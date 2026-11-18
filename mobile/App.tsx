@@ -24,6 +24,7 @@ import {
 } from './services/authTokenStorage';
 
 import colors from './theme/colors';
+
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
@@ -34,6 +35,8 @@ import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import AirtimeScreen from './screens/AirtimeScreen';
 import DataScreen from './screens/DataScreen';
+import ElectricityScreen from './screens/ElectricityScreen';
+import TVScreen from './screens/TVScreen';
 
 import {
   registerPushNotifications,
@@ -51,9 +54,11 @@ const API_BASE =
 const AUTH_URL = `${API_BASE}/auth`;
 const PROFILE_URL = `${API_BASE}/profile`;
 const ACCOUNT_URL = `${API_BASE}/account`;
-const TRANSACTIONS_URL = `${API_BASE}/account/transactions`;
+const TRANSACTIONS_URL =
+  `${API_BASE}/account/transactions`;
 
-const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
+const AUTH_TOKEN_KEY =
+  'zenimonies_auth_token';
 
 type Screen =
   | 'welcome'
@@ -66,7 +71,9 @@ type Screen =
   | 'notifications'
   | 'transaction-details'
   | 'airtime'
-  | 'data';
+  | 'data'
+  | 'electricity'
+  | 'tv';
 
 type Account = {
   id?: string;
@@ -153,6 +160,49 @@ type ProfileResponse = {
   user?: AuthUser;
 };
 
+type ElectricityCustomer = {
+  customerName: string;
+  meterNumber: string;
+  address?: string;
+};
+
+type ElectricityResult = {
+  success?: boolean;
+  status?: string;
+  message?: string;
+  reference?: string;
+  provider_reference?: string;
+  electricity_token?: string;
+  token?: string;
+  units?: string | number;
+  customer_name?: string;
+  customer_address?: string;
+  meter_number?: string;
+  meter_type?: string;
+  provider?: string;
+  [key: string]: any;
+};
+
+type TVPackage = {
+  id: string;
+  name: string;
+  amount: number;
+  description?: string;
+};
+
+type TVCustomer = {
+  customerName: string;
+  customerNumber: string;
+};
+
+type TVPlanRecord = {
+  provider: string;
+  variation_code: string;
+  name: string;
+  amount: number;
+  description?: string;
+};
+
 // ======================================================
 // CURRENCY FORMATTER
 // ======================================================
@@ -191,7 +241,9 @@ const getTransactionTitle = (
     transaction.type || ''
   ).toLowerCase();
 
-  if (type.includes('internal_transfer_received')) {
+  if (
+    type.includes('internal_transfer_received')
+  ) {
     return 'Money received';
   }
 
@@ -209,6 +261,13 @@ const getTransactionTitle = (
 
   if (type.includes('electricity')) {
     return 'Electricity payment';
+  }
+
+  if (
+    type.includes('tv') ||
+    type.includes('cable')
+  ) {
+    return 'TV subscription';
   }
 
   if (type.includes('bill')) {
@@ -271,8 +330,8 @@ const normalizeTransaction = (
   return {
     id: String(
       item.id ||
-      item.reference ||
-      `${item.type}-${item.created_at}`
+        item.reference ||
+        `${item.type}-${item.created_at}`
     ),
 
     title: getTransactionTitle(item),
@@ -284,10 +343,13 @@ const normalizeTransaction = (
       item.reference ||
       '',
 
-    amount: `₦${amount.toLocaleString('en-NG', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`,
+    amount: `₦${amount.toLocaleString(
+      'en-NG',
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }
+    )}`,
 
     type: isCredit ? 'credit' : 'debit',
 
@@ -310,9 +372,14 @@ const normalizeTransaction = (
       : undefined,
 
     fee:
-      Number(item.transaction_fee || item.fee || 0) > 0
+      Number(
+        item.transaction_fee ||
+          item.fee ||
+          0
+      ) > 0
         ? `₦${Number(
-            item.transaction_fee || item.fee
+            item.transaction_fee ||
+              item.fee
           ).toLocaleString('en-NG', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -321,13 +388,12 @@ const normalizeTransaction = (
 
     totalDebit:
       Number(item.total_debit || 0) > 0
-        ? `₦${Number(item.total_debit).toLocaleString(
-            'en-NG',
-            {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }
-          )}`
+        ? `₦${Number(
+            item.total_debit
+          ).toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`
         : undefined,
 
     recipientName: item.recipient_name
@@ -363,9 +429,11 @@ const normalizeTransaction = (
       : undefined,
 
     electricityToken:
-      item.electricity_token || item.token
+      item.electricity_token ||
+      item.token
         ? String(
-            item.electricity_token || item.token
+            item.electricity_token ||
+              item.token
           )
         : undefined,
   };
@@ -386,6 +454,22 @@ async function readJson(
     );
   }
 }
+
+// ======================================================
+// API ERROR HANDLER
+// ======================================================
+
+const getApiErrorMessage = (
+  data: any,
+  fallback: string
+): string => {
+  return (
+    data?.message ||
+    data?.error ||
+    data?.details ||
+    fallback
+  );
+};
 
 // ======================================================
 // MAIN APPLICATION
@@ -416,29 +500,39 @@ export default function App() {
   const [refreshing, setRefreshing] =
     useState(false);
 
-  // Prevent duplicate pull-to-refresh requests.
   const refreshLock = useRef(false);
 
   // ====================================================
-  // CUSTOMER PROFILE PHOTO
+  // PROFILE PHOTO
   // ====================================================
 
   const [profilePhotoUri, setProfilePhotoUri] =
     useState<string | null>(null);
 
-  const handleProfilePhotoChange = useCallback(
-    (uri: string) => {
+  const handleProfilePhotoChange =
+    useCallback((uri: string) => {
       setProfilePhotoUri(uri);
-    },
-    []
-  );
+    }, []);
+
+  // ====================================================
+  // TV PLANS
+  // ====================================================
+
+  const [tvPlans, setTVPlans] =
+    useState<TVPackage[]>([]);
+
+  const [tvPlanRecords, setTVPlanRecords] =
+    useState<TVPlanRecord[]>([]);
+
+  const [loadingTVPlans, setLoadingTVPlans] =
+    useState(false);
 
   // ====================================================
   // PUSH NOTIFICATION OFFER
   // ====================================================
 
-  const offerPushNotifications = useCallback(
-    (token: string) => {
+  const offerPushNotifications =
+    useCallback((token: string) => {
       Alert.alert(
         'Stay updated',
         'Would you like ZENIMONIES to send important account and service announcements to this device?',
@@ -472,9 +566,7 @@ export default function App() {
           },
         ]
       );
-    },
-    []
-  );
+    }, []);
 
   // ====================================================
   // CLEAR SESSION
@@ -486,6 +578,8 @@ export default function App() {
     setTransactions([]);
     setSelectedTransaction(null);
     setProfilePhotoUri(null);
+    setTVPlans([]);
+    setTVPlanRecords([]);
     setRefreshing(false);
     setDashboardLoading(false);
     refreshLock.current = false;
@@ -493,7 +587,9 @@ export default function App() {
 
     void (async () => {
       try {
-        await deleteAuthToken(AUTH_TOKEN_KEY);
+        await deleteAuthToken(
+          AUTH_TOKEN_KEY
+        );
       } catch (error) {
         console.error(
           'Auth token deletion failed:',
@@ -516,186 +612,667 @@ export default function App() {
   }, []);
 
   // ====================================================
-  // AUTHENTICATED API REQUEST
+  // AUTHENTICATED GET REQUEST
   // ====================================================
 
-  const authenticatedFetch = useCallback(
-    async (
-      url: string,
-      token: string
-    ): Promise<Response> => {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  const authenticatedFetch =
+    useCallback(
+      async (
+        url: string,
+        token: string
+      ): Promise<Response> => {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      if (response.status === 401) {
-        const data = await readJson(response);
+        if (response.status === 401) {
+          const data = await readJson(
+            response
+          );
 
-        if (
-          data.code === 'TOKEN_EXPIRED' ||
-          data.code === 'TOKEN_INVALID' ||
-          data.code === 'AUTH_REQUIRED'
-        ) {
-          throw new Error('SESSION_EXPIRED');
+          if (
+            data.code === 'TOKEN_EXPIRED' ||
+            data.code === 'TOKEN_INVALID' ||
+            data.code === 'AUTH_REQUIRED'
+          ) {
+            throw new Error(
+              'SESSION_EXPIRED'
+            );
+          }
+
+          throw new Error(
+            data.message ||
+              'Authentication failed.'
+          );
         }
 
-        throw new Error(
-          data.message ||
-          'Authentication failed.'
-        );
-      }
+        return response;
+      },
+      []
+    );
 
-      return response;
-    },
-    []
-  );
+  // ====================================================
+  // AUTHENTICATED POST REQUEST
+  // ====================================================
+
+  const authenticatedPost =
+    useCallback(
+      async (
+        url: string,
+        token: string,
+        body: Record<string, any>
+      ) => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        const data = await readJson(
+          response
+        );
+
+        if (!response.ok) {
+          const error: any = new Error(
+            getApiErrorMessage(
+              data,
+              'The request could not be completed.'
+            )
+          );
+
+          error.status = response.status;
+          error.code = data?.code;
+          error.data = data;
+
+          throw error;
+        }
+
+        return {
+          data,
+          status: response.status,
+        };
+      },
+      []
+    );
 
   // ====================================================
   // LOAD ACCOUNT AND TRANSACTIONS
   // ====================================================
 
-  const loadDashboardData = useCallback(
-    async (
-      token: string,
-      showLoader = true
-    ): Promise<boolean> => {
-      if (showLoader) {
-        setDashboardLoading(true);
-      }
-
-      try {
-        const [
-          accountResponse,
-          transactionResponse,
-        ] = await Promise.all([
-          authenticatedFetch(
-            ACCOUNT_URL,
-            token
-          ),
-
-          authenticatedFetch(
-            TRANSACTIONS_URL,
-            token
-          ),
-        ]);
-
-        const accountData: AccountResponse =
-          await readJson(accountResponse);
-
-        const transactionData: TransactionsResponse =
-          await readJson(transactionResponse);
-
-        if (
-          !accountResponse.ok ||
-          accountData.success !== true
-        ) {
-          throw new Error(
-            accountData.message ||
-            'Unable to retrieve your account.'
-          );
+  const loadDashboardData =
+    useCallback(
+      async (
+        token: string,
+        showLoader = true
+      ): Promise<boolean> => {
+        if (showLoader) {
+          setDashboardLoading(true);
         }
 
-        if (
-          !transactionResponse.ok ||
-          transactionData.success !== true
-        ) {
-          throw new Error(
-            transactionData.message ||
-            'Unable to retrieve your transactions.'
+        try {
+          const [
+            accountResponse,
+            transactionResponse,
+          ] = await Promise.all([
+            authenticatedFetch(
+              ACCOUNT_URL,
+              token
+            ),
+
+            authenticatedFetch(
+              TRANSACTIONS_URL,
+              token
+            ),
+          ]);
+
+          const accountData: AccountResponse =
+            await readJson(
+              accountResponse
+            );
+
+          const transactionData: TransactionsResponse =
+            await readJson(
+              transactionResponse
+            );
+
+          if (
+            !accountResponse.ok ||
+            accountData.success !== true
+          ) {
+            throw new Error(
+              accountData.message ||
+                'Unable to retrieve your account.'
+            );
+          }
+
+          if (
+            !transactionResponse.ok ||
+            transactionData.success !== true
+          ) {
+            throw new Error(
+              transactionData.message ||
+                'Unable to retrieve your transactions.'
+            );
+          }
+
+          if (!accountData.account) {
+            throw new Error(
+              'Your account details are unavailable.'
+            );
+          }
+
+          setAccount(
+            accountData.account
           );
-        }
 
-        if (!accountData.account) {
-          throw new Error(
-            'Your account details are unavailable.'
-          );
-        }
+          const rows = Array.isArray(
+            transactionData.transactions
+          )
+            ? transactionData.transactions
+            : [];
 
-        setAccount(accountData.account);
-
-        const rows = Array.isArray(
-          transactionData.transactions
-        )
-          ? transactionData.transactions
-          : [];
-
-        setTransactions(
-          rows.map(normalizeTransaction)
-        );
-
-        return true;
-      } catch (error: any) {
-        if (
-          error.message === 'SESSION_EXPIRED'
-        ) {
-          Alert.alert(
-            'Session expired',
-            'Please sign in again to protect your account.',
-            [
-              {
-                text: 'Sign in',
-                onPress: clearSession,
-              },
-            ]
+          setTransactions(
+            rows.map(normalizeTransaction)
           );
 
-          return false;
-        }
+          return true;
+        } catch (error: any) {
+          if (
+            error.message ===
+            'SESSION_EXPIRED'
+          ) {
+            Alert.alert(
+              'Session expired',
+              'Please sign in again to protect your account.',
+              [
+                {
+                  text: 'Sign in',
+                  onPress: clearSession,
+                },
+              ]
+            );
 
-        throw error;
-      } finally {
-        setDashboardLoading(false);
-      }
-    },
-    [
-      authenticatedFetch,
-      clearSession,
-    ]
-  );
+            return false;
+          }
+
+          throw error;
+        } finally {
+          setDashboardLoading(false);
+        }
+      },
+      [
+        authenticatedFetch,
+        clearSession,
+      ]
+    );
 
   // ====================================================
   // LOAD CUSTOMER PROFILE
   // ====================================================
 
-  const loadProfile = useCallback(
-    async (
-      token: string
-    ): Promise<AuthUser | undefined> => {
-      try {
-        const response = await authenticatedFetch(
-          PROFILE_URL,
-          token
-        );
+  const loadProfile =
+    useCallback(
+      async (
+        token: string
+      ): Promise<AuthUser | undefined> => {
+        try {
+          const response =
+            await authenticatedFetch(
+              PROFILE_URL,
+              token
+            );
 
-        const data: ProfileResponse =
-          await readJson(response);
+          const data: ProfileResponse =
+            await readJson(response);
 
-        if (
-          response.ok &&
-          data.success &&
-          data.user
-        ) {
-          setProfilePhotoUri(
-            data.user.profile_photo || null
+          if (
+            response.ok &&
+            data.success &&
+            data.user
+          ) {
+            setProfilePhotoUri(
+              data.user.profile_photo ||
+                null
+            );
+
+            return data.user;
+          }
+        } catch (error) {
+          console.warn(
+            'Profile loading failed:',
+            error
+          );
+        }
+
+        return undefined;
+      },
+      [authenticatedFetch]
+    );
+
+  // ====================================================
+  // LOAD TV PLANS
+  // ====================================================
+
+  const loadTVPlans =
+    useCallback(
+      async (
+        token: string
+      ) => {
+        setLoadingTVPlans(true);
+
+        try {
+          const providers = [
+            'DSTV',
+            'GOTV',
+            'STARTIMES',
+          ];
+
+          const providerResults =
+            await Promise.all(
+              providers.map(
+                async (provider) => {
+                  const response =
+                    await authenticatedFetch(
+                      `${API_BASE}/tv/plans?provider=${encodeURIComponent(
+                        provider
+                      )}`,
+                      token
+                    );
+
+                  const data =
+                    await readJson(
+                      response
+                    );
+
+                  if (
+                    !response.ok ||
+                    data.success !== true
+                  ) {
+                    throw new Error(
+                      data.message ||
+                        `Unable to load ${provider} plans.`
+                    );
+                  }
+
+                  return {
+                    provider,
+                    plans: Array.isArray(
+                      data.plans
+                    )
+                      ? data.plans
+                      : [],
+                  };
+                }
+              )
+            );
+
+          const records: TVPlanRecord[] = [];
+
+          providerResults.forEach(
+            ({ provider, plans }) => {
+              plans.forEach(
+                (plan: any) => {
+                  const variationCode =
+                    plan.variation_code ||
+                    plan.variationCode ||
+                    plan.id;
+
+                  const name =
+                    plan.name ||
+                    plan.description ||
+                    variationCode;
+
+                  const amount = Number(
+                    plan.amount ||
+                      plan.price ||
+                      0
+                  );
+
+                  if (
+                    variationCode &&
+                    Number.isFinite(amount)
+                  ) {
+                    records.push({
+                      provider,
+                      variation_code:
+                        String(variationCode),
+                      name: String(name),
+                      amount,
+                      description:
+                        plan.description
+                          ? String(
+                              plan.description
+                            )
+                          : undefined,
+                    });
+                  }
+                }
+              );
+            }
           );
 
-          return data.user;
-        }
-      } catch (error) {
-        console.warn(
-          'Profile loading failed:',
-          error
-        );
-      }
+          setTVPlanRecords(records);
 
-      return undefined;
-    },
-    [authenticatedFetch]
-  );
+          setTVPlans(
+            records.map((plan) => ({
+              id: plan.variation_code,
+              name: plan.name,
+              amount: plan.amount,
+              description:
+                plan.description,
+            }))
+          );
+        } catch (error: any) {
+          console.error(
+            'TV plans loading error:',
+            error
+          );
+
+          setTVPlans([]);
+          setTVPlanRecords([]);
+
+          Alert.alert(
+            'TV Plans',
+            error?.message ||
+              'Unable to load TV subscription plans. Please try again.'
+          );
+        } finally {
+          setLoadingTVPlans(false);
+        }
+      },
+      [authenticatedFetch]
+    );
+
+  // ====================================================
+  // ELECTRICITY METER VERIFICATION
+  // ====================================================
+
+  const handleElectricityValidate =
+    useCallback(
+      async (
+        provider: string,
+        meterNumber: string,
+        meterType:
+          | 'prepaid'
+          | 'postpaid'
+      ): Promise<ElectricityCustomer> => {
+        if (!session?.token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        const result =
+          await authenticatedPost(
+            `${API_BASE}/bills/electricity/verify`,
+            session.token,
+            {
+              provider,
+              meter_number:
+                meterNumber,
+              meter_type:
+                meterType,
+            }
+          );
+
+        const data = result.data;
+
+        const customerData =
+          data.data ||
+          data.customer ||
+          {};
+
+        return {
+          customerName:
+            customerData.customer_name ||
+            customerData.customerName ||
+            customerData.name ||
+            data.customer_name ||
+            'Verified Customer',
+
+          meterNumber:
+            customerData.meter_number ||
+            customerData.meterNumber ||
+            meterNumber,
+
+          address:
+            customerData.address ||
+            customerData.customer_address ||
+            undefined,
+        };
+      },
+      [
+        session?.token,
+        authenticatedPost,
+      ]
+    );
+
+  // ====================================================
+  // ELECTRICITY PAYMENT
+  // ====================================================
+
+  const handleElectricityPay =
+    useCallback(
+      async (
+        provider: string,
+        meterNumber: string,
+        meterType:
+          | 'prepaid'
+          | 'postpaid',
+        amount: number,
+        transactionPin: string
+      ): Promise<ElectricityResult> => {
+        if (!session?.token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        const result =
+          await authenticatedPost(
+            `${API_BASE}/bills/electricity/pay`,
+            session.token,
+            {
+              provider,
+              meter_number:
+                meterNumber,
+              meter_type:
+                meterType,
+              amount,
+              transaction_pin:
+                transactionPin,
+            }
+          );
+
+        const data = result.data;
+
+        /*
+         * HTTP 202 means the payment is still
+         * processing. Do not treat it as completed.
+         */
+        if (result.status === 202) {
+          return {
+            ...data,
+            status:
+              data.status ||
+              'processing',
+            success: false,
+          };
+        }
+
+        return {
+          ...data,
+          status:
+            data.status ||
+            'completed',
+          success:
+            data.success === true,
+        };
+      },
+      [
+        session?.token,
+        authenticatedPost,
+      ]
+    );
+
+  // ====================================================
+  // TV CUSTOMER VERIFICATION
+  // ====================================================
+
+  const handleTVValidate =
+    useCallback(
+      async (
+        provider: string,
+        customerNumber: string
+      ): Promise<TVCustomer> => {
+        if (!session?.token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        const normalizedProvider =
+          provider.toUpperCase();
+
+        const result =
+          await authenticatedPost(
+            `${API_BASE}/tv/verify`,
+            session.token,
+            {
+              provider:
+                normalizedProvider,
+              billersCode:
+                customerNumber,
+            }
+          );
+
+        const data = result.data;
+
+        const customerData =
+          data.customer ||
+          data.data ||
+          {};
+
+        return {
+          customerName:
+            customerData.name ||
+            customerData.customer_name ||
+            customerData.customerName ||
+            data.customer_name ||
+            'Verified Customer',
+
+          customerNumber:
+            data.billersCode ||
+            customerData.billersCode ||
+            customerNumber,
+        };
+      },
+      [
+        session?.token,
+        authenticatedPost,
+      ]
+    );
+
+  // ====================================================
+  // TV SUBSCRIPTION
+  // ====================================================
+
+  const handleTVSubscribe =
+    useCallback(
+      async (
+        provider: string,
+        customerNumber: string,
+        packageId: string,
+        transactionPin: string
+      ) => {
+        if (!session?.token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        const normalizedProvider =
+          provider.toUpperCase();
+
+        const selectedPlan =
+          tvPlanRecords.find(
+            (plan) =>
+              plan.variation_code ===
+                packageId &&
+              plan.provider ===
+                normalizedProvider
+          );
+
+        if (!selectedPlan) {
+          throw new Error(
+            'The selected TV package is unavailable for this provider. Please select a valid package.'
+          );
+        }
+
+        const phone =
+          session.user?.phone;
+
+        if (!phone) {
+          throw new Error(
+            'Your registered phone number is missing from your account. Please update your profile before purchasing a TV subscription.'
+          );
+        }
+
+        const result =
+          await authenticatedPost(
+            `${API_BASE}/tv`,
+            session.token,
+            {
+              provider:
+                normalizedProvider,
+              billersCode:
+                customerNumber,
+              variation_code:
+                selectedPlan.variation_code,
+              phone,
+              subscription_type:
+                'renew',
+              transaction_pin:
+                transactionPin,
+            }
+          );
+
+        const data = result.data;
+
+        if (result.status === 202) {
+          return {
+            ...data,
+            status:
+              data.status ||
+              'pending',
+            success: false,
+          };
+        }
+
+        return {
+          ...data,
+          status:
+            data.status ||
+            'completed',
+          success:
+            data.success === true,
+        };
+      },
+      [
+        session?.token,
+        session?.user?.phone,
+        tvPlanRecords,
+        authenticatedPost,
+      ]
+    );
 
   // ====================================================
   // RESTORE SAVED LOGIN SESSION
@@ -704,56 +1281,60 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    const restoreSession = async () => {
-      try {
-        const savedToken = await getAuthToken(
-          AUTH_TOKEN_KEY
-        );
+    const restoreSession =
+      async () => {
+        try {
+          const savedToken =
+            await getAuthToken(
+              AUTH_TOKEN_KEY
+            );
 
-        if (!savedToken) {
-          return;
-        }
+          if (!savedToken) {
+            return;
+          }
 
-        const response = await authenticatedFetch(
-          `${AUTH_URL}/me`,
-          savedToken
-        );
+          const response =
+            await authenticatedFetch(
+              `${AUTH_URL}/me`,
+              savedToken
+            );
 
-        const data = await readJson(response);
+          const data =
+            await readJson(response);
 
-        if (
-          !response.ok ||
-          data.success !== true ||
-          !data.user
-        ) {
-          await deleteAuthToken(
-            AUTH_TOKEN_KEY
+          if (
+            !response.ok ||
+            data.success !== true ||
+            !data.user
+          ) {
+            await deleteAuthToken(
+              AUTH_TOKEN_KEY
+            );
+            return;
+          }
+
+          if (!mounted) return;
+
+          setSession({
+            success: true,
+            token: savedToken,
+            user: data.user,
+            account: data.account,
+            accounts: data.accounts,
+          });
+
+          setAccount(
+            data.account ||
+              data.accounts?.[0] ||
+              null
           );
-          return;
-        }
 
-        if (!mounted) return;
+          setScreen('home');
+          setCheckingSession(false);
 
-        setSession({
-          success: true,
-          token: savedToken,
-          user: data.user,
-          account: data.account,
-          accounts: data.accounts,
-        });
-
-        setAccount(
-          data.account ||
-          data.accounts?.[0] ||
-          null
-        );
-
-        setScreen('home');
-        setCheckingSession(false);
-
-        // Load profile in the background.
-        void loadProfile(savedToken).then(
-          (profileUser) => {
+          void loadProfile(
+            savedToken
+          ).then((profileUser) => {
             if (
               !mounted ||
               !profileUser
@@ -764,7 +1345,8 @@ export default function App() {
             setSession((previous) => {
               if (
                 !previous ||
-                previous.token !== savedToken
+                previous.token !==
+                  savedToken
               ) {
                 return previous;
               }
@@ -777,43 +1359,42 @@ export default function App() {
                 },
               };
             });
-          }
-        );
+          });
 
-        // Load account and transactions.
-        void loadDashboardData(
-          savedToken
-        ).catch((error: any) => {
+          void loadDashboardData(
+            savedToken
+          ).catch((error: any) => {
+            if (mounted) {
+              Alert.alert(
+                'Account information',
+                error.message ||
+                  'Your account information could not be loaded. Please refresh.'
+              );
+            }
+          });
+        } catch (error: any) {
+          if (
+            error.message ===
+            'SESSION_EXPIRED'
+          ) {
+            await deleteAuthToken(
+              AUTH_TOKEN_KEY
+            );
+            return;
+          }
+
           if (mounted) {
             Alert.alert(
-              'Account information',
-              error.message ||
-              'Your account information could not be loaded. Please refresh.'
+              'Connection unavailable',
+              'We could not verify your saved session. Check your internet connection and try again.'
             );
           }
-        });
-      } catch (error: any) {
-        if (
-          error.message === 'SESSION_EXPIRED'
-        ) {
-          await deleteAuthToken(
-            AUTH_TOKEN_KEY
-          );
-          return;
+        } finally {
+          if (mounted) {
+            setCheckingSession(false);
+          }
         }
-
-        if (mounted) {
-          Alert.alert(
-            'Connection unavailable',
-            'We could not verify your saved session. Check your internet connection and try again.'
-          );
-        }
-      } finally {
-        if (mounted) {
-          setCheckingSession(false);
-        }
-      }
-    };
+      };
 
     void restoreSession();
 
@@ -830,102 +1411,107 @@ export default function App() {
   // LOGIN SUCCESS
   // ====================================================
 
-  const handleLoginSuccess = async (
-    authData: AuthSession
-  ) => {
-    if (!authData?.token) {
-      Alert.alert(
-        'Sign in incomplete',
-        'The server did not return a valid login token.'
-      );
-      return;
-    }
-
-    try {
-      await setAuthToken(
-        AUTH_TOKEN_KEY,
-        authData.token
-      );
-
-      const initialAccount =
-        authData.account ||
-        authData.accounts?.[0] ||
-        null;
-
-      setSession(authData);
-      setAccount(initialAccount);
-      setTransactions([]);
-      setScreen('home');
-
-      offerPushNotifications(
-        authData.token
-      );
-
-      // Load profile in the background.
-      void loadProfile(
-        authData.token
-      ).then((profileUser) => {
-        if (!profileUser) return;
-
-        setSession((previous) => {
-          if (
-            !previous ||
-            previous.token !== authData.token
-          ) {
-            return previous;
-          }
-
-          return {
-            ...previous,
-            user: {
-              ...(previous.user || {}),
-              ...profileUser,
-            },
-          };
-        });
-      });
-
-      // Load account and transactions in the background.
-      void loadDashboardData(
-        authData.token
-      ).catch((error: any) => {
+  const handleLoginSuccess =
+    async (
+      authData: AuthSession
+    ) => {
+      if (!authData?.token) {
         Alert.alert(
-          'Account information',
-          error.message ||
-          'Your account details could not be loaded. Please refresh the dashboard.'
+          'Sign in incomplete',
+          'The server did not return a valid login token.'
         );
-      });
-    } catch {
-      Alert.alert(
-        'Secure storage unavailable',
-        'Your login was accepted, but this device could not securely save your session.'
-      );
-    }
-  };
+        return;
+      }
+
+      try {
+        await setAuthToken(
+          AUTH_TOKEN_KEY,
+          authData.token
+        );
+
+        const initialAccount =
+          authData.account ||
+          authData.accounts?.[0] ||
+          null;
+
+        setSession(authData);
+        setAccount(initialAccount);
+        setTransactions([]);
+        setScreen('home');
+
+        offerPushNotifications(
+          authData.token
+        );
+
+        void loadProfile(
+          authData.token
+        ).then((profileUser) => {
+          if (!profileUser) return;
+
+          setSession((previous) => {
+            if (
+              !previous ||
+              previous.token !==
+                authData.token
+            ) {
+              return previous;
+            }
+
+            return {
+              ...previous,
+              user: {
+                ...(previous.user || {}),
+                ...profileUser,
+              },
+            };
+          });
+        });
+
+        void loadDashboardData(
+          authData.token
+        ).catch((error: any) => {
+          Alert.alert(
+            'Account information',
+            error.message ||
+              'Your account details could not be loaded. Please refresh the dashboard.'
+          );
+        });
+      } catch {
+        Alert.alert(
+          'Secure storage unavailable',
+          'Your login was accepted, but this device could not securely save your session.'
+        );
+      }
+    };
 
   // ====================================================
   // REGISTRATION SUCCESS
   // ====================================================
 
-  const handleRegistrationSuccess = async (
-    registrationSession: AuthSession | null
-  ) => {
-    if (!registrationSession?.token) {
-      setScreen('login');
-      return;
-    }
+  const handleRegistrationSuccess =
+    async (
+      registrationSession:
+        | AuthSession
+        | null
+    ) => {
+      if (
+        !registrationSession?.token
+      ) {
+        setScreen('login');
+        return;
+      }
 
-    await handleLoginSuccess(
-      registrationSession
-    );
-  };
+      await handleLoginSuccess(
+        registrationSession
+      );
+    };
 
   // ====================================================
   // DASHBOARD REFRESH
   // ====================================================
 
-  const handleRefresh = useCallback(
-    async () => {
+  const handleRefresh =
+    useCallback(async () => {
       if (
         !session?.token ||
         refreshLock.current
@@ -937,19 +1523,16 @@ export default function App() {
       setRefreshing(true);
 
       try {
-        // Refresh account and transactions first.
         const dashboardSuccess =
           await loadDashboardData(
             session.token,
             false
           );
 
-        // Do not continue if the session expired.
         if (!dashboardSuccess) {
           return;
         }
 
-        // Refresh profile information.
         const refreshedProfile =
           await loadProfile(
             session.token
@@ -959,7 +1542,8 @@ export default function App() {
           setSession((previous) => {
             if (
               !previous ||
-              previous.token !== session.token
+              previous.token !==
+                session.token
             ) {
               return previous;
             }
@@ -977,43 +1561,42 @@ export default function App() {
         Alert.alert(
           'Refresh failed',
           error?.message ||
-          'Unable to refresh your account information. Please check your internet connection and try again.'
+            'Unable to refresh your account information. Please check your internet connection and try again.'
         );
       } finally {
         refreshLock.current = false;
         setRefreshing(false);
       }
-    },
-    [
+    }, [
       session?.token,
       loadDashboardData,
       loadProfile,
-    ]
-  );
+    ]);
 
   // ====================================================
   // LOGOUT
   // ====================================================
 
-  const handleLogout = useCallback(() => {
-    const token = session?.token;
+  const handleLogout =
+    useCallback(() => {
+      const token = session?.token;
 
-    clearSession();
+      clearSession();
 
-    if (token) {
-      void unregisterPushNotifications(
-        token
-      ).catch((error) => {
-        console.warn(
-          'Push notification unregistration failed:',
-          error
-        );
-      });
-    }
-  }, [
-    session?.token,
-    clearSession,
-  ]);
+      if (token) {
+        void unregisterPushNotifications(
+          token
+        ).catch((error) => {
+          console.warn(
+            'Push notification unregistration failed:',
+            error
+          );
+        });
+      }
+    }, [
+      session?.token,
+      clearSession,
+    ]);
 
   // ====================================================
   // SELECT TRANSACTION
@@ -1022,37 +1605,44 @@ export default function App() {
   const handleSelectTransaction = (
     transaction: Transaction
   ) => {
-    setSelectedTransaction(transaction);
-    setScreen('transaction-details');
+    setSelectedTransaction(
+      transaction
+    );
+    setScreen(
+      'transaction-details'
+    );
   };
 
   // ====================================================
   // OPEN NOTIFICATION TRANSACTION
   // ====================================================
 
-  const handleOpenNotificationTransaction = (
-    transactionId: string
-  ) => {
-    const matchingTransaction =
-      transactions.find(
-        (transaction) =>
-          transaction.id === transactionId ||
-          transaction.reference === transactionId
+  const handleOpenNotificationTransaction =
+    (
+      transactionId: string
+    ) => {
+      const matchingTransaction =
+        transactions.find(
+          (transaction) =>
+            transaction.id ===
+              transactionId ||
+            transaction.reference ===
+              transactionId
+        );
+
+      if (!matchingTransaction) {
+        Alert.alert(
+          'Transaction unavailable',
+          'We could not find the transaction linked to this notification. Please check your transaction history.'
+        );
+
+        return;
+      }
+
+      handleSelectTransaction(
+        matchingTransaction
       );
-
-    if (!matchingTransaction) {
-      Alert.alert(
-        'Transaction unavailable',
-        'We could not find the transaction linked to this notification. Please check your transaction history.'
-      );
-
-      return;
-    }
-
-    handleSelectTransaction(
-      matchingTransaction
-    );
-  };
+    };
 
   // ====================================================
   // DASHBOARD ACTIONS
@@ -1071,19 +1661,47 @@ export default function App() {
       return;
     }
 
-    const serviceNames: Record<string, string> = {
+    if (
+      action === 'electricity' ||
+      action === 'electricity-bills'
+    ) {
+      setScreen('electricity');
+      return;
+    }
+
+    if (
+      action === 'tv' ||
+      action === 'television' ||
+      action === 'tv-subscription'
+    ) {
+      setTVPlans([]);
+      setTVPlanRecords([]);
+      setScreen('tv');
+
+      if (session?.token) {
+        void loadTVPlans(
+          session.token
+        );
+      }
+
+      return;
+    }
+
+    const serviceNames: Record<
+      string,
+      string
+    > = {
       transfer: 'Bank transfers',
       'add-money': 'Add money',
       withdraw: 'Withdrawals',
-      data: 'Data purchases',
-      electricity: 'Electricity payments',
       bills: 'Bill payments',
       cards: 'Cards',
       savings: 'ZENIMONIES Save',
     };
 
     Alert.alert(
-      serviceNames[action] || 'ZENIMONIES',
+      serviceNames[action] ||
+        'ZENIMONIES',
       'This service screen will be connected in the next development stage. No transaction has been initiated.'
     );
   };
@@ -1178,7 +1796,9 @@ export default function App() {
 
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => setScreen('welcome')}
+          onPress={() =>
+            setScreen('welcome')
+          }
         >
           <Text style={styles.backText}>
             ‹ Back
@@ -1186,7 +1806,9 @@ export default function App() {
         </TouchableOpacity>
 
         <LoginScreen
-          onLoginSuccess={handleLoginSuccess}
+          onLoginSuccess={
+            handleLoginSuccess
+          }
           onRegisterPress={() =>
             setScreen('register')
           }
@@ -1208,7 +1830,9 @@ export default function App() {
 
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => setScreen('welcome')}
+          onPress={() =>
+            setScreen('welcome')
+          }
         >
           <Text style={styles.backText}>
             ‹ Back
@@ -1240,7 +1864,9 @@ export default function App() {
 
         <NotificationsScreen
           token={session.token}
-          onBack={() => setScreen('home')}
+          onBack={() =>
+            setScreen('home')
+          }
           onOpenTransaction={
             handleOpenNotificationTransaction
           }
@@ -1266,7 +1892,9 @@ export default function App() {
         <ProfileScreen
           user={session.user}
           account={account}
-          onBack={() => setScreen('home')}
+          onBack={() =>
+            setScreen('home')
+          }
         />
       </SafeAreaView>
     );
@@ -1288,7 +1916,9 @@ export default function App() {
 
         <SettingsScreen
           token={session.token}
-          onBack={() => setScreen('home')}
+          onBack={() =>
+            setScreen('home')
+          }
           onLogout={handleLogout}
         />
       </SafeAreaView>
@@ -1311,7 +1941,9 @@ export default function App() {
 
         <TransactionHistoryScreen
           transactions={transactions}
-          onBack={() => setScreen('home')}
+          onBack={() =>
+            setScreen('home')
+          }
           onSelectTransaction={
             handleSelectTransaction
           }
@@ -1327,7 +1959,8 @@ export default function App() {
   // ====================================================
 
   if (
-    screen === 'transaction-details' &&
+    screen ===
+      'transaction-details' &&
     session &&
     selectedTransaction
   ) {
@@ -1338,8 +1971,12 @@ export default function App() {
         <StatusBar barStyle="dark-content" />
 
         <TransactionDetailsScreen
-          transaction={selectedTransaction}
-          onBack={() => setScreen('history')}
+          transaction={
+            selectedTransaction
+          }
+          onBack={() =>
+            setScreen('history')
+          }
         />
       </SafeAreaView>
     );
@@ -1361,7 +1998,9 @@ export default function App() {
 
         <AirtimeScreen
           token={session.token}
-          onBack={() => setScreen('home')}
+          onBack={() =>
+            setScreen('home')
+          }
           onComplete={() => {
             void loadDashboardData(
               session.token,
@@ -1394,7 +2033,9 @@ export default function App() {
 
         <DataScreen
           token={session.token}
-          onBack={() => setScreen('home')}
+          onBack={() =>
+            setScreen('home')
+          }
           onComplete={() => {
             void loadDashboardData(
               session.token,
@@ -1407,6 +2048,75 @@ export default function App() {
             });
           }}
         />
+      </SafeAreaView>
+    );
+  }
+
+  // ====================================================
+  // ELECTRICITY
+  // ====================================================
+
+  if (
+    screen === 'electricity' &&
+    session
+  ) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <StatusBar barStyle="dark-content" />
+
+        <ElectricityScreen
+          onValidate={
+            handleElectricityValidate
+          }
+          onPay={
+            handleElectricityPay
+          }
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ====================================================
+  // TV SUBSCRIPTIONS
+  // ====================================================
+
+  if (
+    screen === 'tv' &&
+    session
+  ) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <StatusBar barStyle="dark-content" />
+
+        {loadingTVPlans &&
+        tvPlans.length === 0 ? (
+          <View
+            style={styles.dashboardLoading}
+          >
+            <ActivityIndicator
+              size="large"
+              color={colors.primary}
+            />
+
+            <Text style={styles.loadingText}>
+              Loading TV packages...
+            </Text>
+          </View>
+        ) : (
+          <TVScreen
+            packages={tvPlans}
+            onValidate={
+              handleTVValidate
+            }
+            onSubscribe={
+              handleTVSubscribe
+            }
+          />
+        )}
       </SafeAreaView>
     );
   }
@@ -1445,8 +2155,11 @@ export default function App() {
       >
         <StatusBar barStyle="dark-content" />
 
-        {dashboardLoading && !account ? (
-          <View style={styles.dashboardLoading}>
+        {dashboardLoading &&
+        !account ? (
+          <View
+            style={styles.dashboardLoading}
+          >
             <ActivityIndicator
               size="large"
               color={colors.primary}
@@ -1462,7 +2175,9 @@ export default function App() {
             token={session.token}
             currency="NGN"
             balance={balance}
-            profilePhotoUri={profilePhotoUri}
+            profilePhotoUri={
+              profilePhotoUri
+            }
             onProfilePhotoChange={
               handleProfilePhotoChange
             }
@@ -1472,20 +2187,27 @@ export default function App() {
             }
             bankName="ZENIMONIES"
             verificationLevel={
-              verificationLevel !== undefined
-                ? String(verificationLevel)
+              verificationLevel !==
+              undefined
+                ? String(
+                    verificationLevel
+                  )
                 : undefined
             }
             verificationStatus={
               verificationStatus
             }
             transactions={transactions}
-            onAction={handleDashboardAction}
+            onAction={
+              handleDashboardAction
+            }
             onNavigate={
               handleDashboardNavigation
             }
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={
+              handleRefresh
+            }
           />
         )}
       </SafeAreaView>
@@ -1502,7 +2224,9 @@ export default function App() {
     >
       <StatusBar barStyle="dark-content" />
 
-      <View style={styles.premiumWelcome}>
+      <View
+        style={styles.premiumWelcome}
+      >
         <View style={styles.premiumBrand}>
           <View style={styles.premiumLogo}>
             <Text style={styles.premiumLogoText}>
@@ -1521,7 +2245,9 @@ export default function App() {
 
         <View style={styles.premiumHero}>
           <View style={styles.premiumBadge}>
-            <View style={styles.premiumBadgeDot} />
+            <View
+              style={styles.premiumBadgeDot}
+            />
 
             <Text style={styles.premiumBadgeText}>
               YOUR EVERYDAY BANKING PARTNER
@@ -1530,51 +2256,71 @@ export default function App() {
 
           <Text style={styles.premiumHeading}>
             Banking that moves{' \n'}
-            <Text style={styles.premiumHeadingGreen}>
+            <Text
+              style={styles.premiumHeadingGreen}
+            >
               with you.
             </Text>
           </Text>
 
-          <Text style={styles.premiumDescription}>
+          <Text
+            style={styles.premiumDescription}
+          >
             Manage your money, make payments and
             stay in control of your finances with
             ZENIMONIES.
           </Text>
 
-          <View style={styles.premiumFeatureRow}>
+          <View
+            style={styles.premiumFeatureRow}
+          >
             <View style={styles.premiumFeature}>
-              <Text style={styles.premiumFeatureIcon}>
+              <Text
+                style={styles.premiumFeatureIcon}
+              >
                 ₦
               </Text>
 
-              <Text style={styles.premiumFeatureText}>
+              <Text
+                style={styles.premiumFeatureText}
+              >
                 Payments
               </Text>
             </View>
 
             <View style={styles.premiumFeature}>
-              <Text style={styles.premiumFeatureIcon}>
+              <Text
+                style={styles.premiumFeatureIcon}
+              >
                 ↗
               </Text>
 
-              <Text style={styles.premiumFeatureText}>
+              <Text
+                style={styles.premiumFeatureText}
+              >
                 Transfers
               </Text>
             </View>
 
             <View style={styles.premiumFeature}>
-              <Text style={styles.premiumFeatureIcon}>
+              <Text
+                style={styles.premiumFeatureIcon}
+              >
                 ✓
               </Text>
 
-              <Text style={styles.premiumFeatureText}>
+              <Text
+                style={styles.premiumFeatureText}
+              >
                 Control
               </Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.premiumActions}>
+        <View
+          style={styles.premiumActions}
+        >
           <TouchableOpacity
             style={styles.premiumPrimaryButton}
             onPress={() =>
@@ -1582,11 +2328,15 @@ export default function App() {
             }
             activeOpacity={0.85}
           >
-            <Text style={styles.premiumPrimaryText}>
+            <Text
+              style={styles.premiumPrimaryText}
+            >
               Get Started
             </Text>
 
-            <Text style={styles.premiumButtonArrow}>
+            <Text
+              style={styles.premiumButtonArrow}
+            >
               →
             </Text>
           </TouchableOpacity>
@@ -1598,13 +2348,17 @@ export default function App() {
             }
             activeOpacity={0.85}
           >
-            <Text style={styles.premiumSecondaryText}>
+            <Text
+              style={styles.premiumSecondaryText}
+            >
               I already have an account
             </Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.premiumFooter}>
+        <Text
+          style={styles.premiumFooter}
+        >
           SECURE  •  SIMPLE  •  SMART
         </Text>
       </View>
@@ -1658,10 +2412,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // ====================================================
-  // EXISTING NAVIGATION AND SCREEN STYLES
-  // ====================================================
-
   backButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
@@ -1673,10 +2423,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-
-  // ====================================================
-  // PREMIUM WELCOME SCREEN
-  // ====================================================
 
   premiumWelcome: {
     flex: 1,
