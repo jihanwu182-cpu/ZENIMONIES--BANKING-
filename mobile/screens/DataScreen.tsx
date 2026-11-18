@@ -112,6 +112,221 @@ const CATEGORIES = [
 ];
 
 // ======================================================
+// PHONE NUMBER HELPERS
+// ======================================================
+
+const normalizePhoneNumber = (
+  value: string,
+): string => {
+  let digits = value.replace(/\D/g, '');
+
+  // International Nigerian format
+  // 2348012345678 -> 08012345678
+  if (digits.startsWith('234')) {
+    digits = '0' + digits.slice(3);
+  }
+
+  // Number entered without the first zero
+  // 8012345678 -> 08012345678
+  if (
+    digits.length === 10 &&
+    !digits.startsWith('0')
+  ) {
+    digits = '0' + digits;
+  }
+
+  return digits;
+};
+
+// ======================================================
+// NETWORK DETECTION
+// ======================================================
+
+const detectNetworkFromPhone = (
+  phoneNumber: string,
+): NetworkItem | null => {
+  const normalized =
+    normalizePhoneNumber(phoneNumber);
+
+  if (normalized.length < 4) {
+    return null;
+  }
+
+  const prefix = normalized.substring(0, 4);
+
+  const prefixes: Record<string, string[]> = {
+    mtn: [
+      '0803',
+      '0806',
+      '0810',
+      '0813',
+      '0814',
+      '0816',
+      '0703',
+      '0706',
+      '0903',
+      '0906',
+      '0913',
+      '0916',
+      '0704',
+      '0804',
+      '0904',
+      '0914',
+    ],
+
+    airtel: [
+      '0802',
+      '0808',
+      '0812',
+      '0701',
+      '0708',
+      '0901',
+      '0902',
+      '0907',
+      '0912',
+      '0702',
+      '0705',
+      '0905',
+      '0915',
+    ],
+
+    glo: [
+      '0805',
+      '0807',
+      '0811',
+      '0815',
+      '0705',
+      '0905',
+      '0915',
+      '0805',
+      '0705',
+    ],
+
+    t2mobile: [
+      '0809',
+      '0817',
+      '0818',
+      '0908',
+      '0909',
+      '0910',
+      '0911',
+    ],
+  };
+
+  const foundNetwork = Object.keys(prefixes).find(
+    network =>
+      prefixes[network].includes(prefix),
+  );
+
+  if (!foundNetwork) {
+    return null;
+  }
+
+  return (
+    NETWORKS.find(
+      network => network.id === foundNetwork,
+    ) || null
+  );
+};
+
+// ======================================================
+// NORMALIZE DATA PLANS
+// ======================================================
+
+const normalizeDataPlan = (
+  plan: any,
+  index: number,
+): DataPlan | null => {
+  if (!plan || typeof plan !== 'object') {
+    return null;
+  }
+
+  const variationCode =
+    plan.variation_code ??
+    plan.variationCode ??
+    plan.code ??
+    plan.id ??
+    plan.product_id ??
+    plan.productId;
+
+  const amountValue =
+    plan.amount ??
+    plan.price ??
+    plan.variation_amount ??
+    plan.variationAmount ??
+    plan.cost ??
+    plan.selling_price;
+
+  const amount = Number(
+    String(amountValue ?? 0).replace(/,/g, ''),
+  );
+
+  const name =
+    plan.name ??
+    plan.plan_name ??
+    plan.planName ??
+    plan.description ??
+    plan.title ??
+    `Data Plan ${index + 1}`;
+
+  if (
+    variationCode === undefined ||
+    variationCode === null ||
+    String(variationCode).trim() === '' ||
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    variation_code: String(variationCode),
+    name: String(name),
+    amount,
+
+    network:
+      plan.network ??
+      plan.network_name ??
+      plan.serviceID,
+
+    validity:
+      plan.validity ??
+      plan.duration ??
+      plan.validity_period ??
+      plan.expiry,
+
+    allowance:
+      plan.allowance ??
+      plan.data_amount ??
+      plan.size ??
+      plan.volume,
+
+    description:
+      plan.description ??
+      plan.details ??
+      plan.name,
+
+    category:
+      plan.category ??
+      plan.plan_category,
+
+    fixedPrice:
+      plan.fixedPrice ??
+      plan.fixed_price ??
+      false,
+
+    isPromotional:
+      plan.isPromotional ??
+      plan.is_promotional ??
+      plan.promotional ??
+      plan.promo ??
+      false,
+
+    raw: plan,
+  };
+};
+
+// ======================================================
 // COMPONENT
 // ======================================================
 
@@ -195,90 +410,27 @@ const DataScreen = ({
     useState<any>(null);
 
   // ====================================================
-  // NETWORK DETECTION
+  // PHONE NUMBER
   // ====================================================
 
-  const detectNetwork = useCallback(
-    (number: string) => {
-      const cleanNumber = number.replace(/\D/g, '');
+  const handlePhoneChange = useCallback(
+    (value: string) => {
+      const cleaned = value.replace(/\D/g, '');
 
-      if (cleanNumber.length < 4) {
-        return;
-      }
+      // Allow international format while typing
+      const formatted = cleaned.slice(0, 13);
 
-      const prefix = cleanNumber.substring(0, 4);
+      setPhone(formatted);
 
-      const prefixes: Record<string, string[]> = {
-        mtn: [
-          '0803',
-          '0806',
-          '0810',
-          '0813',
-          '0814',
-          '0816',
-          '0903',
-          '0906',
-          '0913',
-          '0916',
-        ],
+      const detected =
+        detectNetworkFromPhone(formatted);
 
-        airtel: [
-          '0802',
-          '0808',
-          '0812',
-          '0701',
-          '0708',
-          '0901',
-          '0902',
-          '0907',
-          '0912',
-        ],
-
-        glo: [
-          '0805',
-          '0807',
-          '0811',
-          '0815',
-          '0705',
-          '0905',
-          '0915',
-        ],
-
-        t2mobile: [
-          '0809',
-          '0817',
-          '0818',
-          '0908',
-          '0909',
-        ],
-      };
-
-      const foundNetwork = Object.keys(prefixes).find(
-        network => prefixes[network].includes(prefix),
-      );
-
-      if (foundNetwork) {
-        const network = NETWORKS.find(
-          item => item.id === foundNetwork,
-        );
-
-        if (network) {
-          setSelectedNetwork(network);
-        }
+      if (detected) {
+        setSelectedNetwork(detected);
       }
     },
     [],
   );
-
-  const handlePhoneChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-
-    const formatted = cleaned.slice(0, 11);
-
-    setPhone(formatted);
-
-    detectNetwork(formatted);
-  };
 
   // ====================================================
   // LOAD PLANS
@@ -308,17 +460,54 @@ const DataScreen = ({
 
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
         throw new Error(
-          data.message || 'Unable to load data plans.',
+          data.message ||
+            data.error ||
+            'Unable to load data plans.',
         );
       }
 
-      setPlans(
-        Array.isArray(data.plans)
-          ? data.plans
-          : [],
-      );
+      // Support multiple API response structures
+      let rawPlans: any[] = [];
+
+      if (Array.isArray(data.plans)) {
+        rawPlans = data.plans;
+      } else if (
+        Array.isArray(data.data?.plans)
+      ) {
+        rawPlans = data.data.plans;
+      } else if (
+        Array.isArray(data.data)
+      ) {
+        rawPlans = data.data;
+      } else if (
+        Array.isArray(data.result?.plans)
+      ) {
+        rawPlans = data.result.plans;
+      } else if (
+        Array.isArray(data.results)
+      ) {
+        rawPlans = data.results;
+      }
+
+      const normalizedPlans = rawPlans
+        .map((plan, index) =>
+          normalizeDataPlan(plan, index),
+        )
+        .filter(
+          (plan): plan is DataPlan =>
+            plan !== null,
+        );
+
+      setPlans(normalizedPlans);
+
+      if (normalizedPlans.length === 0) {
+        console.log(
+          'Data plans response:',
+          JSON.stringify(data, null, 2),
+        );
+      }
     } catch (error: any) {
       console.log('Data plans error:', error);
 
@@ -353,6 +542,15 @@ const DataScreen = ({
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
+
+    // Hot Deals must be checked before Special
+    if (
+      text.includes('hot') ||
+      text.includes('deal') ||
+      text.includes('discount')
+    ) {
+      return 'Hot Deals';
+    }
 
     if (
       text.includes('night') ||
@@ -423,13 +621,6 @@ const DataScreen = ({
       return 'Special';
     }
 
-    if (
-      text.includes('hot') ||
-      text.includes('deal')
-    ) {
-      return 'Hot Deals';
-    }
-
     return 'Other';
   };
 
@@ -439,7 +630,8 @@ const DataScreen = ({
 
   const filteredPlans = useMemo(() => {
     return plans.filter(plan => {
-      const category = getPlanCategory(plan);
+      const category =
+        getPlanCategory(plan);
 
       const matchesCategory =
         selectedCategory === 'All Plans' ||
@@ -459,9 +651,14 @@ const DataScreen = ({
 
       const matchesSearch =
         search.trim() === '' ||
-        searchText.includes(search.trim().toLowerCase());
+        searchText.includes(
+          search.trim().toLowerCase(),
+        );
 
-      return matchesCategory && matchesSearch;
+      return (
+        matchesCategory &&
+        matchesSearch
+      );
     });
   }, [plans, selectedCategory, search]);
 
@@ -469,7 +666,9 @@ const DataScreen = ({
   // CURRENCY
   // ====================================================
 
-  const formatAmount = (amount: number) => {
+  const formatAmount = (
+    amount: number,
+  ) => {
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency: 'NGN',
@@ -482,6 +681,9 @@ const DataScreen = ({
   // ====================================================
 
   const handleContinue = () => {
+    const normalizedPhone =
+      normalizePhoneNumber(phone);
+
     if (!phone.trim()) {
       Alert.alert(
         'Phone number required',
@@ -490,10 +692,12 @@ const DataScreen = ({
       return;
     }
 
-    if (!/^0\d{10}$/.test(phone)) {
+    if (
+      !/^0\d{10}$/.test(normalizedPhone)
+    ) {
       Alert.alert(
         'Invalid phone number',
-        'Enter a valid 11-digit Nigerian phone number.',
+        'Enter a valid Nigerian phone number. You can enter it with or without the first zero, or with +234.',
       );
       return;
     }
@@ -527,6 +731,9 @@ const DataScreen = ({
       return;
     }
 
+    const normalizedPhone =
+      normalizePhoneNumber(phone);
+
     setPurchasing(true);
 
     try {
@@ -534,6 +741,7 @@ const DataScreen = ({
         `${API_BASE}/data`,
         {
           method: 'POST',
+
           headers: {
             Authorization: `Bearer ${authToken}`,
             'Content-Type': 'application/json',
@@ -542,7 +750,7 @@ const DataScreen = ({
 
           body: JSON.stringify({
             network: selectedNetwork.id,
-            phone,
+            phone: normalizedPhone,
             variation_code:
               selectedPlan.variation_code,
             transaction_pin: transactionPin,
@@ -559,7 +767,7 @@ const DataScreen = ({
         ...data,
         httpStatus: response.status,
         amount: selectedPlan.amount,
-        phone,
+        phone: normalizedPhone,
         network: selectedNetwork.name,
         plan: selectedPlan.name,
       });
@@ -576,7 +784,7 @@ const DataScreen = ({
           error?.message ||
           'Unable to complete your data purchase.',
         amount: selectedPlan.amount,
-        phone,
+        phone: normalizedPhone,
         network: selectedNetwork.name,
         plan: selectedPlan.name,
       });
@@ -628,7 +836,9 @@ const DataScreen = ({
   const closeResultModal = () => {
     setResultModalVisible(false);
 
-    if (getTransactionStatus() === 'success') {
+    if (
+      getTransactionStatus() === 'success'
+    ) {
       onComplete?.();
     }
   };
@@ -637,7 +847,9 @@ const DataScreen = ({
   // SELECT NETWORK
   // ====================================================
 
-  const selectNetwork = (network: NetworkItem) => {
+  const selectNetwork = (
+    network: NetworkItem,
+  ) => {
     setSelectedNetwork(network);
     setNetworkModalVisible(false);
     setSelectedCategory('All Plans');
@@ -653,7 +865,9 @@ const DataScreen = ({
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: theme.background },
+        {
+          backgroundColor: theme.background,
+        },
       ]}
     >
       {/* HEADER */}
@@ -679,7 +893,9 @@ const DataScreen = ({
           </Text>
         </TouchableOpacity>
 
-        <View style={styles.headerTitleContainer}>
+        <View
+          style={styles.headerTitleContainer}
+        >
           <Text
             style={[
               styles.headerTitle,
@@ -704,7 +920,7 @@ const DataScreen = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* PHONE NUMBER + NETWORK DROPDOWN */}
+        {/* PHONE NUMBER */}
 
         <Text
           style={[
@@ -738,12 +954,12 @@ const DataScreen = ({
               styles.phoneInput,
               { color: theme.text },
             ]}
-            placeholder="08012345678"
+            placeholder="8012345678"
             placeholderTextColor={theme.muted}
             keyboardType="phone-pad"
             value={phone}
             onChangeText={handlePhoneChange}
-            maxLength={11}
+            maxLength={13}
           />
 
           <TouchableOpacity
@@ -790,7 +1006,8 @@ const DataScreen = ({
             { color: theme.muted },
           ]}
         >
-          Data will be sent to this phone number.
+          Enter a Nigerian phone number. Network
+          detection is automatic.
         </Text>
 
         {/* SEARCH */}
@@ -804,7 +1021,9 @@ const DataScreen = ({
             },
           ]}
         >
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Text style={styles.searchIcon}>
+            🔍
+          </Text>
 
           <TextInput
             style={[
@@ -838,7 +1057,9 @@ const DataScreen = ({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryContainer}
+          contentContainerStyle={
+            styles.categoryContainer
+          }
         >
           {CATEGORIES.map(category => {
             const active =
@@ -905,7 +1126,9 @@ const DataScreen = ({
         </View>
 
         {loadingPlans ? (
-          <View style={styles.loadingContainer}>
+          <View
+            style={styles.loadingContainer}
+          >
             <ActivityIndicator
               size="large"
               color={theme.green}
@@ -930,7 +1153,9 @@ const DataScreen = ({
               },
             ]}
           >
-            <Text style={styles.emptyIcon}>📦</Text>
+            <Text style={styles.emptyIcon}>
+              📦
+            </Text>
 
             <Text
               style={[
@@ -953,137 +1178,158 @@ const DataScreen = ({
             <TouchableOpacity
               style={[
                 styles.retryButton,
-                { backgroundColor: theme.green },
+                {
+                  backgroundColor: theme.green,
+                },
               ]}
               onPress={loadPlans}
             >
-              <Text style={styles.retryButtonText}>
+              <Text
+                style={styles.retryButtonText}
+              >
                 Retry
               </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.plansContainer}>
-            {filteredPlans.map((plan, index) => {
-              const active =
-                selectedPlan?.variation_code ===
-                plan.variation_code;
+            {filteredPlans.map(
+              (plan, index) => {
+                const active =
+                  selectedPlan?.variation_code ===
+                  plan.variation_code;
 
-              const category =
-                getPlanCategory(plan);
+                const category =
+                  getPlanCategory(plan);
 
-              return (
-                <TouchableOpacity
-                  key={`${plan.variation_code}-${index}`}
-                  style={[
-                    styles.planCard,
-                    {
-                      backgroundColor: theme.card,
-                      borderColor: active
-                        ? theme.green
-                        : theme.border,
-                      borderWidth: active ? 2 : 1,
-                    },
-                  ]}
-                  onPress={() =>
-                    setSelectedPlan(plan)
-                  }
-                >
-                  <View style={styles.planTop}>
-                    <View style={styles.planDetails}>
-                      <Text
-                        style={[
-                          styles.planName,
-                          { color: theme.text },
-                        ]}
+                return (
+                  <TouchableOpacity
+                    key={`${plan.variation_code}-${index}`}
+                    style={[
+                      styles.planCard,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: active
+                          ? theme.green
+                          : theme.border,
+                        borderWidth: active ? 2 : 1,
+                      },
+                    ]}
+                    onPress={() =>
+                      setSelectedPlan(plan)
+                    }
+                  >
+                    <View style={styles.planTop}>
+                      <View
+                        style={styles.planDetails}
                       >
-                        {plan.name}
-                      </Text>
-
-                      {plan.allowance && (
                         <Text
                           style={[
-                            styles.planAllowance,
-                            { color: theme.muted },
+                            styles.planName,
+                            { color: theme.text },
                           ]}
                         >
-                          {plan.allowance}
+                          {plan.name}
                         </Text>
-                      )}
 
-                      {plan.validity && (
+                        {plan.allowance && (
+                          <Text
+                            style={[
+                              styles.planAllowance,
+                              { color: theme.muted },
+                            ]}
+                          >
+                            {plan.allowance}
+                          </Text>
+                        )}
+
+                        {plan.validity && (
+                          <Text
+                            style={[
+                              styles.planValidity,
+                              { color: theme.muted },
+                            ]}
+                          >
+                            Validity: {plan.validity}
+                          </Text>
+                        )}
+                      </View>
+
+                      <View
+                        style={
+                          styles.planPriceContainer
+                        }
+                      >
                         <Text
                           style={[
-                            styles.planValidity,
-                            { color: theme.muted },
+                            styles.planPrice,
+                            { color: theme.green },
                           ]}
                         >
-                          Validity: {plan.validity}
+                          {formatAmount(
+                            Number(plan.amount) || 0,
+                          )}
                         </Text>
-                      )}
+
+                        {active && (
+                          <View
+                            style={[
+                              styles.selectedIndicator,
+                              {
+                                backgroundColor:
+                                  theme.green,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={styles.checkText}
+                            >
+                              ✓
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
 
-                    <View style={styles.planPriceContainer}>
-                      <Text
+                    <View
+                      style={styles.planBottom}
+                    >
+                      <View
                         style={[
-                          styles.planPrice,
-                          { color: theme.green },
+                          styles.planCategoryBadge,
+                          {
+                            backgroundColor: isDark
+                              ? '#303A30'
+                              : '#F0F5E8',
+                          },
                         ]}
                       >
-                        {formatAmount(
-                          Number(plan.amount) || 0,
-                        )}
-                      </Text>
-
-                      {active && (
-                        <View
+                        <Text
                           style={[
-                            styles.selectedIndicator,
-                            {
-                              backgroundColor: theme.green,
-                            },
+                            styles.planCategoryText,
+                            { color: theme.green },
                           ]}
                         >
-                          <Text style={styles.checkText}>
-                            ✓
+                          {category}
+                        </Text>
+                      </View>
+
+                      {plan.isPromotional && (
+                        <View
+                          style={styles.promoBadge}
+                        >
+                          <Text
+                            style={styles.promoText}
+                          >
+                            PROMO
                           </Text>
                         </View>
                       )}
                     </View>
-                  </View>
-
-                  <View style={styles.planBottom}>
-                    <View
-                      style={[
-                        styles.planCategoryBadge,
-                        {
-                          backgroundColor: isDark
-                            ? '#303A30'
-                            : '#F0F5E8',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.planCategoryText,
-                          { color: theme.green },
-                        ]}
-                      >
-                        {category}
-                      </Text>
-                    </View>
-
-                    {plan.isPromotional && (
-                      <View style={styles.promoBadge}>
-                        <Text style={styles.promoText}>
-                          PROMO
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              },
+            )}
           </View>
         )}
 
@@ -1144,7 +1390,8 @@ const DataScreen = ({
                   { color: theme.text },
                 ]}
               >
-                {phone || 'Not entered'}
+                {normalizePhoneNumber(phone) ||
+                  'Not entered'}
               </Text>
             </View>
 
@@ -1212,11 +1459,15 @@ const DataScreen = ({
           disabled={!selectedPlan}
           onPress={handleContinue}
         >
-          <Text style={styles.continueButtonText}>
+          <Text
+            style={styles.continueButtonText}
+          >
             Continue
           </Text>
 
-          <Text style={styles.continueArrow}>→</Text>
+          <Text style={styles.continueArrow}>
+            →
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.bottomSpace} />
@@ -1261,7 +1512,8 @@ const DataScreen = ({
 
             {NETWORKS.map(network => {
               const active =
-                selectedNetwork.id === network.id;
+                selectedNetwork.id ===
+                network.id;
 
               return (
                 <TouchableOpacity
@@ -1286,7 +1538,9 @@ const DataScreen = ({
                 >
                   <Image
                     source={network.logo}
-                    style={styles.networkOptionLogo}
+                    style={
+                      styles.networkOptionLogo
+                    }
                     resizeMode="contain"
                   />
 
@@ -1303,10 +1557,15 @@ const DataScreen = ({
                     <View
                       style={[
                         styles.networkCheck,
-                        { backgroundColor: theme.green },
+                        {
+                          backgroundColor:
+                            theme.green,
+                        },
                       ]}
                     >
-                      <Text style={styles.checkText}>
+                      <Text
+                        style={styles.checkText}
+                      >
                         ✓
                       </Text>
                     </View>
@@ -1387,7 +1646,8 @@ const DataScreen = ({
                 style={[
                   styles.modalSummary,
                   {
-                    backgroundColor: theme.background,
+                    backgroundColor:
+                      theme.background,
                     borderColor: theme.border,
                   },
                 ]}
@@ -1407,7 +1667,8 @@ const DataScreen = ({
                     { color: theme.muted },
                   ]}
                 >
-                  {selectedNetwork.name} • {phone}
+                  {selectedNetwork.name} •{' '}
+                  {normalizePhoneNumber(phone)}
                 </Text>
 
                 <Text
@@ -1440,7 +1701,9 @@ const DataScreen = ({
               value={transactionPin}
               onChangeText={value =>
                 setTransactionPin(
-                  value.replace(/\D/g, '').slice(0, 4),
+                  value
+                    .replace(/\D/g, '')
+                    .slice(0, 4),
                 )
               }
               autoFocus
@@ -1465,9 +1728,13 @@ const DataScreen = ({
               onPress={handlePurchase}
             >
               {purchasing ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator
+                  color="#FFFFFF"
+                />
               ) : (
-                <Text style={styles.confirmButtonText}>
+                <Text
+                  style={styles.confirmButtonText}
+                >
                   Confirm & Buy Data
                 </Text>
               )}
@@ -1509,12 +1776,15 @@ const DataScreen = ({
               { backgroundColor: theme.card },
             ]}
           >
-            {getTransactionStatus() === 'success' ? (
+            {getTransactionStatus() ===
+            'success' ? (
               <>
                 <View
                   style={[
                     styles.resultIcon,
-                    { backgroundColor: '#E7F6E8' },
+                    {
+                      backgroundColor: '#E7F6E8',
+                    },
                   ]}
                 >
                   <Text
@@ -1542,19 +1812,24 @@ const DataScreen = ({
                     { color: theme.muted },
                   ]}
                 >
-                  Your data purchase has been completed
-                  successfully.
+                  Your data purchase has been
+                  completed successfully.
                 </Text>
               </>
-            ) : getTransactionStatus() === 'pending' ? (
+            ) : getTransactionStatus() ===
+              'pending' ? (
               <>
                 <View
                   style={[
                     styles.resultIcon,
-                    { backgroundColor: '#F0F5E8' },
+                    {
+                      backgroundColor: '#F0F5E8',
+                    },
                   ]}
                 >
-                  <Text style={styles.resultIconText}>
+                  <Text
+                    style={styles.resultIconText}
+                  >
                     ⏳
                   </Text>
                 </View>
@@ -1574,8 +1849,9 @@ const DataScreen = ({
                     { color: theme.muted },
                   ]}
                 >
-                  Your transaction is being processed.
-                  Please wait for confirmation.
+                  Your transaction is being
+                  processed. Please wait for
+                  confirmation.
                 </Text>
               </>
             ) : (
@@ -1583,7 +1859,9 @@ const DataScreen = ({
                 <View
                   style={[
                     styles.resultIcon,
-                    { backgroundColor: '#FDE8E8' },
+                    {
+                      backgroundColor: '#FDE8E8',
+                    },
                   ]}
                 >
                   <Text
@@ -1623,7 +1901,8 @@ const DataScreen = ({
                 style={[
                   styles.resultDetails,
                   {
-                    backgroundColor: theme.background,
+                    backgroundColor:
+                      theme.background,
                     borderColor: theme.border,
                   },
                 ]}
@@ -1705,7 +1984,9 @@ const DataScreen = ({
                     ]}
                   >
                     {formatAmount(
-                      Number(transactionResult.amount) || 0,
+                      Number(
+                        transactionResult.amount,
+                      ) || 0,
                     )}
                   </Text>
                 </View>
@@ -1719,8 +2000,11 @@ const DataScreen = ({
               ]}
               onPress={closeResultModal}
             >
-              <Text style={styles.resultButtonText}>
-                {getTransactionStatus() === 'success'
+              <Text
+                style={styles.resultButtonText}
+              >
+                {getTransactionStatus() ===
+                'success'
                   ? 'Done'
                   : 'Close'}
               </Text>
