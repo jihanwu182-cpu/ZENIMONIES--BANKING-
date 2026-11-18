@@ -606,7 +606,13 @@ const loadPlans = useCallback(async () => {
     }
   }
 }, [authToken, selectedNetwork.id]);
-  
+  // ====================================================
+// AUTOMATICALLY LOAD DATA PLANS
+// ====================================================
+
+useEffect(() => {
+  loadPlans();
+}, [loadPlans]);
   // ====================================================
   // PLAN CATEGORIES
   // ====================================================
