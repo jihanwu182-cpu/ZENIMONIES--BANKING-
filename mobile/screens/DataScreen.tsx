@@ -50,8 +50,12 @@ interface NetworkItem {
   id: string;
   name: string;
   logo: any;
-  color: string;
 }
+
+type TransactionStatus =
+  | 'success'
+  | 'pending'
+  | 'failed';
 
 // ======================================================
 // CONFIGURATION
@@ -65,10 +69,9 @@ const COLORS = {
   darkGreen: '#527900',
   black: '#172018',
   muted: '#858B83',
-  background: '#FFFFFF',
+  background: '#F6F8F3',
   white: '#FFFFFF',
   border: '#E9EDE5',
-  red: '#E53935',
 };
 
 const NETWORKS: NetworkItem[] = [
@@ -76,25 +79,21 @@ const NETWORKS: NetworkItem[] = [
     id: 'mtn',
     name: 'MTN',
     logo: require('../assets/network-logos/mtn-nigeria-communications-plc--600.png'),
-    color: '#FFCC00',
   },
   {
     id: 'airtel',
     name: 'Airtel',
     logo: require('../assets/network-logos/airtel.png'),
-    color: '#E60000',
   },
   {
     id: 'glo',
     name: 'Glo',
     logo: require('../assets/network-logos/glo.png'),
-    color: '#00A859',
   },
   {
     id: 't2mobile',
     name: 'T2 Mobile',
     logo: require('../assets/network-logos/T2-Mobilr.jpg'),
-    color: '#222222',
   },
 ];
 
@@ -274,21 +273,17 @@ const normalizeDataPlan = (
     return null;
   }
 
-  // Automatically extract allowance from plan name.
   const allowanceMatch = String(name).match(
     /(\d+(?:\.\d+)?\s*(?:MB|GB|TB))/i,
   );
 
-  // Automatically extract validity from plan name.
   const validityMatch = String(name).match(
     /(\d+\s*(?:day|days|week|weeks|month|months|hour|hours))/i,
   );
 
   return {
     variation_code: String(variationCode),
-
     name: String(name),
-
     amount,
 
     network:
@@ -338,6 +333,7 @@ const normalizeDataPlan = (
 // ======================================================
 // EXTRACT PLANS FROM API RESPONSE
 // ======================================================
+
 const extractPlansFromResponse = (
   response: any,
 ): any[] => {
@@ -370,6 +366,60 @@ const extractPlansFromResponse = (
 
   return [];
 };
+
+// ======================================================
+// TRANSACTION STATUS HELPERS
+// ======================================================
+
+const getStatusFromResult = (
+  result: any,
+): TransactionStatus => {
+  if (!result) {
+    return 'failed';
+  }
+
+  const status = String(
+    result.status ||
+      result.transaction?.status ||
+      result.data?.status ||
+      '',
+  ).toLowerCase();
+
+  // Pending takes precedence over success.
+  if (
+    result.httpStatus === 202 ||
+    status === 'pending' ||
+    status === 'processing' ||
+    status === 'queued' ||
+    status === 'initiated' ||
+    status === 'unknown'
+  ) {
+    return 'pending';
+  }
+
+  if (
+    status === 'failed' ||
+    status === 'failure' ||
+    status === 'declined' ||
+    status === 'rejected' ||
+    status === 'cancelled' ||
+    status === 'canceled'
+  ) {
+    return 'failed';
+  }
+
+  if (
+    status === 'completed' ||
+    status === 'successful' ||
+    status === 'success' ||
+    result.success === true
+  ) {
+    return 'success';
+  }
+
+  return 'failed';
+};
+
 // ======================================================
 // COMPONENT
 // ======================================================
@@ -381,17 +431,16 @@ const DataScreen = ({
   colors,
   isDark = false,
 }: Props) => {
+  // Approved ZENIMONIES palette only.
   const theme = {
-  background: '#FFFFFF',
-  card: '#FFFFFF',
-  text: COLORS.black,
-  muted: COLORS.muted,
-  border: COLORS.border,
-
-  // ZENIMONIES ORIGINAL DARK GREEN
-  green: '#527900',
-  darkGreen: '#527900',
-};
+    background: COLORS.background,
+    card: COLORS.white,
+    text: COLORS.black,
+    muted: COLORS.muted,
+    border: COLORS.border,
+    green: COLORS.green,
+    darkGreen: COLORS.darkGreen,
+  };
 
   const authToken = token || '';
 
@@ -437,6 +486,8 @@ const DataScreen = ({
 
   const requestIdRef = useRef(0);
 
+  const purchaseInProgressRef = useRef(false);
+
   // ====================================================
   // PHONE NUMBER
   // ====================================================
@@ -462,157 +513,162 @@ const DataScreen = ({
   // ====================================================
   // LOAD PLANS
   // ====================================================
-const loadPlans = useCallback(async () => {
-  const currentRequest = ++requestIdRef.current;
 
-  if (!authToken) {
+  const loadPlans = useCallback(async () => {
+    const currentRequest =
+      ++requestIdRef.current;
+
+    if (!authToken) {
+      setPlans([]);
+      setSelectedPlan(null);
+      setLoadingPlans(false);
+
+      Alert.alert(
+        'Session expired',
+        'Please log in again to load data plans.',
+      );
+
+      return;
+    }
+
+    setLoadingPlans(true);
     setPlans([]);
     setSelectedPlan(null);
-    setLoadingPlans(false);
-
-    Alert.alert(
-      'Session expired',
-      'Please log in again to load data plans.',
-    );
-
-    return;
-  }
-
-  setLoadingPlans(true);
-  setPlans([]);
-  setSelectedPlan(null);
-
-  try {
-    const url =
-      `${API_BASE}/data/plans?network=` +
-      encodeURIComponent(selectedNetwork.id);
-
-    console.log(
-      'ZENIMONIES DATA PLANS REQUEST:',
-      selectedNetwork.id,
-    );
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        Accept: 'application/json',
-      },
-    });
-
-    const responseText = await response.text();
-
-    let data: any;
 
     try {
-      data = responseText
-        ? JSON.parse(responseText)
-        : {};
-    } catch {
-      throw new Error(
-        'Invalid response received from the server.',
-      );
-    }
+      const url =
+        `${API_BASE}/data/plans?network=` +
+        encodeURIComponent(selectedNetwork.id);
 
-    console.log(
-      'DATA PLANS HTTP STATUS:',
-      response.status,
-    );
-
-    console.log(
-      'DATA PLANS RESPONSE:',
-      JSON.stringify(data),
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        data.message ||
-          data.error ||
-          data.details ||
-          `Request failed (${response.status})`,
-      );
-    }
-
-    const rawPlans =
-      extractPlansFromResponse(data);
-
-    console.log(
-      'RAW DATA PLANS COUNT:',
-      rawPlans.length,
-    );
-
-    const normalizedPlans = rawPlans
-      .map((plan: any, index: number) =>
-        normalizeDataPlan(plan, index),
-      )
-      .filter(
-        (plan): plan is DataPlan =>
-          plan !== null,
-      );
-
-    console.log(
-      'NORMALIZED DATA PLANS COUNT:',
-      normalizedPlans.length,
-    );
-
-    if (
-      currentRequest !== requestIdRef.current
-    ) {
-      return;
-    }
-
-    setPlans(normalizedPlans);
-
-    // Always reset category when plans are loaded.
-    // This prevents a selected Night/Weekly category
-    // from hiding plans returned by the provider.
-    setSelectedCategory('All Plans');
-
-    if (normalizedPlans.length > 0) {
       console.log(
-        'DATA PLANS SUCCESS:',
+        'ZENIMONIES DATA PLANS REQUEST:',
+        selectedNetwork.id,
+      );
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const responseText =
+        await response.text();
+
+      let data: any;
+
+      try {
+        data = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch {
+        throw new Error(
+          'Invalid response received from the server.',
+        );
+      }
+
+      console.log(
+        'DATA PLANS HTTP STATUS:',
+        response.status,
+      );
+
+      console.log(
+        'DATA PLANS RESPONSE:',
+        JSON.stringify(data),
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            data.details ||
+            `Request failed (${response.status})`,
+        );
+      }
+
+      const rawPlans =
+        extractPlansFromResponse(data);
+
+      console.log(
+        'RAW DATA PLANS COUNT:',
+        rawPlans.length,
+      );
+
+      const normalizedPlans = rawPlans
+        .map((plan: any, index: number) =>
+          normalizeDataPlan(plan, index),
+        )
+        .filter(
+          (plan): plan is DataPlan =>
+            plan !== null,
+        );
+
+      console.log(
+        'NORMALIZED DATA PLANS COUNT:',
         normalizedPlans.length,
       );
-    } else {
-      console.warn(
-        'DATA PLANS EMPTY:',
-        JSON.stringify(data, null, 2),
+
+      if (
+        currentRequest !==
+        requestIdRef.current
+      ) {
+        return;
+      }
+
+      setPlans(normalizedPlans);
+
+      setSelectedCategory('All Plans');
+
+      if (normalizedPlans.length > 0) {
+        console.log(
+          'DATA PLANS SUCCESS:',
+          normalizedPlans.length,
+        );
+      } else {
+        console.warn(
+          'DATA PLANS EMPTY:',
+          JSON.stringify(data, null, 2),
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        'ZENIMONIES DATA PLANS ERROR:',
+        error?.message || error,
       );
-    }
-  } catch (error: any) {
-    console.error(
-      'ZENIMONIES DATA PLANS ERROR:',
-      error?.message || error,
-    );
 
-    if (
-      currentRequest !== requestIdRef.current
-    ) {
-      return;
-    }
+      if (
+        currentRequest !==
+        requestIdRef.current
+      ) {
+        return;
+      }
 
-    setPlans([]);
+      setPlans([]);
 
-    Alert.alert(
-      'Unable to load data plans',
-      error?.message ||
-        'Please check your internet connection and try again.',
-    );
-  } finally {
-    if (
-      currentRequest === requestIdRef.current
-    ) {
-      setLoadingPlans(false);
+      Alert.alert(
+        'Unable to load data plans',
+        error?.message ||
+          'Please check your internet connection and try again.',
+      );
+    } finally {
+      if (
+        currentRequest ===
+        requestIdRef.current
+      ) {
+        setLoadingPlans(false);
+      }
     }
-  }
-}, [authToken, selectedNetwork.id]);
+  }, [authToken, selectedNetwork.id]);
+
   // ====================================================
-// AUTOMATICALLY LOAD DATA PLANS
-// ====================================================
+  // AUTOMATICALLY LOAD DATA PLANS
+  // ====================================================
 
-useEffect(() => {
-  loadPlans();
-}, [loadPlans]);
+  useEffect(() => {
+    loadPlans();
+  }, [loadPlans]);
+
   // ====================================================
   // PLAN CATEGORIES
   // ====================================================
@@ -716,32 +772,39 @@ useEffect(() => {
   // ====================================================
 
   const filteredPlans = useMemo(() => {
-  return plans.filter(plan => {
-    const category = getPlanCategory(plan);
+    return plans.filter(plan => {
+      const category =
+        getPlanCategory(plan);
 
-    const matchesCategory =
-      selectedCategory === 'All Plans' ||
-      category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === 'All Plans' ||
+        category === selectedCategory;
 
-    const searchText = [
-      plan.name,
-      plan.allowance,
-      plan.validity,
-      plan.description,
-      plan.category,
-      plan.amount,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+      const searchText = [
+        plan.name,
+        plan.allowance,
+        plan.validity,
+        plan.description,
+        plan.category,
+        plan.amount,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-    const matchesSearch =
-      search.trim() === '' ||
-      searchText.includes(search.trim().toLowerCase());
+      const matchesSearch =
+        search.trim() === '' ||
+        searchText.includes(
+          search.trim().toLowerCase(),
+        );
 
-    return matchesCategory && matchesSearch;
-  });
-}, [plans, selectedCategory, search]);
+      return (
+        matchesCategory &&
+        matchesSearch
+      );
+    });
+  }, [plans, selectedCategory, search]);
+
   // ====================================================
   // CURRENCY
   // ====================================================
@@ -815,10 +878,23 @@ useEffect(() => {
       return;
     }
 
+    // Prevent duplicate taps/submissions.
+    if (purchaseInProgressRef.current) {
+      return;
+    }
+
+    purchaseInProgressRef.current = true;
+
     const normalizedPhone =
       normalizePhoneNumber(phone);
 
+    const submittedPin =
+      transactionPin;
+
     setPurchasing(true);
+
+    // Clear PIN from state immediately.
+    setTransactionPin('');
 
     try {
       const response = await fetch(
@@ -837,7 +913,7 @@ useEffect(() => {
             phone: normalizedPhone,
             variation_code:
               selectedPlan.variation_code,
-            transaction_pin: transactionPin,
+            transaction_pin: submittedPin,
           }),
         },
       );
@@ -859,7 +935,6 @@ useEffect(() => {
       }
 
       setPinModalVisible(false);
-      setTransactionPin('');
 
       setTransactionResult({
         ...data,
@@ -873,14 +948,17 @@ useEffect(() => {
       setResultModalVisible(true);
     } catch (error: any) {
       setPinModalVisible(false);
-      setTransactionPin('');
 
+      /*
+       * A network error does not prove that the
+       * provider/backend did not receive the request.
+       * Therefore the status is UNKNOWN/PENDING.
+       */
       setTransactionResult({
         success: false,
-        status: 'failed',
+        status: 'unknown',
         message:
-          error?.message ||
-          'Unable to complete your data purchase.',
+          'We could not confirm the transaction status. Your request may have been processed. Check your transaction history before attempting another purchase.',
         amount: selectedPlan.amount,
         phone: normalizedPhone,
         network: selectedNetwork.name,
@@ -889,7 +967,9 @@ useEffect(() => {
 
       setResultModalVisible(true);
     } finally {
+      setTransactionPin('');
       setPurchasing(false);
+      purchaseInProgressRef.current = false;
     }
   };
 
@@ -897,46 +977,19 @@ useEffect(() => {
   // TRANSACTION STATUS
   // ====================================================
 
-  const getTransactionStatus = () => {
-    const result = transactionResult;
-
-    if (!result) {
-      return 'failed';
-    }
-
-    const status = String(
-      result.status ||
-        result.transaction?.status ||
-        result.data?.status ||
-        '',
-    ).toLowerCase();
-
-    if (
-      result.success === true ||
-      status === 'completed' ||
-      status === 'successful' ||
-      status === 'success'
-    ) {
-      return 'success';
-    }
-
-    if (
-      status === 'pending' ||
-      status === 'processing' ||
-      status === 'unknown'
-    ) {
-      return 'pending';
-    }
-
-    return 'failed';
+  const getTransactionStatus = (): TransactionStatus => {
+    return getStatusFromResult(
+      transactionResult,
+    );
   };
 
   const closeResultModal = () => {
+    const currentStatus =
+      getTransactionStatus();
+
     setResultModalVisible(false);
 
-    if (
-      getTransactionStatus() === 'success'
-    ) {
+    if (currentStatus === 'success') {
       onComplete?.();
     }
   };
@@ -1172,7 +1225,6 @@ useEffect(() => {
                     backgroundColor: active
                       ? theme.green
                       : theme.card,
-
                     borderColor: active
                       ? theme.green
                       : theme.border,
@@ -1187,7 +1239,7 @@ useEffect(() => {
                     styles.categoryText,
                     {
                       color: active
-                        ? '#FFFFFF'
+                        ? theme.white
                         : theme.text,
                     },
                   ]}
@@ -1398,16 +1450,15 @@ useEffect(() => {
                         style={[
                           styles.planCategoryBadge,
                           {
-                            backgroundColor: isDark
-                              ? '#303A30'
-                              : '#F0F5E8',
+                            backgroundColor:
+                              theme.background,
                           },
                         ]}
                       >
                         <Text
                           style={[
                             styles.planCategoryText,
-                            { color: theme.green },
+                            { color: theme.darkGreen },
                           ]}
                         >
                           {category}
@@ -1416,10 +1467,20 @@ useEffect(() => {
 
                       {plan.isPromotional && (
                         <View
-                          style={styles.promoBadge}
+                          style={[
+                            styles.promoBadge,
+                            {
+                              backgroundColor:
+                                theme.background,
+                              borderColor: theme.border,
+                            },
+                          ]}
                         >
                           <Text
-                            style={styles.promoText}
+                            style={[
+                              styles.promoText,
+                              { color: theme.darkGreen },
+                            ]}
                           >
                             PROMO
                           </Text>
@@ -1622,11 +1683,8 @@ useEffect(() => {
                     styles.networkOption,
                     {
                       backgroundColor: active
-                        ? isDark
-                          ? '#303A30'
-                          : '#F0F5E8'
+                        ? theme.background
                         : theme.card,
-
                       borderColor: active
                         ? theme.green
                         : theme.border,
@@ -1699,9 +1757,12 @@ useEffect(() => {
         visible={pinModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setPinModalVisible(false)
-        }
+        onRequestClose={() => {
+          if (!purchasing) {
+            setPinModalVisible(false);
+            setTransactionPin('');
+          }
+        }}
       >
         <View style={styles.modalOverlay}>
           <View
@@ -1715,7 +1776,10 @@ useEffect(() => {
             <View
               style={[
                 styles.modalIcon,
-                { backgroundColor: '#F0F5E8' },
+                {
+                  backgroundColor:
+                    theme.background,
+                },
               ]}
             >
               <Text style={styles.modalIconText}>
@@ -1788,7 +1852,8 @@ useEffect(() => {
               style={[
                 styles.pinInput,
                 {
-                  backgroundColor: theme.background,
+                  backgroundColor:
+                    theme.background,
                   borderColor: theme.border,
                   color: theme.text,
                 },
@@ -1829,7 +1894,7 @@ useEffect(() => {
             >
               {purchasing ? (
                 <ActivityIndicator
-                  color="#FFFFFF"
+                  color={theme.white}
                 />
               ) : (
                 <Text
@@ -1843,8 +1908,10 @@ useEffect(() => {
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => {
-                setPinModalVisible(false);
-                setTransactionPin('');
+                if (!purchasing) {
+                  setPinModalVisible(false);
+                  setTransactionPin('');
+                }
               }}
               disabled={purchasing}
             >
@@ -1883,7 +1950,8 @@ useEffect(() => {
                   style={[
                     styles.resultIcon,
                     {
-                      backgroundColor: '#E7F6E8',
+                      backgroundColor:
+                        theme.background,
                     },
                   ]}
                 >
@@ -1923,7 +1991,8 @@ useEffect(() => {
                   style={[
                     styles.resultIcon,
                     {
-                      backgroundColor: '#F0F5E8',
+                      backgroundColor:
+                        theme.background,
                     },
                   ]}
                 >
@@ -1949,10 +2018,33 @@ useEffect(() => {
                     { color: theme.muted },
                   ]}
                 >
-                  Your transaction is being
-                  processed. Please wait for
-                  confirmation.
+                  Your transaction has been
+                  submitted but has not yet been
+                  confirmed.
                 </Text>
+
+                <View
+                  style={[
+                    styles.pendingNotice,
+                    {
+                      backgroundColor:
+                        theme.background,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.pendingNoticeText,
+                      { color: theme.darkGreen },
+                    ]}
+                  >
+                    Do not purchase this data
+                    bundle again yet. Check your
+                    transaction history for the
+                    final status before retrying.
+                  </Text>
+                </View>
               </>
             ) : (
               <>
@@ -1960,14 +2052,15 @@ useEffect(() => {
                   style={[
                     styles.resultIcon,
                     {
-                      backgroundColor: '#FDE8E8',
+                      backgroundColor:
+                        theme.background,
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.resultIconText,
-                      { color: COLORS.red },
+                      { color: theme.darkGreen },
                     ]}
                   >
                     ✕
@@ -2175,8 +2268,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // PHONE NUMBER
-
   phoneInputContainer: {
     minHeight: 58,
     borderWidth: 1,
@@ -2232,8 +2323,6 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
 
-  // SEARCH
-
   searchContainer: {
     height: 48,
     borderWidth: 1,
@@ -2259,8 +2348,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
 
-  // CATEGORIES
-
   categoryContainer: {
     paddingVertical: 15,
     gap: 8,
@@ -2277,8 +2364,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-
-  // PLANS
 
   plansHeader: {
     flexDirection: 'row',
@@ -2345,7 +2430,7 @@ const styles = StyleSheet.create({
   },
 
   checkText: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -2369,19 +2454,16 @@ const styles = StyleSheet.create({
   },
 
   promoBadge: {
-    backgroundColor: '#F0F5E8',
+    borderWidth: 1,
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 7,
   },
 
   promoText: {
-    color: '#527900',
     fontSize: 10,
     fontWeight: '800',
   },
-
-  // LOADING
 
   loadingContainer: {
     paddingVertical: 40,
@@ -2392,8 +2474,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 12,
   },
-
-  // EMPTY
 
   emptyContainer: {
     borderWidth: 1,
@@ -2426,11 +2506,9 @@ const styles = StyleSheet.create({
   },
 
   retryButtonText: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontWeight: '700',
   },
-
-  // SUMMARY
 
   summaryCard: {
     borderWidth: 1,
@@ -2479,8 +2557,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  // CONTINUE
-
   continueButton: {
     height: 55,
     borderRadius: 15,
@@ -2491,13 +2567,13 @@ const styles = StyleSheet.create({
   },
 
   continueButtonText: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: '800',
   },
 
   continueArrow: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontSize: 20,
     fontWeight: '700',
     marginLeft: 10,
@@ -2507,11 +2583,9 @@ const styles = StyleSheet.create({
     height: 40,
   },
 
-  // MODALS
-
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: COLORS.black,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -2521,11 +2595,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 5,
-    backgroundColor: '#D8DDD5',
+    backgroundColor: COLORS.border,
     marginBottom: 20,
   },
-
-  // NETWORK MODAL
 
   networkModal: {
     width: '100%',
@@ -2585,8 +2657,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-
-  // PIN MODAL
 
   modalContainer: {
     width: '100%',
@@ -2668,7 +2738,7 @@ const styles = StyleSheet.create({
   },
 
   confirmButtonText: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -2681,8 +2751,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-
-  // RESULT
 
   resultModal: {
     width: '100%',
@@ -2716,6 +2784,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     marginTop: 8,
+  },
+
+  pendingNotice: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+  },
+
+  pendingNoticeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 18,
+    textAlign: 'center',
   },
 
   resultDetails: {
@@ -2753,7 +2836,7 @@ const styles = StyleSheet.create({
   },
 
   resultButtonText: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
   },
