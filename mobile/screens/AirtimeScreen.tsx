@@ -32,43 +32,15 @@ type Props = {
   onComplete?: () => void;
 };
 
-type NetworkItem = {
+const NETWORKS: {
   value: Network;
   label: string;
-  shortLabel: string;
   color: string;
-  background: string;
-};
-
-const NETWORKS: NetworkItem[] = [
-  {
-    value: 'MTN',
-    label: 'MTN',
-    shortLabel: 'MTN',
-    color: '#111111',
-    background: '#FFD900',
-  },
-  {
-    value: 'Airtel',
-    label: 'Airtel',
-    shortLabel: 'Airtel',
-    color: '#FFFFFF',
-    background: '#E31B23',
-  },
-  {
-    value: 'Glo',
-    label: 'Glo',
-    shortLabel: 'Glo',
-    color: '#FFFFFF',
-    background: '#00A859',
-  },
-  {
-    value: '9mobile',
-    label: 'T2 Mobile',
-    shortLabel: 'T2',
-    color: '#FFFFFF',
-    background: '#171717',
-  },
+}[] = [
+  { value: 'MTN', label: 'MTN', color: '#FFCC00' },
+  { value: 'Airtel', label: 'Airtel', color: '#E31B23' },
+  { value: 'Glo', label: 'Glo', color: '#00A859' },
+  { value: '9mobile', label: 'T2 Mobile', color: '#111111' },
 ];
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
@@ -130,6 +102,7 @@ export default function AirtimeScreen({
 
   const [phone, setPhone] = useState('');
   const [network, setNetwork] = useState<Network | null>(null);
+  const [manualNetwork, setManualNetwork] = useState(false);
   const [networkModalVisible, setNetworkModalVisible] =
     useState(false);
 
@@ -141,7 +114,6 @@ export default function AirtimeScreen({
 
   const [loading, setLoading] = useState(false);
   const [requerying, setRequerying] = useState(false);
-
   const [pendingReference, setPendingReference] = useState('');
 
   const [result, setResult] = useState<{
@@ -155,15 +127,13 @@ export default function AirtimeScreen({
     [phone]
   );
 
-  const selectedNetwork = NETWORKS.find(
-    (item) => item.value === network
-  );
-
   const selectedAmount = Number(amount || customAmount);
 
   const validPhone = /^0[789][01]\d{8}$/.test(phone);
 
-  const isPending = result?.status === 'pending';
+  const selectedNetwork = NETWORKS.find(
+    item => item.value === network
+  );
 
   const networkLabel = (value: Network) =>
     value === '9mobile' ? 'T2 Mobile' : value;
@@ -172,24 +142,24 @@ export default function AirtimeScreen({
     const normalized = normalizePhone(value);
 
     setPhone(normalized);
+    setResult(null);
+    setPendingReference('');
+    setManualNetwork(false);
 
     const detected = detectNetwork(normalized);
 
-    // Automatically suggest/select the detected network.
-    // The customer can still manually override it.
     if (detected) {
       setNetwork(detected);
-    } else if (normalized.length < 4) {
+    } else {
       setNetwork(null);
     }
-
-    setResult(null);
-    setPendingReference('');
   };
 
   const handleNetworkSelection = (value: Network) => {
     setNetwork(value);
+    setManualNetwork(true);
     setNetworkModalVisible(false);
+    setResult(null);
   };
 
   const handlePurchase = async () => {
@@ -231,10 +201,10 @@ export default function AirtimeScreen({
       return;
     }
 
-    if (isPending) {
+    if (pendingReference) {
       Alert.alert(
         'Transaction pending',
-        'Please check the status of your current transaction before making another purchase.'
+        'Please check the status of your previous transaction before making another purchase.'
       );
       return;
     }
@@ -251,7 +221,7 @@ export default function AirtimeScreen({
       return;
     }
 
-    if (loading) return;
+    if (!network) return;
 
     setLoading(true);
 
@@ -364,9 +334,7 @@ export default function AirtimeScreen({
   };
 
   const handleRequery = async () => {
-    if (!pendingReference || !token || requerying) {
-      return;
-    }
+    if (!pendingReference || !token) return;
 
     setRequerying(true);
 
@@ -448,15 +416,15 @@ export default function AirtimeScreen({
   const resetForm = () => {
     setPhone('');
     setNetwork(null);
+    setManualNetwork(false);
     setAmount('');
     setCustomAmount('');
     setResult(null);
     setPendingReference('');
-    setPin('');
   };
 
-  const formatAmount = (value: number) =>
-    `₦${value.toLocaleString('en-NG')}`;
+  const selected = (value: Network) =>
+    network === value;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -464,12 +432,10 @@ export default function AirtimeScreen({
         barStyle={isDark ? 'light-content' : 'dark-content'}
       />
 
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.backButton}
-          activeOpacity={0.7}
         >
           <MaterialCommunityIcons
             name="arrow-left"
@@ -482,7 +448,7 @@ export default function AirtimeScreen({
           Buy Airtime
         </Text>
 
-        <View style={styles.headerSpacer} />
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
@@ -490,18 +456,14 @@ export default function AirtimeScreen({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* PHONE NUMBER */}
-        <Text style={styles.sectionLabel}>
+        <Text style={styles.label}>
           Phone number
         </Text>
 
         <View style={styles.phoneInput}>
-          <View style={styles.countryCodeContainer}>
-            <Text style={styles.countryCode}>
-              +234
-            </Text>
-            <View style={styles.countryDivider} />
-          </View>
+          <Text style={styles.countryCode}>
+            +234
+          </Text>
 
           <TextInput
             value={phone}
@@ -510,7 +472,7 @@ export default function AirtimeScreen({
             placeholder="0803 123 4567"
             placeholderTextColor={colors.textSecondary}
             maxLength={11}
-            style={styles.phoneTextInput}
+            style={styles.input}
           />
 
           {validPhone && (
@@ -522,8 +484,25 @@ export default function AirtimeScreen({
           )}
         </View>
 
-        {/* NETWORK */}
-        <Text style={styles.sectionLabel}>
+        {detectedNetwork && (
+          <View style={styles.detectedBox}>
+            <MaterialCommunityIcons
+              name="check-circle"
+              size={17}
+              color={colors.success}
+            />
+
+            <Text style={styles.detectedText}>
+              {manualNetwork
+                ? 'Network selected manually'
+                : `Network detected: ${networkLabel(
+                    detectedNetwork
+                  )}`}
+            </Text>
+          </View>
+        )}
+
+        <Text style={styles.label}>
           Mobile network
         </Text>
 
@@ -534,73 +513,64 @@ export default function AirtimeScreen({
         >
           {selectedNetwork ? (
             <View style={styles.selectedNetworkContent}>
-              <NetworkBadge
-                item={selectedNetwork}
-                size={38}
-              />
+              <View
+                style={[
+                  styles.networkBadge,
+                  {
+                    backgroundColor:
+                      selectedNetwork.color,
+                  },
+                ]}
+              >
+                <Text style={styles.networkBadgeText}>
+                  {selectedNetwork.label === 'T2 Mobile'
+                    ? 'T2'
+                    : selectedNetwork.label.substring(
+                        0,
+                        1
+                      )}
+                </Text>
+              </View>
 
-              <View style={styles.selectedNetworkText}>
-                <Text style={styles.selectedNetworkName}>
+              <View style={styles.networkSelectorText}>
+                <Text style={styles.networkSelectorTitle}>
                   {selectedNetwork.label}
                 </Text>
 
-                <Text style={styles.selectedNetworkSubtext}>
-                  {detectedNetwork === network
-                    ? 'Detected from phone number'
-                    : 'Selected network'}
+                <Text style={styles.networkSelectorSubtitle}>
+                  {manualNetwork
+                    ? 'Selected manually'
+                    : 'Based on phone number'}
                 </Text>
               </View>
             </View>
           ) : (
-            <View style={styles.networkPlaceholder}>
-              <View style={styles.networkPlaceholderIcon}>
-                <MaterialCommunityIcons
-                  name="sim"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </View>
-
-              <Text style={styles.networkPlaceholderText}>
-                Select mobile network
-              </Text>
-            </View>
+            <Text style={styles.networkPlaceholder}>
+              Select mobile network
+            </Text>
           )}
 
           <MaterialCommunityIcons
             name="chevron-down"
-            size={24}
+            size={23}
             color={colors.textSecondary}
           />
         </TouchableOpacity>
 
-        {detectedNetwork && (
-          <View style={styles.detectedNotice}>
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={17}
-              color={colors.primary}
-            />
+        <Text style={styles.networkNote}>
+          Network detection uses the phone number prefix.
+          If your number has been ported, select your
+          current network manually.
+        </Text>
 
-            <Text style={styles.detectedNoticeText}>
-              Number prefix suggests{' '}
-              <Text style={styles.detectedNoticeBold}>
-                {networkLabel(detectedNetwork)}
-              </Text>
-              . You can change the network if this number
-              has been ported.
-            </Text>
-          </View>
-        )}
-
-        {/* AMOUNT */}
-        <Text style={styles.sectionLabel}>
-          Select amount
+        <Text style={styles.label}>
+          Choose amount
         </Text>
 
         <View style={styles.amountGrid}>
-          {AMOUNTS.map((value) => {
-            const selected = amount === String(value);
+          {AMOUNTS.map(value => {
+            const isSelected =
+              amount === String(value);
 
             return (
               <TouchableOpacity
@@ -608,38 +578,30 @@ export default function AirtimeScreen({
                 onPress={() => {
                   setAmount(String(value));
                   setCustomAmount('');
+                  setResult(null);
                 }}
                 style={[
                   styles.amountItem,
-                  selected && styles.amountSelected,
+                  isSelected &&
+                    styles.amountSelected,
                 ]}
-                activeOpacity={0.75}
               >
                 <Text
                   style={[
                     styles.amountText,
-                    selected && styles.amountTextSelected,
+                    isSelected &&
+                      styles.amountTextSelected,
                   ]}
                 >
-                  {formatAmount(value)}
+                  ₦{value.toLocaleString('en-NG')}
                 </Text>
-
-                {selected && (
-                  <MaterialCommunityIcons
-                    name="check-circle"
-                    size={15}
-                    color={colors.primary}
-                    style={styles.amountCheck}
-                  />
-                )}
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {/* CUSTOM AMOUNT */}
-        <Text style={styles.sectionLabel}>
-          Other amount
+        <Text style={styles.label}>
+          Or enter another amount
         </Text>
 
         <View style={styles.customAmountInput}>
@@ -649,40 +611,35 @@ export default function AirtimeScreen({
 
           <TextInput
             value={customAmount}
-            onChangeText={(value) => {
+            onChangeText={value => {
               setCustomAmount(
                 value.replace(/[^0-9.]/g, '')
               );
               setAmount('');
+              setResult(null);
             }}
             keyboardType="decimal-pad"
             placeholder="Enter amount"
-            placeholderTextColor={colors.textSecondary}
-            style={styles.customAmountTextInput}
+            placeholderTextColor={
+              colors.textSecondary
+            }
+            style={styles.input}
           />
         </View>
 
-        <Text style={styles.amountHint}>
-          Minimum ₦50 · Maximum ₦50,000
-        </Text>
+        <View style={styles.infoBox}>
+          <MaterialCommunityIcons
+            name="shield-check-outline"
+            size={20}
+            color={colors.primary}
+          />
 
-        {/* SECURITY */}
-        <View style={styles.securityNotice}>
-          <View style={styles.securityIcon}>
-            <MaterialCommunityIcons
-              name="shield-check"
-              size={21}
-              color={colors.primary}
-            />
-          </View>
-
-          <Text style={styles.securityText}>
-            Your transaction PIN is verified securely by
-            ZENIMONIES.
+          <Text style={styles.infoText}>
+            Your transaction PIN is verified securely
+            by ZENIMONIES.
           </Text>
         </View>
 
-        {/* RESULT */}
         {result && (
           <View
             style={[
@@ -702,7 +659,7 @@ export default function AirtimeScreen({
                   ? 'alert-circle'
                   : 'clock-outline'
               }
-              size={30}
+              size={27}
               color={
                 result.status === 'completed'
                   ? colors.success
@@ -736,22 +693,13 @@ export default function AirtimeScreen({
                   style={styles.requeryButton}
                   onPress={handleRequery}
                   disabled={requerying}
-                  activeOpacity={0.8}
                 >
                   {requerying ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <>
-                      <MaterialCommunityIcons
-                        name="refresh"
-                        size={17}
-                        color="#FFFFFF"
-                      />
-
-                      <Text style={styles.requeryText}>
-                        Check transaction status
-                      </Text>
-                    </>
+                    <Text style={styles.requeryText}>
+                      Check transaction status
+                    </Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -760,7 +708,6 @@ export default function AirtimeScreen({
               <TouchableOpacity
                 style={styles.newPurchaseButton}
                 onPress={resetForm}
-                activeOpacity={0.75}
               >
                 <Text style={styles.newPurchaseText}>
                   Make another purchase
@@ -770,18 +717,16 @@ export default function AirtimeScreen({
           </View>
         )}
 
-        {/* CONTINUE */}
         <TouchableOpacity
           style={[
             styles.continueButton,
-            (
-              loading ||
+            (loading ||
               !validPhone ||
               !network ||
               selectedAmount < 50 ||
               selectedAmount > 50000 ||
-              isPending
-            ) && styles.disabledButton,
+              !!pendingReference) &&
+              styles.disabledButton,
           ]}
           onPress={handlePurchase}
           disabled={
@@ -790,30 +735,29 @@ export default function AirtimeScreen({
             !network ||
             selectedAmount < 50 ||
             selectedAmount > 50000 ||
-            isPending
+            !!pendingReference
           }
-          activeOpacity={0.8}
         >
           <Text style={styles.continueText}>
-            {isPending
+            {pendingReference
               ? 'Transaction pending'
               : 'Continue'}
           </Text>
 
           <MaterialCommunityIcons
-            name={isPending ? 'clock-outline' : 'arrow-right'}
+            name="arrow-right"
             size={20}
             color="#FFFFFF"
           />
         </TouchableOpacity>
 
         <Text style={styles.footerNote}>
-          Confirm the phone number, network and amount
-          before continuing.
+          Please confirm the phone number and network
+          before purchasing.
         </Text>
       </ScrollView>
 
-      {/* NETWORK SELECTOR MODAL */}
+      {/* NETWORK SELECTOR */}
       <Modal
         visible={networkModalVisible}
         transparent
@@ -826,33 +770,28 @@ export default function AirtimeScreen({
           <View style={styles.networkModal}>
             <View style={styles.modalHandle} />
 
-            <View style={styles.networkModalHeader}>
-              <View>
-                <Text style={styles.networkModalTitle}>
-                  Select network
-                </Text>
-
-                <Text style={styles.networkModalSubtitle}>
-                  Choose the recipient's mobile network
-                </Text>
-              </View>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Select network
+              </Text>
 
               <TouchableOpacity
                 onPress={() =>
                   setNetworkModalVisible(false)
                 }
-                style={styles.modalCloseButton}
               >
                 <MaterialCommunityIcons
                   name="close"
-                  size={22}
+                  size={24}
                   color={colors.text}
                 />
               </TouchableOpacity>
             </View>
 
-            {NETWORKS.map((item) => {
-              const selected = network === item.value;
+            {NETWORKS.map(item => {
+              const isSelected =
+                network === item.value;
+
               const suggested =
                 detectedNetwork === item.value;
 
@@ -861,17 +800,30 @@ export default function AirtimeScreen({
                   key={item.value}
                   style={[
                     styles.networkOption,
-                    selected && styles.networkOptionSelected,
+                    isSelected &&
+                      styles.networkOptionSelected,
                   ]}
                   onPress={() =>
-                    handleNetworkSelection(item.value)
+                    handleNetworkSelection(
+                      item.value
+                    )
                   }
                   activeOpacity={0.75}
                 >
-                  <NetworkBadge
-                    item={item}
-                    size={42}
-                  />
+                  <View
+                    style={[
+                      styles.networkBadge,
+                      {
+                        backgroundColor: item.color,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.networkBadgeText}>
+                      {item.label === 'T2 Mobile'
+                        ? 'T2'
+                        : item.label.substring(0, 1)}
+                    </Text>
+                  </View>
 
                   <View style={styles.networkOptionContent}>
                     <Text style={styles.networkOptionTitle}>
@@ -895,13 +847,13 @@ export default function AirtimeScreen({
 
                   <MaterialCommunityIcons
                     name={
-                      selected
+                      isSelected
                         ? 'check-circle'
                         : 'circle-outline'
                     }
                     size={22}
                     color={
-                      selected
+                      isSelected
                         ? colors.primary
                         : colors.textSecondary
                     }
@@ -924,7 +876,7 @@ export default function AirtimeScreen({
         </View>
       </Modal>
 
-      {/* TRANSACTION PIN MODAL */}
+      {/* TRANSACTION PIN */}
       <Modal
         visible={pinVisible}
         transparent
@@ -938,7 +890,11 @@ export default function AirtimeScreen({
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={
+            Platform.OS === 'ios'
+              ? 'padding'
+              : undefined
+          }
         >
           <View style={styles.pinModal}>
             <View style={styles.modalHandle} />
@@ -948,35 +904,42 @@ export default function AirtimeScreen({
             </Text>
 
             <Text style={styles.pinDescription}>
-              Enter your transaction PIN to authorize this payment.
+              Enter your transaction PIN to authorize
+              this payment.
             </Text>
 
             <Text style={styles.pinSummary}>
-              {network ? networkLabel(network) : ''} · {phone}
+              {network
+                ? networkLabel(network)
+                : ''}{' '}
+              · {phone}
             </Text>
 
             <Text style={styles.pinAmount}>
               ₦
-              {Number(selectedAmount || 0).toLocaleString(
-                'en-NG',
-                {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                }
-              )}
+              {Number(
+                selectedAmount || 0
+              ).toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </Text>
 
             <TextInput
               value={pin}
-              onChangeText={(value) =>
+              onChangeText={value =>
                 setPin(
-                  value.replace(/\D/g, '').slice(0, 6)
+                  value
+                    .replace(/\D/g, '')
+                    .slice(0, 6)
                 )
               }
               secureTextEntry
               keyboardType="number-pad"
               placeholder="Transaction PIN"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={
+                colors.textSecondary
+              }
               style={styles.pinInput}
               maxLength={6}
               autoFocus
@@ -985,11 +948,11 @@ export default function AirtimeScreen({
             <TouchableOpacity
               style={[
                 styles.confirmButton,
-                loading && styles.disabledButton,
+                loading &&
+                  styles.disabledButton,
               ]}
               onPress={confirmPurchase}
               disabled={loading}
-              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
@@ -1003,6 +966,7 @@ export default function AirtimeScreen({
             <TouchableOpacity
               onPress={() => {
                 if (loading) return;
+
                 setPinVisible(false);
                 setPin('');
               }}
@@ -1019,48 +983,6 @@ export default function AirtimeScreen({
     </SafeAreaView>
   );
 }
-
-/* =========================================================
-   NETWORK BADGE
-========================================================= */
-
-function NetworkBadge({
-  item,
-  size = 38,
-}: {
-  item: NetworkItem;
-  size?: number;
-}) {
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.28,
-        backgroundColor: item.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: item.value === 'MTN' ? 0 : 0.5,
-        borderColor: 'rgba(0,0,0,0.08)',
-      }}
-    >
-      <Text
-        style={{
-          color: item.color,
-          fontSize: size * 0.28,
-          fontWeight: '900',
-          letterSpacing: -0.5,
-        }}
-      >
-        {item.shortLabel}
-      </Text>
-    </View>
-  );
-}
-
-/* =========================================================
-   STYLES
-========================================================= */
 
 const createStyles = (
   colors: ReturnType<typeof getColors>,
@@ -1095,22 +1017,17 @@ const createStyles = (
       fontWeight: '800',
     },
 
-    headerSpacer: {
-      width: 40,
-    },
-
     content: {
-      paddingHorizontal: 20,
-      paddingTop: 10,
+      padding: 20,
       paddingBottom: 40,
     },
 
-    sectionLabel: {
+    label: {
       color: colors.text,
       fontSize: 13,
       fontWeight: '800',
-      marginTop: 21,
       marginBottom: 9,
+      marginTop: 20,
     },
 
     phoneInput: {
@@ -1124,42 +1041,43 @@ const createStyles = (
       paddingHorizontal: 13,
     },
 
-    countryCodeContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginRight: 12,
-    },
-
     countryCode: {
       color: colors.text,
       fontSize: 14,
       fontWeight: '800',
+      marginRight: 10,
     },
 
-    countryDivider: {
-      height: 23,
-      width: 1,
-      backgroundColor: colors.border,
-      marginLeft: 12,
-    },
-
-    phoneTextInput: {
+    input: {
       flex: 1,
       color: colors.text,
       fontSize: 15,
       paddingVertical: 12,
     },
 
+    detectedBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 9,
+      gap: 7,
+    },
+
+    detectedText: {
+      color: colors.success,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
     networkSelector: {
       minHeight: 62,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 13,
+      borderRadius: 14,
       backgroundColor: colors.surface,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 13,
+      paddingHorizontal: 14,
     },
 
     selectedNetworkContent: {
@@ -1168,61 +1086,46 @@ const createStyles = (
       flex: 1,
     },
 
-    selectedNetworkText: {
-      marginLeft: 11,
+    networkBadge: {
+      width: 42,
+      height: 42,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
 
-    selectedNetworkName: {
+    networkBadgeText: {
+      color: '#FFFFFF',
+      fontWeight: '900',
+      fontSize: 15,
+    },
+
+    networkSelectorText: {
+      marginLeft: 12,
+    },
+
+    networkSelectorTitle: {
       color: colors.text,
-      fontSize: 14,
       fontWeight: '800',
+      fontSize: 14,
     },
 
-    selectedNetworkSubtext: {
+    networkSelectorSubtitle: {
       color: colors.textSecondary,
       fontSize: 10,
       marginTop: 3,
     },
 
     networkPlaceholder: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-
-    networkPlaceholderIcon: {
-      width: 38,
-      height: 38,
-      borderRadius: 11,
-      backgroundColor: colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-
-    networkPlaceholderText: {
       color: colors.textSecondary,
       fontSize: 13,
-      marginLeft: 10,
     },
 
-    detectedNotice: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      marginTop: 10,
-      gap: 7,
-    },
-
-    detectedNoticeText: {
-      flex: 1,
+    networkNote: {
       color: colors.textSecondary,
       fontSize: 10,
       lineHeight: 15,
-    },
-
-    detectedNoticeBold: {
-      color: colors.primary,
-      fontWeight: '800',
+      marginTop: 9,
     },
 
     amountGrid: {
@@ -1234,25 +1137,23 @@ const createStyles = (
 
     amountItem: {
       width: '31%',
-      minHeight: 49,
+      minHeight: 48,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
       borderRadius: 11,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 5,
     },
 
     amountSelected: {
       borderColor: colors.primary,
-      borderWidth: 1.5,
       backgroundColor: colors.primaryLight,
     },
 
     amountText: {
       color: colors.text,
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '800',
     },
 
@@ -1260,14 +1161,8 @@ const createStyles = (
       color: colors.primary,
     },
 
-    amountCheck: {
-      position: 'absolute',
-      right: 4,
-      top: 4,
-    },
-
     customAmountInput: {
-      minHeight: 53,
+      minHeight: 52,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 13,
@@ -1284,39 +1179,17 @@ const createStyles = (
       marginRight: 9,
     },
 
-    customAmountTextInput: {
-      flex: 1,
-      color: colors.text,
-      fontSize: 15,
-      paddingVertical: 12,
-    },
-
-    amountHint: {
-      color: colors.textSecondary,
-      fontSize: 10,
-      marginTop: 7,
-    },
-
-    securityNotice: {
+    infoBox: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.primaryLight,
       borderRadius: 12,
       padding: 12,
-      marginTop: 21,
+      marginTop: 20,
       gap: 9,
     },
 
-    securityIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: colors.surface,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-
-    securityText: {
+    infoText: {
       flex: 1,
       color: colors.text,
       fontSize: 10,
@@ -1366,11 +1239,15 @@ const createStyles = (
     },
 
     failedBox: {
-      backgroundColor: isDark ? '#3C2222' : '#FCEEEE',
+      backgroundColor: isDark
+        ? '#3C2222'
+        : '#FCEEEE',
     },
 
     pendingBox: {
-      backgroundColor: isDark ? '#3C3321' : '#FFF7E6',
+      backgroundColor: isDark
+        ? '#3C3321'
+        : '#FFF7E6',
     },
 
     resultTitle: {
@@ -1400,10 +1277,6 @@ const createStyles = (
       paddingHorizontal: 17,
       paddingVertical: 11,
       marginTop: 13,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 7,
     },
 
     requeryText: {
@@ -1435,48 +1308,40 @@ const createStyles = (
       borderTopRightRadius: 24,
       paddingHorizontal: 20,
       paddingTop: 12,
-      paddingBottom: 28,
+      paddingBottom: 25,
     },
 
-    networkModalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+    modalHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+      alignSelf: 'center',
       marginBottom: 18,
     },
 
-    networkModalTitle: {
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 14,
+    },
+
+    modalTitle: {
       color: colors.text,
       fontSize: 18,
       fontWeight: '900',
     },
 
-    networkModalSubtitle: {
-      color: colors.textSecondary,
-      fontSize: 11,
-      marginTop: 5,
-    },
-
-    modalCloseButton: {
-      width: 38,
-      height: 38,
-      borderRadius: 12,
-      backgroundColor: colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-
     networkOption: {
-      minHeight: 63,
+      minHeight: 67,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
+      borderRadius: 13,
       backgroundColor: colors.background,
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 11,
+      paddingHorizontal: 12,
       marginBottom: 9,
     },
 
@@ -1504,9 +1369,9 @@ const createStyles = (
 
     suggestedBadge: {
       backgroundColor: colors.primaryLight,
-      borderRadius: 6,
-      paddingHorizontal: 7,
-      paddingVertical: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 8,
       marginRight: 8,
     },
 
@@ -1517,10 +1382,9 @@ const createStyles = (
     },
 
     modalCancelButton: {
-      minHeight: 45,
       alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 4,
+      paddingVertical: 14,
+      marginTop: 5,
     },
 
     modalCancelText: {
@@ -1536,15 +1400,6 @@ const createStyles = (
       paddingHorizontal: 23,
       paddingTop: 12,
       paddingBottom: 30,
-    },
-
-    modalHandle: {
-      width: 42,
-      height: 4,
-      borderRadius: 3,
-      backgroundColor: colors.border,
-      alignSelf: 'center',
-      marginBottom: 20,
     },
 
     pinTitle: {
