@@ -2,7 +2,6 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 
@@ -19,6 +18,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// ======================================================
+// TYPES
+// ======================================================
 
 interface Props {
   token?: string;
@@ -49,8 +52,23 @@ interface NetworkItem {
   color: string;
 }
 
+// ======================================================
+// CONFIGURATION
+// ======================================================
+
 const API_BASE =
   'https://zenimonies-banking.onrender.com/api';
+
+const COLORS = {
+  green: '#78A900',
+  darkGreen: '#527900',
+  black: '#172018',
+  muted: '#858B83',
+  background: '#F6F8F3',
+  white: '#FFFFFF',
+  border: '#E9EDE5',
+  red: '#E53935',
+};
 
 const NETWORKS: NetworkItem[] = [
   {
@@ -93,18 +111,9 @@ const CATEGORIES = [
   'Other',
 ];
 
-// ZENIMONIES BRAND COLORS
-const COLORS = {
-  green: '#78A900',
-  darkGreen: '#527900',
-  black: '#172018',
-  muted: '#858B83',
-  background: '#F6F8F3',
-  white: '#FFFFFF',
-  border: '#E9EDE5',
-  red: '#E53935',
-  orange: '#F59E0B',
-};
+// ======================================================
+// COMPONENT
+// ======================================================
 
 const DataScreen = ({
   token,
@@ -145,10 +154,15 @@ const DataScreen = ({
 
   const authToken = token || '';
 
-  const requestCounter = useRef(0);
+  // ====================================================
+  // STATE
+  // ====================================================
 
   const [selectedNetwork, setSelectedNetwork] =
     useState<NetworkItem>(NETWORKS[0]);
+
+  const [networkModalVisible, setNetworkModalVisible] =
+    useState(false);
 
   const [phone, setPhone] = useState('');
 
@@ -168,9 +182,6 @@ const DataScreen = ({
   const [purchasing, setPurchasing] =
     useState(false);
 
-  const [networkModalVisible, setNetworkModalVisible] =
-    useState(false);
-
   const [pinModalVisible, setPinModalVisible] =
     useState(false);
 
@@ -183,159 +194,101 @@ const DataScreen = ({
   const [transactionResult, setTransactionResult] =
     useState<any>(null);
 
-  // --------------------------------------------------
-  // NETWORK SELECTION
-  // --------------------------------------------------
+  // ====================================================
+  // NETWORK DETECTION
+  // ====================================================
 
-  const selectNetwork = (network: NetworkItem) => {
-    setSelectedNetwork(network);
-    setSelectedPlan(null);
-    setSelectedCategory('All Plans');
-    setSearch('');
-    setNetworkModalVisible(false);
-  };
+  const detectNetwork = useCallback(
+    (number: string) => {
+      const cleanNumber = number.replace(/\D/g, '');
 
-  // --------------------------------------------------
-  // PHONE NUMBER
-  // --------------------------------------------------
+      if (cleanNumber.length < 4) {
+        return;
+      }
+
+      const prefix = cleanNumber.substring(0, 4);
+
+      const prefixes: Record<string, string[]> = {
+        mtn: [
+          '0803',
+          '0806',
+          '0810',
+          '0813',
+          '0814',
+          '0816',
+          '0903',
+          '0906',
+          '0913',
+          '0916',
+        ],
+
+        airtel: [
+          '0802',
+          '0808',
+          '0812',
+          '0701',
+          '0708',
+          '0901',
+          '0902',
+          '0907',
+          '0912',
+        ],
+
+        glo: [
+          '0805',
+          '0807',
+          '0811',
+          '0815',
+          '0705',
+          '0905',
+          '0915',
+        ],
+
+        t2mobile: [
+          '0809',
+          '0817',
+          '0818',
+          '0908',
+          '0909',
+        ],
+      };
+
+      const foundNetwork = Object.keys(prefixes).find(
+        network => prefixes[network].includes(prefix),
+      );
+
+      if (foundNetwork) {
+        const network = NETWORKS.find(
+          item => item.id === foundNetwork,
+        );
+
+        if (network) {
+          setSelectedNetwork(network);
+        }
+      }
+    },
+    [],
+  );
 
   const handlePhoneChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
 
-    setPhone(cleaned.slice(0, 11));
+    const formatted = cleaned.slice(0, 11);
+
+    setPhone(formatted);
+
+    detectNetwork(formatted);
   };
 
-  // --------------------------------------------------
-  // DATA PLAN CATEGORY
-  // --------------------------------------------------
-
-  const getPlanCategory = (
-    plan: DataPlan,
-  ): string => {
-    const text = [
-      plan.name,
-      plan.validity,
-      plan.allowance,
-      plan.description,
-      plan.category,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-
-    // Night plans
-    if (
-      text.includes('night') ||
-      text.includes('midnight')
-    ) {
-      return 'Night';
-    }
-
-    // Weekend plans
-    if (
-      text.includes('weekend') ||
-      text.includes('saturday') ||
-      text.includes('sunday')
-    ) {
-      return 'Weekend';
-    }
-
-    // Hourly plans
-    if (
-      text.includes('hourly') ||
-      /\d+\s*hours?/.test(text) ||
-      /\d+\s*hrs?/.test(text)
-    ) {
-      return 'Hourly';
-    }
-
-    // 3 months
-    if (
-      text.includes('3 month') ||
-      text.includes('90 day') ||
-      text.includes('90 days') ||
-      text.includes('quarterly')
-    ) {
-      return '3 Months';
-    }
-
-    // Daily
-    if (
-      text.includes('daily') ||
-      text.includes('1 day') ||
-      text.includes('1 days') ||
-      text.includes('24 hour') ||
-      text.includes('24hrs') ||
-      text.includes('24 hrs')
-    ) {
-      return 'Daily';
-    }
-
-    // Weekly
-    if (
-      text.includes('weekly') ||
-      text.includes('7 day') ||
-      text.includes('7 days') ||
-      text.includes('5 day') ||
-      text.includes('5 days') ||
-      text.includes('6 day') ||
-      text.includes('6 days') ||
-      text.includes('2 day') ||
-      text.includes('2 days') ||
-      text.includes('3 day') ||
-      text.includes('3 days') ||
-      text.includes('4 day') ||
-      text.includes('4 days')
-    ) {
-      return 'Weekly';
-    }
-
-    // Monthly
-    if (
-      text.includes('monthly') ||
-      text.includes('30 day') ||
-      text.includes('30 days') ||
-      text.includes('31 day') ||
-      text.includes('31 days') ||
-      text.includes('28 day') ||
-      text.includes('28 days')
-    ) {
-      return 'Monthly';
-    }
-
-    // Promotional
-    if (
-      plan.isPromotional ||
-      text.includes('promo') ||
-      text.includes('bonus') ||
-      text.includes('special')
-    ) {
-      return 'Special';
-    }
-
-    // Hot deals
-    if (
-      text.includes('hot deal') ||
-      text.includes('hot deals')
-    ) {
-      return 'Hot Deals';
-    }
-
-    return 'Other';
-  };
-
-  // --------------------------------------------------
-  // LOAD DATA PLANS
-  // --------------------------------------------------
+  // ====================================================
+  // LOAD PLANS
+  // ====================================================
 
   const loadPlans = useCallback(async () => {
     if (!authToken) {
       setPlans([]);
       return;
     }
-
-    const currentRequest =
-      ++requestCounter.current;
 
     setLoadingPlans(true);
     setPlans([]);
@@ -355,55 +308,134 @@ const DataScreen = ({
 
       const data = await response.json();
 
-      if (currentRequest !== requestCounter.current) {
-        return;
-      }
-
       if (!response.ok || !data.success) {
         throw new Error(
-          data.message ||
-            'Unable to load data plans.',
+          data.message || 'Unable to load data plans.',
         );
       }
 
-      const receivedPlans: DataPlan[] =
+      setPlans(
         Array.isArray(data.plans)
           ? data.plans
-          : [];
-
-      setPlans(receivedPlans);
+          : [],
+      );
     } catch (error: any) {
-      if (currentRequest !== requestCounter.current) {
-        return;
-      }
-
       console.log('Data plans error:', error);
-
-      setPlans([]);
 
       Alert.alert(
         'Unable to load plans',
         error?.message ||
-          'Please check your connection and try again.',
+          'Please check your internet connection and try again.',
       );
     } finally {
-      if (currentRequest === requestCounter.current) {
-        setLoadingPlans(false);
-      }
+      setLoadingPlans(false);
     }
   }, [authToken, selectedNetwork.id]);
 
   useEffect(() => {
     loadPlans();
-
-    return () => {
-      requestCounter.current++;
-    };
   }, [loadPlans]);
 
-  // --------------------------------------------------
+  // ====================================================
+  // PLAN CATEGORIES
+  // ====================================================
+
+  const getPlanCategory = (
+    plan: DataPlan,
+  ): string => {
+    const text = [
+      plan.name,
+      plan.validity,
+      plan.allowance,
+      plan.description,
+      plan.category,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    if (
+      text.includes('night') ||
+      text.includes('midnight')
+    ) {
+      return 'Night';
+    }
+
+    if (
+      text.includes('weekend') ||
+      text.includes('saturday') ||
+      text.includes('sunday')
+    ) {
+      return 'Weekend';
+    }
+
+    if (
+      text.includes('hour') ||
+      text.includes('hourly')
+    ) {
+      return 'Hourly';
+    }
+
+    if (
+      text.includes('3 month') ||
+      text.includes('90 day') ||
+      text.includes('90 days') ||
+      text.includes('quarterly')
+    ) {
+      return '3 Months';
+    }
+
+    if (
+      text.includes('daily') ||
+      text.includes('1 day') ||
+      text.includes('2 day') ||
+      text.includes('24 hour') ||
+      text.includes('48 hour') ||
+      text.includes('24hrs') ||
+      text.includes('48hrs')
+    ) {
+      return 'Daily';
+    }
+
+    if (
+      text.includes('weekly') ||
+      text.includes('7 day') ||
+      text.includes('7 days')
+    ) {
+      return 'Weekly';
+    }
+
+    if (
+      text.includes('monthly') ||
+      text.includes('30 day') ||
+      text.includes('30 days') ||
+      text.includes('31 day')
+    ) {
+      return 'Monthly';
+    }
+
+    if (
+      plan.isPromotional ||
+      text.includes('promo') ||
+      text.includes('bonus') ||
+      text.includes('special')
+    ) {
+      return 'Special';
+    }
+
+    if (
+      text.includes('hot') ||
+      text.includes('deal')
+    ) {
+      return 'Hot Deals';
+    }
+
+    return 'Other';
+  };
+
+  // ====================================================
   // FILTER PLANS
-  // --------------------------------------------------
+  // ====================================================
 
   const filteredPlans = useMemo(() => {
     return plans.filter(plan => {
@@ -433,9 +465,9 @@ const DataScreen = ({
     });
   }, [plans, selectedCategory, search]);
 
-  // --------------------------------------------------
+  // ====================================================
   // CURRENCY
-  // --------------------------------------------------
+  // ====================================================
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -445,9 +477,9 @@ const DataScreen = ({
     }).format(amount);
   };
 
-  // --------------------------------------------------
-  // PURCHASE
-  // --------------------------------------------------
+  // ====================================================
+  // PURCHASE VALIDATION
+  // ====================================================
 
   const handleContinue = () => {
     if (!phone.trim()) {
@@ -474,17 +506,13 @@ const DataScreen = ({
       return;
     }
 
-    if (!authToken) {
-      Alert.alert(
-        'Session expired',
-        'Please log in again to continue.',
-      );
-      return;
-    }
-
     setTransactionPin('');
     setPinModalVisible(true);
   };
+
+  // ====================================================
+  // PURCHASE
+  // ====================================================
 
   const handlePurchase = async () => {
     if (transactionPin.length !== 4) {
@@ -511,6 +539,7 @@ const DataScreen = ({
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
+
           body: JSON.stringify({
             network: selectedNetwork.id,
             phone,
@@ -558,9 +587,9 @@ const DataScreen = ({
     }
   };
 
-  // --------------------------------------------------
+  // ====================================================
   // TRANSACTION STATUS
-  // --------------------------------------------------
+  // ====================================================
 
   const getTransactionStatus = () => {
     const result = transactionResult;
@@ -604,9 +633,21 @@ const DataScreen = ({
     }
   };
 
-  // --------------------------------------------------
+  // ====================================================
+  // SELECT NETWORK
+  // ====================================================
+
+  const selectNetwork = (network: NetworkItem) => {
+    setSelectedNetwork(network);
+    setNetworkModalVisible(false);
+    setSelectedCategory('All Plans');
+    setSearch('');
+    setSelectedPlan(null);
+  };
+
+  // ====================================================
   // UI
-  // --------------------------------------------------
+  // ====================================================
 
   return (
     <SafeAreaView
@@ -661,10 +702,9 @@ const DataScreen = ({
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        {/* PHONE NUMBER AND NETWORK DROPDOWN */}
+        {/* PHONE NUMBER + NETWORK DROPDOWN */}
 
         <Text
           style={[
@@ -684,24 +724,14 @@ const DataScreen = ({
             },
           ]}
         >
-          {/* COUNTRY CODE */}
-
-          <View style={styles.countryContainer}>
-            <Text style={styles.countryFlag}>
-              🇳🇬
-            </Text>
-
-            <Text
-              style={[
-                styles.countryCode,
-                { color: theme.text },
-              ]}
-            >
-              +234
-            </Text>
-          </View>
-
-          {/* PHONE */}
+          <Text
+            style={[
+              styles.countryCode,
+              { color: theme.text },
+            ]}
+          >
+            🇳🇬 +234
+          </Text>
 
           <TextInput
             style={[
@@ -716,13 +746,12 @@ const DataScreen = ({
             maxLength={11}
           />
 
-          {/* NETWORK DROPDOWN */}
-
           <TouchableOpacity
             style={[
               styles.networkDropdown,
               {
-                borderLeftColor: theme.border,
+                backgroundColor: theme.background,
+                borderColor: theme.border,
               },
             ]}
             onPress={() =>
@@ -747,7 +776,7 @@ const DataScreen = ({
             <Text
               style={[
                 styles.dropdownArrow,
-                { color: theme.muted },
+                { color: theme.green },
               ]}
             >
               ▾
@@ -775,9 +804,7 @@ const DataScreen = ({
             },
           ]}
         >
-          <Text style={styles.searchIcon}>
-            🔍
-          </Text>
+          <Text style={styles.searchIcon}>🔍</Text>
 
           <TextInput
             style={[
@@ -826,6 +853,7 @@ const DataScreen = ({
                     backgroundColor: active
                       ? theme.green
                       : theme.card,
+
                     borderColor: active
                       ? theme.green
                       : theme.border,
@@ -852,7 +880,7 @@ const DataScreen = ({
           })}
         </ScrollView>
 
-        {/* PLANS HEADER */}
+        {/* AVAILABLE PLANS */}
 
         <View style={styles.plansHeader}>
           <Text
@@ -876,8 +904,6 @@ const DataScreen = ({
           )}
         </View>
 
-        {/* LOADING */}
-
         {loadingPlans ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator
@@ -895,8 +921,6 @@ const DataScreen = ({
             </Text>
           </View>
         ) : filteredPlans.length === 0 ? (
-          /* EMPTY STATE */
-
           <View
             style={[
               styles.emptyContainer,
@@ -906,9 +930,7 @@ const DataScreen = ({
               },
             ]}
           >
-            <Text style={styles.emptyIcon}>
-              📦
-            </Text>
+            <Text style={styles.emptyIcon}>📦</Text>
 
             <Text
               style={[
@@ -925,9 +947,7 @@ const DataScreen = ({
                 { color: theme.muted },
               ]}
             >
-              {plans.length === 0
-                ? `No data plans are currently available for ${selectedNetwork.name}.`
-                : `No ${selectedCategory.toLowerCase()} plans found. Try All Plans.`}
+              Try another category or search term.
             </Text>
 
             <TouchableOpacity
@@ -935,20 +955,14 @@ const DataScreen = ({
                 styles.retryButton,
                 { backgroundColor: theme.green },
               ]}
-              onPress={() => {
-                setSelectedCategory('All Plans');
-                setSearch('');
-                loadPlans();
-              }}
+              onPress={loadPlans}
             >
               <Text style={styles.retryButtonText}>
-                Reload Plans
+                Retry
               </Text>
             </TouchableOpacity>
           </View>
         ) : (
-          /* PLANS */
-
           <View style={styles.plansContainer}>
             {filteredPlans.map((plan, index) => {
               const active =
@@ -974,7 +988,6 @@ const DataScreen = ({
                   onPress={() =>
                     setSelectedPlan(plan)
                   }
-                  activeOpacity={0.8}
                 >
                   <View style={styles.planTop}>
                     <View style={styles.planDetails}>
@@ -1027,8 +1040,7 @@ const DataScreen = ({
                           style={[
                             styles.selectedIndicator,
                             {
-                              backgroundColor:
-                                theme.green,
+                              backgroundColor: theme.green,
                             },
                           ]}
                         >
@@ -1106,22 +1118,14 @@ const DataScreen = ({
                 Network
               </Text>
 
-              <View style={styles.summaryNetwork}>
-                <Image
-                  source={selectedNetwork.logo}
-                  style={styles.summaryLogo}
-                  resizeMode="contain"
-                />
-
-                <Text
-                  style={[
-                    styles.summaryValue,
-                    { color: theme.text },
-                  ]}
-                >
-                  {selectedNetwork.name}
-                </Text>
-              </View>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: theme.text },
+                ]}
+              >
+                {selectedNetwork.name}
+              </Text>
             </View>
 
             <View style={styles.summaryRow}>
@@ -1212,9 +1216,7 @@ const DataScreen = ({
             Continue
           </Text>
 
-          <Text style={styles.continueArrow}>
-            →
-          </Text>
+          <Text style={styles.continueArrow}>→</Text>
         </TouchableOpacity>
 
         <View style={styles.bottomSpace} />
@@ -1254,7 +1256,7 @@ const DataScreen = ({
                 { color: theme.muted },
               ]}
             >
-              Choose the mobile network for this number
+              Choose the network for this phone number
             </Text>
 
             {NETWORKS.map(network => {
@@ -1272,6 +1274,7 @@ const DataScreen = ({
                           ? '#303A30'
                           : '#F0F5E8'
                         : theme.card,
+
                       borderColor: active
                         ? theme.green
                         : theme.border,
@@ -1313,14 +1316,14 @@ const DataScreen = ({
             })}
 
             <TouchableOpacity
-              style={styles.networkModalCancel}
+              style={styles.modalCancel}
               onPress={() =>
                 setNetworkModalVisible(false)
               }
             >
               <Text
                 style={[
-                  styles.cancelButtonText,
+                  styles.modalCancelText,
                   { color: theme.muted },
                 ]}
               >
@@ -1331,7 +1334,7 @@ const DataScreen = ({
         </View>
       </Modal>
 
-      {/* PIN MODAL */}
+      {/* TRANSACTION PIN MODAL */}
 
       <Modal
         visible={pinModalVisible}
@@ -1350,7 +1353,12 @@ const DataScreen = ({
           >
             <View style={styles.modalHandle} />
 
-            <View style={styles.modalIcon}>
+            <View
+              style={[
+                styles.modalIcon,
+                { backgroundColor: '#F0F5E8' },
+              ]}
+            >
               <Text style={styles.modalIconText}>
                 🔐
               </Text>
@@ -1393,22 +1401,14 @@ const DataScreen = ({
                   {selectedPlan.name}
                 </Text>
 
-                <View style={styles.modalNetworkRow}>
-                  <Image
-                    source={selectedNetwork.logo}
-                    style={styles.modalNetworkLogo}
-                    resizeMode="contain"
-                  />
-
-                  <Text
-                    style={[
-                      styles.modalPhone,
-                      { color: theme.muted },
-                    ]}
-                  >
-                    {selectedNetwork.name} • {phone}
-                  </Text>
-                </View>
+                <Text
+                  style={[
+                    styles.modalPhone,
+                    { color: theme.muted },
+                  ]}
+                >
+                  {selectedNetwork.name} • {phone}
+                </Text>
 
                 <Text
                   style={[
@@ -1517,7 +1517,12 @@ const DataScreen = ({
                     { backgroundColor: '#E7F6E8' },
                   ]}
                 >
-                  <Text style={styles.resultIconText}>
+                  <Text
+                    style={[
+                      styles.resultIconText,
+                      { color: theme.green },
+                    ]}
+                  >
                     ✓
                   </Text>
                 </View>
@@ -1546,7 +1551,7 @@ const DataScreen = ({
                 <View
                   style={[
                     styles.resultIcon,
-                    { backgroundColor: '#FFF4DF' },
+                    { backgroundColor: '#F0F5E8' },
                   ]}
                 >
                   <Text style={styles.resultIconText}>
@@ -1581,7 +1586,12 @@ const DataScreen = ({
                     { backgroundColor: '#FDE8E8' },
                   ]}
                 >
-                  <Text style={styles.resultIconText}>
+                  <Text
+                    style={[
+                      styles.resultIconText,
+                      { color: COLORS.red },
+                    ]}
+                  >
                     ✕
                   </Text>
                 </View>
@@ -1781,65 +1791,56 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // PHONE + NETWORK
+  // PHONE NUMBER
 
   phoneInputContainer: {
     minHeight: 58,
     borderWidth: 1,
-    borderRadius: 15,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 13,
-    paddingRight: 5,
-  },
-
-  countryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 10,
-  },
-
-  countryFlag: {
-    fontSize: 18,
-    marginRight: 5,
+    paddingHorizontal: 10,
   },
 
   countryCode: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    marginRight: 8,
   },
 
   phoneInput: {
     flex: 1,
+    minWidth: 65,
     fontSize: 15,
     fontWeight: '600',
-    minWidth: 60,
+    paddingVertical: 10,
   },
 
   networkDropdown: {
-    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 10,
-    paddingRight: 8,
-    borderLeftWidth: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
     marginLeft: 5,
   },
 
   dropdownLogo: {
-    width: 28,
-    height: 28,
+    width: 24,
+    height: 24,
   },
 
   dropdownNetworkName: {
     fontSize: 11,
     fontWeight: '700',
-    marginLeft: 5,
+    marginLeft: 4,
   },
 
   dropdownArrow: {
-    fontSize: 13,
-    marginLeft: 5,
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '700',
   },
 
   helperText: {
@@ -1893,7 +1894,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // PLAN HEADER
+  // PLANS
 
   plansHeader: {
     flexDirection: 'row',
@@ -1909,8 +1910,6 @@ const styles = StyleSheet.create({
   plansContainer: {
     gap: 10,
   },
-
-  // PLAN CARD
 
   planCard: {
     borderRadius: 15,
@@ -1986,14 +1985,14 @@ const styles = StyleSheet.create({
   },
 
   promoBadge: {
-    backgroundColor: '#FFF0D8',
+    backgroundColor: '#F0F5E8',
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 7,
   },
 
   promoText: {
-    color: '#D97706',
+    color: '#527900',
     fontSize: 10,
     fontWeight: '800',
   },
@@ -2032,7 +2031,6 @@ const styles = StyleSheet.create({
   emptyMessage: {
     fontSize: 12,
     textAlign: 'center',
-    lineHeight: 19,
     marginTop: 6,
   },
 
@@ -2081,17 +2079,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  summaryNetwork: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  summaryLogo: {
-    width: 20,
-    height: 20,
-    marginRight: 6,
-  },
-
   summaryDivider: {
     borderTopWidth: 1,
     borderStyle: 'dashed',
@@ -2136,7 +2123,7 @@ const styles = StyleSheet.create({
     height: 40,
   },
 
-  // MODAL
+  // MODALS
 
   modalOverlay: {
     flex: 1,
@@ -2154,13 +2141,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // NETWORK SELECTOR
+  // NETWORK MODAL
 
   networkModal: {
     width: '100%',
     maxWidth: 420,
     borderRadius: 25,
-    padding: 22,
+    padding: 24,
   },
 
   networkModalTitle: {
@@ -2172,17 +2159,16 @@ const styles = StyleSheet.create({
   networkModalSubtitle: {
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 7,
     marginBottom: 20,
   },
 
   networkOption: {
-    minHeight: 65,
-    borderWidth: 1,
-    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 10,
   },
 
@@ -2206,9 +2192,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  networkModalCancel: {
+  modalCancel: {
     alignItems: 'center',
-    paddingVertical: 15,
+    paddingVertical: 12,
+  },
+
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // PIN MODAL
@@ -2225,7 +2216,6 @@ const styles = StyleSheet.create({
     width: 55,
     height: 55,
     borderRadius: 18,
-    backgroundColor: '#EEF5E5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2259,18 +2249,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     textAlign: 'center',
-  },
-
-  modalNetworkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 7,
-  },
-
-  modalNetworkLogo: {
-    width: 20,
-    height: 20,
-    marginRight: 5,
   },
 
   modalPhone: {
