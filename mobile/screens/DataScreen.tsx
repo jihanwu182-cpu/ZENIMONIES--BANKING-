@@ -19,8 +19,6 @@ import {
   View,
 } from 'react-native';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 interface Props {
   token?: string;
   onBack?: () => void;
@@ -139,8 +137,7 @@ const DataScreen = ({
       COLORS.green,
   };
 
-  const [authToken, setAuthToken] = useState<string>(
-    token || '',
+  const authToken = token || '';
   );
 
   const [selectedNetwork, setSelectedNetwork] =
@@ -180,32 +177,6 @@ const DataScreen = ({
     useState(false);
 
   const [requestId, setRequestId] = useState(0);
-
-  // --------------------------------------------------
-  // AUTH TOKEN
-  // --------------------------------------------------
-
-  useEffect(() => {
-    if (token) {
-      setAuthToken(token);
-      return;
-    }
-
-    const getToken = async () => {
-      try {
-        const savedToken =
-          await AsyncStorage.getItem('zenimonies_token');
-
-        if (savedToken) {
-          setAuthToken(savedToken);
-        }
-      } catch (error) {
-        console.log('Token error:', error);
-      }
-    };
-
-    getToken();
-  }, [token]);
 
   // --------------------------------------------------
   // NETWORK DETECTION
