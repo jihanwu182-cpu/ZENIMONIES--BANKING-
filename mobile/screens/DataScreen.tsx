@@ -138,7 +138,6 @@ const DataScreen = ({
   };
 
   const authToken = token || '';
-  );
 
   const [selectedNetwork, setSelectedNetwork] =
     useState<NetworkItem>(NETWORKS[0]);
@@ -172,11 +171,6 @@ const DataScreen = ({
 
   const [transactionResult, setTransactionResult] =
     useState<any>(null);
-
-  const [networkModalVisible, setNetworkModalVisible] =
-    useState(false);
-
-  const [requestId, setRequestId] = useState(0);
 
   // --------------------------------------------------
   // NETWORK DETECTION
@@ -268,12 +262,11 @@ const DataScreen = ({
 
   const loadPlans = useCallback(async () => {
     if (!authToken) {
+      setPlans([]);
+      setLoadingPlans(false);
       return;
     }
 
-    const currentRequest = requestId + 1;
-
-    setRequestId(currentRequest);
     setLoadingPlans(true);
     setPlans([]);
     setSelectedPlan(null);
@@ -315,13 +308,11 @@ const DataScreen = ({
     } finally {
       setLoadingPlans(false);
     }
-  }, [authToken, selectedNetwork.id, requestId]);
+  }, [authToken, selectedNetwork.id]);
 
   useEffect(() => {
-    if (authToken) {
-      loadPlans();
-    }
-  }, [authToken, selectedNetwork.id]);
+    loadPlans();
+  }, [loadPlans]);
 
   // --------------------------------------------------
   // PLAN CATEGORY
@@ -1085,14 +1076,8 @@ const DataScreen = ({
                     </View>
 
                     {plan.isPromotional && (
-                      <View
-                        style={[
-                          styles.promoBadge,
-                        ]}
-                      >
-                        <Text
-                          style={styles.promoText}
-                        >
+                      <View style={styles.promoBadge}>
+                        <Text style={styles.promoText}>
                           PROMO
                         </Text>
                       </View>
