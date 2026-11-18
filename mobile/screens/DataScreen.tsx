@@ -32,6 +32,13 @@ type DataPlan = {
   name: string;
   amount: number;
   description?: string;
+  validity?: string | null;
+  allowance?: string | null;
+  category?: string | null;
+  fixedPrice?: boolean | null;
+  isPromotional?: boolean;
+  network?: string | null;
+  raw?: any;
 };
 
 type Props = {
@@ -46,6 +53,33 @@ type NetworkInfo = {
   shortName: string;
   color: string;
 };
+
+type Category =
+  | 'All Plans'
+  | 'Daily'
+  | 'Weekly'
+  | 'Monthly'
+  | 'Night'
+  | 'Special'
+  | 'Hot Deals'
+  | '3 Months'
+  | 'Weekend'
+  | 'Hourly'
+  | 'Other';
+
+const CATEGORIES: Category[] = [
+  'All Plans',
+  'Daily',
+  'Weekly',
+  'Monthly',
+  'Night',
+  'Special',
+  'Hot Deals',
+  '3 Months',
+  'Weekend',
+  'Hourly',
+  'Other',
+];
 
 const NETWORKS: NetworkInfo[] = [
   {
@@ -120,6 +154,167 @@ const detectNetwork = (phone: string): Network | null => {
   return prefixes[phone.substring(0, 4)] || null;
 };
 
+// ============================================================
+// CATEGORY DETECTION
+// ============================================================
+
+const getPlanText = (plan: DataPlan) => {
+  return [
+    plan.name,
+    plan.description,
+    plan.validity,
+    plan.allowance,
+    plan.category,
+    plan.variation_code,
+    plan.raw?.name,
+    plan.raw?.description,
+    plan.raw?.validity,
+    plan.raw?.category,
+    plan.raw?.plan_type,
+    plan.raw?.type,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+};
+
+const matchesCategory = (
+  plan: DataPlan,
+  category: Category
+): boolean => {
+  if (category === 'All Plans') {
+    return true;
+  }
+
+  const text = getPlanText(plan);
+
+  // Provider metadata takes precedence when available.
+  const providerCategory = String(
+    plan.category ||
+      plan.raw?.category ||
+      plan.raw?.plan_category ||
+      plan.raw?.plan_type ||
+      ''
+  ).toLowerCase();
+
+  if (category === 'Daily') {
+    return (
+      /\bdaily\b/.test(text) ||
+      /\b1\s*day\b/.test(text) ||
+      /\b2\s*days?\b/.test(text) ||
+      /\b24\s*hours?\b/.test(text) ||
+      /\b48\s*hours?\b/.test(text) ||
+      /\b24hrs?\b/.test(text) ||
+      /\b48hrs?\b/.test(text) ||
+      /\bday\s*plan\b/.test(text) ||
+      /\bday(s)?\s*valid\b/.test(text) ||
+      /\bdaily\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Weekly') {
+    return (
+      /\bweekly\b/.test(text) ||
+      /\b7\s*days?\b/.test(text) ||
+      /\bweek\b/.test(text) ||
+      /\b168\s*hours?\b/.test(text) ||
+      /\bweekly\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Monthly') {
+    return (
+      /\bmonthly\b/.test(text) ||
+      /\b30\s*days?\b/.test(text) ||
+      /\b31\s*days?\b/.test(text) ||
+      /\b1\s*month\b/.test(text) ||
+      /\bmonth\b/.test(text) ||
+      /\bmonthly\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Night') {
+    return (
+      /\bnight\b/.test(text) ||
+      /\bmidnight\b/.test(text) ||
+      /\bnight\s*plan\b/.test(text) ||
+      /\bnight\s*browsing\b/.test(text) ||
+      /\bnight\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Special') {
+    return (
+      /\bspecial\b/.test(text) ||
+      /\bsme\b/.test(text) ||
+      /\bsocial\b/.test(text) ||
+      /\bcampus\b/.test(text) ||
+      /\bstudent\b/.test(text) ||
+      /\bsmartphone\b/.test(text) ||
+      /\bbonus\b/.test(providerCategory) ||
+      /\bspecial\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Hot Deals') {
+    return (
+      plan.isPromotional === true ||
+      plan.raw?.is_promotional === true ||
+      plan.raw?.promotion === true ||
+      /\bhot\s*deal\b/.test(text) ||
+      /\bpromo\b/.test(text) ||
+      /\bpromotional\b/.test(text) ||
+      /\bdiscount\b/.test(text) ||
+      /\bdeal\b/.test(text) ||
+      /\bspecial\s*offer\b/.test(text)
+    );
+  }
+
+  if (category === '3 Months') {
+    return (
+      /\b3\s*months?\b/.test(text) ||
+      /\bthree\s*months?\b/.test(text) ||
+      /\b90\s*days?\b/.test(text) ||
+      /\bquarterly\b/.test(text) ||
+      /\b3\s*month\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Weekend') {
+    return (
+      /\bweekend\b/.test(text) ||
+      /\bsaturday\b/.test(text) ||
+      /\bsunday\b/.test(text) ||
+      /\bweekend\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Hourly') {
+    return (
+      /\bhourly\b/.test(text) ||
+      /\b\d+\s*hours?\b/.test(text) ||
+      /\bhrs?\b/.test(text) ||
+      /\bhour\b/.test(providerCategory)
+    );
+  }
+
+  if (category === 'Other') {
+    return !CATEGORIES.some((item) => {
+      if (item === 'All Plans' || item === 'Other') {
+        return false;
+      }
+
+      return matchesCategory(plan, item);
+    });
+  }
+
+  return false;
+};
+
+// ============================================================
+// COMPONENT
+// ============================================================
+
 export default function DataScreen({
   token,
   onBack,
@@ -149,6 +344,11 @@ export default function DataScreen({
   const [manualNetworkSelection, setManualNetworkSelection] =
     useState(false);
 
+  const [selectedCategory, setSelectedCategory] =
+    useState<Category>('All Plans');
+
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [result, setResult] = useState<{
     status: string;
     reference: string;
@@ -171,6 +371,50 @@ export default function DataScreen({
     value;
 
   // ====================================================
+  // CATEGORY FILTERING
+  // ====================================================
+
+  const categoryPlans = useMemo(() => {
+    return plans.filter((plan) =>
+      matchesCategory(plan, selectedCategory)
+    );
+  }, [plans, selectedCategory]);
+
+  const filteredPlans = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return categoryPlans;
+    }
+
+    return categoryPlans.filter((plan) => {
+      const searchable = [
+        plan.name,
+        plan.description,
+        plan.validity,
+        plan.allowance,
+        plan.category,
+        plan.variation_code,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  }, [categoryPlans, searchQuery]);
+
+  const availableCategories = useMemo(() => {
+    return CATEGORIES.filter((category) => {
+      if (category === 'All Plans') return true;
+
+      return plans.some((plan) =>
+        matchesCategory(plan, category)
+      );
+    });
+  }, [plans]);
+
+  // ====================================================
   // AUTOMATIC NETWORK DETECTION
   // ====================================================
 
@@ -189,6 +433,8 @@ export default function DataScreen({
     setPlans([]);
     setSelectedPlan(null);
     setResult(null);
+    setSelectedCategory('All Plans');
+    setSearchQuery('');
 
     try {
       const response = await fetch(
@@ -216,21 +462,59 @@ export default function DataScreen({
         ? data.plans
         : [];
 
-      const normalizedPlans = returnedPlans
+      const normalizedPlans: DataPlan[] = returnedPlans
         .map((item: any) => ({
           variation_code: String(
             item.variation_code || item.plan_id || ''
-          ),
+          ).trim(),
+
           name: String(
             item.name ||
               item.description ||
               item.variation_code ||
               'Data plan'
           ),
+
           amount: Number(item.amount),
+
           description: item.description
             ? String(item.description)
             : undefined,
+
+          validity:
+            item.validity ??
+            item.validity_period ??
+            item.duration ??
+            null,
+
+          allowance:
+            item.allowance ??
+            item.bundle ??
+            item.data_size ??
+            item.volume ??
+            null,
+
+          category:
+            item.category ??
+            item.plan_category ??
+            item.type ??
+            item.plan_type ??
+            null,
+
+          fixedPrice:
+            item.fixedPrice ??
+            item.fixed_price ??
+            null,
+
+          isPromotional:
+            item.isPromotional ??
+            item.is_promotional ??
+            item.promotion ??
+            false,
+
+          network: item.network || null,
+
+          raw: item.raw || item,
         }))
         .filter(
           (item: DataPlan) =>
@@ -276,9 +560,6 @@ export default function DataScreen({
 
     setPhone(normalized);
     setResult(null);
-
-    // Changing the phone number allows automatic detection
-    // to suggest a new network again.
     setManualNetworkSelection(false);
   };
 
@@ -464,6 +745,8 @@ export default function DataScreen({
     setManualNetworkSelection(false);
     setPlans([]);
     setSelectedPlan(null);
+    setSelectedCategory('All Plans');
+    setSearchQuery('');
     setResult(null);
     setPin('');
   };
@@ -504,6 +787,29 @@ export default function DataScreen({
       </View>
     );
   };
+
+  // ====================================================
+  // PLAN DETAILS
+  // ====================================================
+
+  const getPlanDetails = (plan: DataPlan) => {
+    const details = [
+      plan.allowance,
+      plan.validity,
+    ].filter(Boolean);
+
+    if (details.length > 0) {
+      return details.join(' · ');
+    }
+
+    return plan.description || '';
+  };
+
+  const formatAmount = (amount: number) =>
+    amount.toLocaleString('en-NG', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   // ====================================================
   // UI
@@ -696,71 +1002,233 @@ export default function DataScreen({
               />
 
               <Text style={styles.loadingText}>
-                Loading available plans...
+                Loading Sogo data catalogue...
               </Text>
             </View>
           ) : plans.length > 0 ? (
-            <View style={styles.planList}>
-              {plans.map((plan) => {
-                const selected =
-                  selectedPlan?.variation_code ===
-                  plan.variation_code;
+            <>
+              {/* SEARCH */}
 
-                return (
+              <View style={styles.searchBox}>
+                <MaterialCommunityIcons
+                  name="magnify"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search data plans"
+                  placeholderTextColor={colors.textSecondary}
+                  style={styles.searchInput}
+                />
+
+                {!!searchQuery && (
                   <TouchableOpacity
-                    key={plan.variation_code}
-                    onPress={() => setSelectedPlan(plan)}
-                    activeOpacity={0.75}
-                    style={[
-                      styles.planItem,
-                      selected && styles.planSelected,
-                    ]}
+                    onPress={() => setSearchQuery('')}
                   >
-                    <View style={styles.planRadio}>
-                      <MaterialCommunityIcons
-                        name={
-                          selected
-                            ? 'radiobox-marked'
-                            : 'radiobox-blank'
-                        }
-                        size={21}
-                        color={
-                          selected
-                            ? colors.primary
-                            : colors.textSecondary
-                        }
-                      />
-                    </View>
+                    <MaterialCommunityIcons
+                      name="close-circle"
+                      size={19}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
 
-                    <View style={styles.planInfo}>
-                      <Text style={styles.planName}>
-                        {plan.name}
+              {/* CATEGORY FILTERS */}
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryList}
+              >
+                {availableCategories.map((category) => {
+                  const selected =
+                    selectedCategory === category;
+
+                  const count =
+                    category === 'All Plans'
+                      ? plans.length
+                      : plans.filter((plan) =>
+                          matchesCategory(plan, category)
+                        ).length;
+
+                  return (
+                    <TouchableOpacity
+                      key={category}
+                      activeOpacity={0.75}
+                      onPress={() =>
+                        setSelectedCategory(category)
+                      }
+                      style={[
+                        styles.categoryChip,
+                        selected && styles.categoryChipSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          selected &&
+                            styles.categoryChipTextSelected,
+                        ]}
+                      >
+                        {category}
                       </Text>
 
-                      {!!plan.description && (
+                      <View
+                        style={[
+                          styles.categoryCount,
+                          selected &&
+                            styles.categoryCountSelected,
+                        ]}
+                      >
                         <Text
-                          style={styles.planDescription}
-                          numberOfLines={2}
+                          style={[
+                            styles.categoryCountText,
+                            selected &&
+                              styles.categoryCountTextSelected,
+                          ]}
                         >
-                          {plan.description}
+                          {count}
                         </Text>
-                      )}
-                    </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
-                    <Text style={styles.planPrice}>
-                      ₦
-                      {plan.amount.toLocaleString(
-                        'en-NG',
-                        {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
+              {/* CATALOGUE SUMMARY */}
+
+              <View style={styles.catalogueSummary}>
+                <Text style={styles.catalogueSummaryText}>
+                  {filteredPlans.length} plan
+                  {filteredPlans.length !== 1 ? 's' : ''}{' '}
+                  available
+                </Text>
+
+                <Text style={styles.catalogueSource}>
+                  Sogo catalogue
+                </Text>
+              </View>
+
+              {/* PLAN LIST */}
+
+              {filteredPlans.length > 0 ? (
+                <View style={styles.planList}>
+                  {filteredPlans.map((plan) => {
+                    const selected =
+                      selectedPlan?.variation_code ===
+                      plan.variation_code;
+
+                    const details = getPlanDetails(plan);
+
+                    const promotional =
+                      plan.isPromotional === true ||
+                      plan.raw?.is_promotional === true ||
+                      plan.raw?.promotion === true;
+
+                    return (
+                      <TouchableOpacity
+                        key={plan.variation_code}
+                        onPress={() =>
+                          setSelectedPlan(plan)
                         }
-                      )}
+                        activeOpacity={0.75}
+                        style={[
+                          styles.planItem,
+                          selected && styles.planSelected,
+                        ]}
+                      >
+                        <View style={styles.planRadio}>
+                          <MaterialCommunityIcons
+                            name={
+                              selected
+                                ? 'radiobox-marked'
+                                : 'radiobox-blank'
+                            }
+                            size={21}
+                            color={
+                              selected
+                                ? colors.primary
+                                : colors.textSecondary
+                            }
+                          />
+                        </View>
+
+                        <View style={styles.planInfo}>
+                          <View style={styles.planNameRow}>
+                            <Text
+                              style={styles.planName}
+                            >
+                              {plan.name}
+                            </Text>
+
+                            {promotional && (
+                              <View
+                                style={styles.promoBadge}
+                              >
+                                <Text
+                                  style={styles.promoBadgeText}
+                                >
+                                  DEAL
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {!!details && (
+                            <Text
+                              style={styles.planDescription}
+                              numberOfLines={2}
+                            >
+                              {details}
+                            </Text>
+                          )}
+
+                          {!!plan.category && (
+                            <Text
+                              style={styles.providerCategory}
+                            >
+                              {plan.category}
+                            </Text>
+                          )}
+                        </View>
+
+                        <Text style={styles.planPrice}>
+                          ₦{formatAmount(plan.amount)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyBox}>
+                  <MaterialCommunityIcons
+                    name="magnify"
+                    size={27}
+                    color={colors.textSecondary}
+                  />
+
+                  <Text style={styles.emptyText}>
+                    No plans found in this category.
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedCategory('All Plans');
+                      setSearchQuery('');
+                    }}
+                    style={styles.retryButton}
+                  >
+                    <Text style={styles.retryText}>
+                      View all plans
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+                </View>
+              )}
+            </>
           ) : (
             <View style={styles.emptyBox}>
               <MaterialCommunityIcons
@@ -798,8 +1266,8 @@ export default function DataScreen({
 
           <Text style={styles.infoText}>
             Your transaction PIN is verified securely by
-            ZENIMONIES. Plan prices are supplied by the
-            provider's catalogue.
+            ZENIMONIES. Data plans and prices are supplied
+            by the Sogo provider catalogue.
           </Text>
         </View>
 
@@ -1011,7 +1479,6 @@ export default function DataScreen({
                 </TouchableOpacity>
               );
             })}
-          
 
             <TouchableOpacity
               style={styles.modalCancelButton}
@@ -1345,6 +1812,101 @@ const createStyles = (
       fontWeight: '900',
     },
 
+    searchBox: {
+      height: 45,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+      paddingHorizontal: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 11,
+      backgroundColor: colors.surface,
+      marginBottom: 12,
+    },
+
+    searchInput: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 12,
+      paddingVertical: 8,
+    },
+
+    categoryList: {
+      paddingBottom: 8,
+      gap: 8,
+    },
+
+    categoryChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 22,
+      paddingHorizontal: 11,
+      paddingVertical: 9,
+      backgroundColor: colors.surface,
+    },
+
+    categoryChipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+
+    categoryChipText: {
+      color: colors.text,
+      fontSize: 10,
+      fontWeight: '800',
+    },
+
+    categoryChipTextSelected: {
+      color: '#FFFFFF',
+    },
+
+    categoryCount: {
+      minWidth: 19,
+      height: 19,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    },
+
+    categoryCountSelected: {
+      backgroundColor: 'rgba(255,255,255,0.25)',
+    },
+
+    categoryCountText: {
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '900',
+    },
+
+    categoryCountTextSelected: {
+      color: '#FFFFFF',
+    },
+
+    catalogueSummary: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+    },
+
+    catalogueSummaryText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    catalogueSource: {
+      color: colors.primary,
+      fontSize: 9,
+      fontWeight: '900',
+    },
+
     planList: {
       gap: 8,
     },
@@ -1352,7 +1914,7 @@ const createStyles = (
     planItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 64,
+      minHeight: 68,
       paddingHorizontal: 12,
       paddingVertical: 10,
       borderWidth: 1,
@@ -1376,10 +1938,31 @@ const createStyles = (
       paddingRight: 8,
     },
 
+    planNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+
     planName: {
       color: colors.text,
       fontSize: 12,
       fontWeight: '800',
+      flexShrink: 1,
+    },
+
+    promoBadge: {
+      backgroundColor: '#E6A322',
+      borderRadius: 5,
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+    },
+
+    promoBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 7,
+      fontWeight: '900',
     },
 
     planDescription: {
@@ -1387,6 +1970,13 @@ const createStyles = (
       fontSize: 10,
       marginTop: 4,
       lineHeight: 14,
+    },
+
+    providerCategory: {
+      color: colors.primary,
+      fontSize: 9,
+      marginTop: 3,
+      fontWeight: '700',
     },
 
     planPrice: {
