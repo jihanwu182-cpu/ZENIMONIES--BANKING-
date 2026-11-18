@@ -1,8 +1,10 @@
+
 import React, { useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -31,15 +33,33 @@ type Props = {
   onComplete?: () => void;
 };
 
-const NETWORKS: {
+type NetworkItem = {
   value: Network;
   label: string;
-  color: string;
-}[] = [
-  { value: 'MTN', label: 'MTN', color: '#FFCC00' },
-  { value: 'Airtel', label: 'Airtel', color: '#E31B23' },
-  { value: 'Glo', label: 'Glo', color: '#00A859' },
-  { value: '9mobile', label: 'T2 Mobile', color: '#111111' },
+  logo: any;
+};
+
+const NETWORKS: NetworkItem[] = [
+  {
+    value: 'MTN',
+    label: 'MTN',
+    logo: require('../../assets/network-logos/mtn.png'),
+  },
+  {
+    value: 'Airtel',
+    label: 'Airtel',
+    logo: require('../../assets/network-logos/airtel.png'),
+  },
+  {
+    value: 'Glo',
+    label: 'Glo',
+    logo: require('../../assets/network-logos/glo.png'),
+  },
+  {
+    value: '9mobile',
+    label: 'T2 Mobile',
+    logo: require('../../assets/network-logos/t2.png'),
+  },
 ];
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
@@ -49,6 +69,7 @@ const normalizePhone = (value: string) =>
 
 const detectNetwork = (phone: string): Network | null => {
   const prefixes: Record<string, Network> = {
+    // MTN
     '0803': 'MTN',
     '0806': 'MTN',
     '0810': 'MTN',
@@ -60,6 +81,7 @@ const detectNetwork = (phone: string): Network | null => {
     '0913': 'MTN',
     '0916': 'MTN',
 
+    // Airtel
     '0802': 'Airtel',
     '0808': 'Airtel',
     '0812': 'Airtel',
@@ -70,6 +92,7 @@ const detectNetwork = (phone: string): Network | null => {
     '0907': 'Airtel',
     '0912': 'Airtel',
 
+    // Glo
     '0805': 'Glo',
     '0807': 'Glo',
     '0811': 'Glo',
@@ -78,6 +101,7 @@ const detectNetwork = (phone: string): Network | null => {
     '0905': 'Glo',
     '0915': 'Glo',
 
+    // T2 Mobile
     '0809': '9mobile',
     '0817': '9mobile',
     '0818': '9mobile',
@@ -153,11 +177,7 @@ export default function AirtimeScreen({
 
     const detected = detectNetwork(normalized);
 
-    if (detected) {
-      setNetwork(detected);
-    } else {
-      setNetwork(null);
-    }
+    setNetwork(detected);
   };
 
   const handleNetworkSelection = (value: Network) => {
@@ -434,6 +454,8 @@ export default function AirtimeScreen({
         barStyle={isDark ? 'light-content' : 'dark-content'}
       />
 
+      {/* HEADER */}
+
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
@@ -488,11 +510,13 @@ export default function AirtimeScreen({
           )}
         </View>
 
+        {/* NETWORK DETECTION */}
+
         {detectedNetwork && (
           <View style={styles.detectedBox}>
             <MaterialCommunityIcons
               name="check-circle"
-              size={17}
+              size={16}
               color={colors.success}
             />
 
@@ -506,7 +530,7 @@ export default function AirtimeScreen({
           </View>
         )}
 
-        {/* NETWORK DROPDOWN */}
+        {/* NETWORK SELECTOR */}
 
         <Text style={styles.label}>
           Mobile network
@@ -519,21 +543,11 @@ export default function AirtimeScreen({
         >
           {selectedNetwork ? (
             <View style={styles.selectedNetworkContent}>
-              <View
-                style={[
-                  styles.networkBadge,
-                  {
-                    backgroundColor:
-                      selectedNetwork.color,
-                  },
-                ]}
-              >
-                <Text style={styles.networkBadgeText}>
-                  {selectedNetwork.label === 'T2 Mobile'
-                    ? 'T2'
-                    : selectedNetwork.label.substring(0, 1)}
-                </Text>
-              </View>
+              <Image
+                source={selectedNetwork.logo}
+                style={styles.networkLogo}
+                resizeMode="contain"
+              />
 
               <View style={styles.networkSelectorText}>
                 <Text style={styles.networkSelectorTitle}>
@@ -543,7 +557,7 @@ export default function AirtimeScreen({
                 <Text style={styles.networkSelectorSubtitle}>
                   {manualNetwork
                     ? 'Selected manually'
-                    : 'Based on phone number'}
+                    : 'Automatically detected'}
                 </Text>
               </View>
             </View>
@@ -559,12 +573,6 @@ export default function AirtimeScreen({
             color={colors.textSecondary}
           />
         </TouchableOpacity>
-
-        <Text style={styles.networkNote}>
-          Network detection uses the phone number prefix.
-          If your number has been ported, select your
-          current network manually.
-        </Text>
 
         {/* AMOUNT */}
 
@@ -605,8 +613,10 @@ export default function AirtimeScreen({
           })}
         </View>
 
+        {/* CUSTOM AMOUNT */}
+
         <Text style={styles.label}>
-          Or enter another amount
+          Other amount
         </Text>
 
         <View style={styles.customAmountInput}>
@@ -744,14 +754,9 @@ export default function AirtimeScreen({
             color="#FFFFFF"
           />
         </TouchableOpacity>
-
-        <Text style={styles.footerNote}>
-          Please confirm the phone number and network
-          before purchasing.
-        </Text>
       </ScrollView>
 
-      {/* NETWORK SELECTOR MODAL */}
+      {/* NETWORK SELECTOR */}
 
       <Modal
         visible={networkModalVisible}
@@ -803,20 +808,11 @@ export default function AirtimeScreen({
                   }
                   activeOpacity={0.75}
                 >
-                  <View
-                    style={[
-                      styles.networkBadge,
-                      {
-                        backgroundColor: item.color,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.networkBadgeText}>
-                      {item.label === 'T2 Mobile'
-                        ? 'T2'
-                        : item.label.substring(0, 1)}
-                    </Text>
-                  </View>
+                  <Image
+                    source={item.logo}
+                    style={styles.modalNetworkLogo}
+                    resizeMode="contain"
+                  />
 
                   <View style={styles.networkOptionContent}>
                     <Text style={styles.networkOptionTitle}>
@@ -869,7 +865,7 @@ export default function AirtimeScreen({
         </View>
       </Modal>
 
-      {/* TRANSACTION PIN MODAL */}
+      {/* TRANSACTION PIN */}
 
       <Modal
         visible={pinVisible}
@@ -1061,15 +1057,15 @@ const createStyles = (
     },
 
     networkSelector: {
-      minHeight: 62,
+      minHeight: 58,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 14,
+      borderRadius: 12,
       backgroundColor: colors.surface,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 14,
+      paddingHorizontal: 12,
     },
 
     selectedNetworkContent: {
@@ -1078,28 +1074,19 @@ const createStyles = (
       flex: 1,
     },
 
-    networkBadge: {
-      width: 42,
-      height: 42,
-      borderRadius: 13,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-
-    networkBadgeText: {
-      color: '#FFFFFF',
-      fontWeight: '900',
-      fontSize: 15,
+    networkLogo: {
+      width: 40,
+      height: 36,
     },
 
     networkSelectorText: {
-      marginLeft: 12,
+      marginLeft: 10,
     },
 
     networkSelectorTitle: {
       color: colors.text,
       fontWeight: '800',
-      fontSize: 14,
+      fontSize: 13,
     },
 
     networkSelectorSubtitle: {
@@ -1111,13 +1098,6 @@ const createStyles = (
     networkPlaceholder: {
       color: colors.textSecondary,
       fontSize: 13,
-    },
-
-    networkNote: {
-      color: colors.textSecondary,
-      fontSize: 10,
-      lineHeight: 15,
-      marginTop: 9,
     },
 
     amountGrid: {
@@ -1190,14 +1170,6 @@ const createStyles = (
 
     disabledButton: {
       opacity: 0.45,
-    },
-
-    footerNote: {
-      textAlign: 'center',
-      color: colors.textSecondary,
-      fontSize: 10,
-      lineHeight: 15,
-      marginTop: 12,
     },
 
     resultBox: {
@@ -1309,7 +1281,7 @@ const createStyles = (
     },
 
     networkOption: {
-      minHeight: 67,
+      minHeight: 64,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 13,
@@ -1323,6 +1295,11 @@ const createStyles = (
     networkOptionSelected: {
       borderColor: colors.primary,
       backgroundColor: colors.primaryLight,
+    },
+
+    modalNetworkLogo: {
+      width: 43,
+      height: 38,
     },
 
     networkOptionContent: {
