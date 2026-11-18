@@ -118,19 +118,45 @@ const getProviderMessage = (providerResponse) => {
 // GET DATA PLANS
 // GET /api/data/plans?network=MTN
 // ============================================================
-
 const getPlans = async (req, res) => {
-  try {
-    const network = req.query?.network;
+  const network = req.query?.network;
 
+  console.log('========================================');
+  console.log('ZENIMONIES DATA PLANS REQUEST');
+  console.log('Network:', network);
+  console.log('User ID:', getUserId(req));
+  console.log('========================================');
+
+  try {
     if (!network) {
+      console.warn('DATA PLANS: Missing network parameter');
+
       return res.status(400).json({
         success: false,
         message: 'Network is required.',
       });
     }
 
+    console.log('DATA PLANS: Calling Sogo service...');
+
     const result = await getDataPlans(network);
+
+    console.log('DATA PLANS: Sogo service returned successfully');
+
+    console.log('DATA PLANS DIAGNOSTICS:', {
+      requestedNetwork: network,
+      returnedNetwork: result?.network,
+      serviceID: result?.serviceID,
+      plansType: typeof result?.plans,
+      plansIsArray: Array.isArray(result?.plans),
+      totalPlans: result?.plans?.length,
+      firstPlanKeys:
+        result?.plans?.[0]
+          ? Object.keys(result.plans[0])
+          : [],
+      firstPlan:
+        result?.plans?.[0] || null,
+    });
 
     return res.status(200).json({
       success: true,
@@ -142,10 +168,18 @@ const getPlans = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('========================================');
+    console.error('ZENIMONIES DATA PLANS ERROR');
+    console.error('Network:', network);
+    console.error('Error code:', error?.code);
+    console.error('Error message:', error?.message);
+    console.error('HTTP status:', error?.response?.status);
     console.error(
-      'Sogo Data plans error:',
-      error?.code || error?.message || 'Unknown error'
+      'Provider response:',
+      error?.response?.data
     );
+    console.error('Stack:', error?.stack);
+    console.error('========================================');
 
     const statusMap = {
       UNSUPPORTED_NETWORK: 400,
