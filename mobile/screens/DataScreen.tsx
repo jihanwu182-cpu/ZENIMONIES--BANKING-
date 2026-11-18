@@ -63,8 +63,7 @@ type TransactionStatus =
 
 const API_BASE =
   'https://zenimonies-banking.onrender.com/api';
-
-const colors = {
+const PALETTE = {
   background: '#F6F8F3',
   card: '#FFFFFF',
   text: '#172018',
@@ -73,7 +72,9 @@ const colors = {
   green: '#78A900',
   darkGreen: '#527900',
   white: '#FFFFFF',
+  black: '#000000',
 };
+
 
 const NETWORKS: NetworkItem[] = [
   {
@@ -433,14 +434,15 @@ const DataScreen = ({
   isDark = false,
 }: Props) => {
   // Approved ZENIMONIES palette only.
-  const theme = {
-  background: colors.background,
-  card: colors.card,
-  text: colors.text,
-  muted: colors.muted,
-  border: colors.border,
-  green: colors.green,
-  darkGreen: colors.darkGreen,
+const theme = {
+  background: colors?.background ?? PALETTE.background,
+  card: colors?.card ?? PALETTE.card,
+  text: colors?.text ?? PALETTE.text,
+  muted: colors?.muted ?? PALETTE.muted,
+  border: colors?.border ?? PALETTE.border,
+  green: colors?.green ?? PALETTE.green,
+  darkGreen: colors?.darkGreen ?? PALETTE.darkGreen,
+  white: PALETTE.white,
 };
   const authToken = token || '';
 
