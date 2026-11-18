@@ -1,29 +1,30 @@
+
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-
-// ======================================================
-// TYPES
-// ======================================================
 
 interface ElectricityProvider {
   id: string;
   name: string;
+  shortName: string;
 }
 
 interface MeterCustomer {
-  customerName: string;
-  meterNumber: string;
+  name?: string;
   address?: string;
+  meterNumber?: string;
+  customerNumber?: string;
+  customerType?: string;
+  accountNumber?: string;
 }
 
 interface ElectricityPaymentResult {
@@ -31,25 +32,17 @@ interface ElectricityPaymentResult {
   status?: string;
   message?: string;
   reference?: string;
-  provider_reference?: string;
-  electricity_token?: string;
+  providerReference?: string;
   token?: string;
   units?: string | number;
-  customer_name?: string;
-  customer_address?: string;
-  meter_number?: string;
-  meter_type?: string;
-  provider?: string;
-  httpStatus?: number;
-  statusCode?: number;
-  [key: string]: any;
+  customer?: MeterCustomer;
 }
 
 interface ElectricityScreenProps {
   onValidate?: (
     provider: string,
     meterNumber: string,
-    meterType: 'prepaid' | 'postpaid'
+    meterType: 'prepaid' | 'postpaid',
   ) => Promise<MeterCustomer>;
 
   onPay?: (
@@ -57,13 +50,9 @@ interface ElectricityScreenProps {
     meterNumber: string,
     meterType: 'prepaid' | 'postpaid',
     amount: number,
-    transactionPin: string
+    transactionPin: string,
   ) => Promise<ElectricityPaymentResult>;
 }
-
-// ======================================================
-// ZENIMONIES BRAND COLORS
-// ======================================================
 
 const GREEN = '#78A900';
 const DARK_GREEN = '#527900';
@@ -73,248 +62,224 @@ const BACKGROUND = '#F6F8F3';
 const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
 
-// ======================================================
-// PROVIDERS
-// ======================================================
-
-const providers: ElectricityProvider[] = [
-  { id: 'IKEDC', name: 'Ikeja Electric' },
-  { id: 'EKEDC', name: 'Eko Electric' },
-  { id: 'AEDC', name: 'Abuja Electric' },
-  { id: 'IBEDC', name: 'Ibadan Electric' },
-  { id: 'KEDCO', name: 'Kano Electric' },
-  { id: 'KAEDCO', name: 'Kaduna Electric' },
-  { id: 'JED', name: 'Jos Electric' },
-  { id: 'EEDC', name: 'Enugu Electric' },
-  { id: 'PHEDC', name: 'Port Harcourt Electric' },
-  { id: 'BEDC', name: 'Benin Electric' },
-  { id: 'YEDC', name: 'Yola Electric' },
+const PROVIDERS: ElectricityProvider[] = [
+  { id: 'IKEDC', name: 'Ikeja Electric', shortName: 'IKEDC' },
+  { id: 'EKEDC', name: 'Eko Electric', shortName: 'EKEDC' },
+  { id: 'AEDC', name: 'Abuja Electric', shortName: 'AEDC' },
+  { id: 'IBEDC', name: 'Ibadan Electric', shortName: 'IBEDC' },
+  { id: 'KEDCO', name: 'Kano Electric', shortName: 'KEDCO' },
+  { id: 'KAEDCO', name: 'Kaduna Electric', shortName: 'KAEDCO' },
+  { id: 'JED', name: 'Jos Electric', shortName: 'JED' },
+  { id: 'EEDC', name: 'Enugu Electric', shortName: 'EEDC' },
+  { id: 'PHEDC', name: 'Port Harcourt Electric', shortName: 'PHEDC' },
+  { id: 'BEDC', name: 'Benin Electric', shortName: 'BEDC' },
+  { id: 'YEDC', name: 'Yola Electric', shortName: 'YEDC' },
 ];
 
-// ======================================================
-// HELPERS
-// ======================================================
+const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
+
+const MIN_AMOUNT = 500;
+const MAX_AMOUNT = 1000000;
+
+type PaymentStatus =
+  | 'idle'
+  | 'validating'
+  | 'verified'
+  | 'paying'
+  | 'success'
+  | 'pending'
+  | 'failed';
 
 const formatCurrency = (amount: number) =>
   `₦${amount.toLocaleString('en-NG')}`;
 
-// ======================================================
-// COMPONENT
-// ======================================================
+const isPendingResponse = (result: ElectricityPaymentResult) => {
+  const status = String(result.status || '').toLowerCase();
 
-export default function ElectricityScreen({
+  return (
+    status === 'pending' ||
+    status === 'processing' ||
+    status === 'queued' ||
+    status === 'unknown' ||
+    status === 'initiated'
+  );
+};
+
+const isSuccessfulResponse = (result: ElectricityPaymentResult) => {
+  const status = String(result.status || '').toLowerCase();
+
+  if (isPendingResponse(result)) {
+    return false;
+  }
+
+  return (
+    status === 'success' ||
+    status === 'successful' ||
+    status === 'completed' ||
+    result.success === true
+  );
+};
+
+const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   onValidate,
   onPay,
-}: ElectricityScreenProps) {
-  const [selectedProvider, setSelectedProvider] =
-    useState('IKEDC');
+}) => {
+  const [provider, setProvider] = useState('');
+  const [meterNumber, setMeterNumber] = useState('');
+  const [meterType, setMeterType] = useState<'prepaid' | 'postpaid'>(
+    'prepaid',
+  );
 
-  const [meterType, setMeterType] =
-    useState<'prepaid' | 'postpaid'>('prepaid');
+  const [amount, setAmount] = useState('');
+  const [transactionPin, setTransactionPin] = useState('');
 
-  const [meterNumber, setMeterNumber] =
-    useState('');
-
-  const [customer, setCustomer] =
-    useState<MeterCustomer | null>(null);
-
-  const [amount, setAmount] =
-    useState('');
-
-  const [transactionPin, setTransactionPin] =
-    useState('');
-
-  const [validated, setValidated] =
-    useState(false);
-
-  const [loadingValidation, setLoadingValidation] =
-    useState(false);
-
-  const [loadingPayment, setLoadingPayment] =
-    useState(false);
-
-  const [showPin, setShowPin] =
-    useState(false);
-
+  const [customer, setCustomer] = useState<MeterCustomer | null>(null);
   const [paymentResult, setPaymentResult] =
     useState<ElectricityPaymentResult | null>(null);
 
-  const [paymentStatus, setPaymentStatus] =
-    useState<
-      'completed' | 'pending' | 'failed' | null
-    >(null);
+  const [status, setStatus] = useState<PaymentStatus>('idle');
+  const [loading, setLoading] = useState(false);
 
-  // ====================================================
-  // PROVIDER
-  // ====================================================
+  const selectedProvider = PROVIDERS.find(
+    item => item.id === provider,
+  );
 
-  const handleProviderChange = (
-    provider: string,
-  ) => {
-    if (loadingPayment) return;
+  const numericAmount = Number(amount.replace(/,/g, ''));
 
-    setSelectedProvider(provider);
-    setCustomer(null);
-    setValidated(false);
+  const isAmountValid =
+    Number.isFinite(numericAmount) &&
+    numericAmount >= MIN_AMOUNT &&
+    numericAmount <= MAX_AMOUNT;
+
+  const isMeterValid = meterNumber.trim().length >= 6;
+
+  const isPinValid = /^\d{4}$/.test(transactionPin);
+
+  const resetPayment = () => {
+    setAmount('');
+    setTransactionPin('');
     setPaymentResult(null);
-    setPaymentStatus(null);
+    setStatus('verified');
+  };
+
+  const handleProviderSelect = (selectedProvider: string) => {
+    setProvider(selectedProvider);
+    setCustomer(null);
+    setPaymentResult(null);
+    setStatus('idle');
     setAmount('');
     setTransactionPin('');
   };
-
-  // ====================================================
-  // METER TYPE
-  // ====================================================
 
   const handleMeterTypeChange = (
-    type: 'prepaid' | 'postpaid',
+    selectedType: 'prepaid' | 'postpaid',
   ) => {
-    if (loadingPayment) return;
-
-    setMeterType(type);
+    setMeterType(selectedType);
     setCustomer(null);
-    setValidated(false);
     setPaymentResult(null);
-    setPaymentStatus(null);
+    setStatus('idle');
     setAmount('');
     setTransactionPin('');
   };
 
-  // ====================================================
-  // VALIDATE METER
-  // ====================================================
-
   const handleValidateMeter = async () => {
-    if (!meterNumber.trim()) {
+    if (!provider) {
       Alert.alert(
-        'Meter Number Required',
-        'Please enter your meter number.',
+        'Select electricity provider',
+        'Please select your electricity distribution company.',
       );
+      return;
+    }
 
+    if (!isMeterValid) {
+      Alert.alert(
+        'Invalid meter number',
+        'Please enter a valid meter number.',
+      );
       return;
     }
 
     if (!onValidate) {
       Alert.alert(
-        'Not Connected',
-        'Meter validation has not yet been connected to the backend.',
+        'Unavailable',
+        'Meter validation is currently unavailable.',
       );
-
       return;
     }
 
+    setLoading(true);
+    setStatus('validating');
+    setCustomer(null);
+    setPaymentResult(null);
+
     try {
-      setLoadingValidation(true);
-
-      setCustomer(null);
-      setValidated(false);
-      setPaymentResult(null);
-      setPaymentStatus(null);
-
       const result = await onValidate(
-        selectedProvider,
+        provider,
         meterNumber.trim(),
         meterType,
       );
 
       setCustomer(result);
-      setValidated(true);
+      setStatus('verified');
 
       Alert.alert(
-        'Meter Verified',
-        `Customer: ${result.customerName}`,
+        'Meter verified',
+        'Customer details have been successfully verified.',
       );
     } catch (error: any) {
-      setCustomer(null);
-      setValidated(false);
+      setStatus('failed');
 
       Alert.alert(
-        'Validation Failed',
-        error?.message ||
-          'Unable to validate meter number. Please check the number and try again.',
+        'Verification failed',
+        error?.response?.data?.message ||
+          error?.message ||
+          'Unable to verify this meter number. Please check the details and try again.',
       );
     } finally {
-      setLoadingValidation(false);
+      setLoading(false);
     }
   };
 
-  // ====================================================
-  // PAYMENT VALIDATION
-  // ====================================================
-
-  const handlePayment = () => {
-    if (!validated || !customer) {
+  const handlePay = async () => {
+    if (!customer) {
       Alert.alert(
-        'Validate Meter',
-        'Please validate your meter number first.',
+        'Verify meter first',
+        'Please verify your meter number before continuing.',
       );
-
       return;
     }
 
-    const paymentAmount = Number(amount);
-
-    if (
-      !paymentAmount ||
-      Number.isNaN(paymentAmount) ||
-      paymentAmount <= 0
-    ) {
+    if (!isAmountValid) {
       Alert.alert(
-        'Invalid Amount',
-        'Enter a valid payment amount.',
+        'Invalid amount',
+        `Enter an amount between ${formatCurrency(
+          MIN_AMOUNT,
+        )} and ${formatCurrency(MAX_AMOUNT)}.`,
       );
-
       return;
     }
 
-    if (paymentAmount < 500) {
+    if (!isPinValid) {
       Alert.alert(
-        'Minimum Amount',
-        'The minimum electricity payment is ₦500.',
+        'Invalid transaction PIN',
+        'Your transaction PIN must be exactly 4 digits.',
       );
-
-      return;
-    }
-
-    if (paymentAmount > 1000000) {
-      Alert.alert(
-        'Maximum Amount',
-        'The maximum electricity payment is ₦1,000,000.',
-      );
-
-      return;
-    }
-
-    if (
-      !transactionPin ||
-      transactionPin.length !== 4
-    ) {
-      Alert.alert(
-        'Invalid PIN',
-        'Enter your 4-digit transaction PIN.',
-      );
-
       return;
     }
 
     if (!onPay) {
       Alert.alert(
-        'Not Connected',
-        'Electricity payment has not yet been connected to the backend.',
+        'Unavailable',
+        'Electricity payment is currently unavailable.',
       );
-
       return;
     }
 
-    const providerName =
-      providers.find(
-        provider =>
-          provider.id === selectedProvider,
-      )?.name || selectedProvider;
-
     Alert.alert(
-      'Confirm Payment',
-      `Provider: ${providerName}\n\nCustomer: ${customer.customerName}\n\nMeter Number: ${meterNumber}\n\nMeter Type: ${meterType.toUpperCase()}\n\nAmount: ${formatCurrency(paymentAmount)}`,
+      'Confirm electricity payment',
+      `Provider: ${selectedProvider?.name}\n\nMeter Number: ${meterNumber}\n\nMeter Type: ${meterType.toUpperCase()}\n\nAmount: ${formatCurrency(
+        numericAmount,
+      )}\n\nDo you want to continue?`,
       [
         {
           text: 'Cancel',
@@ -328,260 +293,166 @@ export default function ElectricityScreen({
     );
   };
 
-  // ====================================================
-  // EXECUTE PAYMENT
-  // ====================================================
-
   const executePayment = async () => {
-    if (loadingPayment || !onPay) return;
+    setLoading(true);
+    setStatus('paying');
+    setPaymentResult(null);
+
+    const submittedPin = transactionPin;
+
+    // Clear the PIN immediately after submitting.
+    setTransactionPin('');
 
     try {
-      setLoadingPayment(true);
-
-      setPaymentResult(null);
-      setPaymentStatus(null);
-
-      const result = await onPay(
-        selectedProvider,
+      const result = await onPay!(
+        provider,
         meterNumber.trim(),
         meterType,
-        Number(amount),
-        transactionPin,
+        numericAmount,
+        submittedPin,
       );
 
       setPaymentResult(result);
 
-      const status = String(
-        result?.status || '',
-      ).toLowerCase();
-
-      const isPending =
-        status === 'pending' ||
-        status === 'processing' ||
-        status === 'unknown' ||
-        result?.httpStatus === 202 ||
-        result?.statusCode === 202;
-
-      // Pending takes priority over success.
-      const isSuccessful =
-        !isPending &&
-        (
-          result?.success === true ||
-          status === 'completed' ||
-          status === 'successful' ||
-          status === 'success'
-        );
-
-      if (isPending) {
-        setPaymentStatus('pending');
+      // Pending/processing must take precedence over success:true.
+      if (isPendingResponse(result)) {
+        setStatus('pending');
 
         Alert.alert(
-          'Payment Processing',
-          result?.message ||
-            'Your electricity payment is being processed. Please do not make another payment for this meter until the current transaction is confirmed.',
+          'Payment processing',
+          'Your electricity payment is being processed. Do not make another payment yet. Check your transaction history for the final status.',
         );
 
         return;
       }
 
-      if (isSuccessful) {
-        setPaymentStatus('completed');
+      if (isSuccessfulResponse(result)) {
+        setStatus('success');
 
         Alert.alert(
-          'Payment Successful',
-          result?.message ||
-            'Your electricity payment was processed successfully.',
+          'Payment successful',
+          meterType === 'prepaid' && result.token
+            ? `Your electricity payment was successful.\n\nToken: ${result.token}`
+            : 'Your electricity payment was successful.',
         );
 
         return;
       }
 
-      setPaymentStatus('failed');
+      setStatus('failed');
 
       Alert.alert(
-        'Payment Failed',
-        result?.message ||
-          'The electricity payment could not be completed.',
+        'Payment unsuccessful',
+        result.message ||
+          'The payment could not be completed. Check your transaction history before attempting another payment.',
       );
     } catch (error: any) {
       /*
-       * A network error does not always mean that
-       * the provider failed to receive the payment.
+       * A network failure may happen after the backend/provider
+       * receives the payment request. Never assume the payment failed.
        */
+      setStatus('pending');
 
-      const status = String(
-        error?.status ||
-          error?.response?.status ||
-          '',
+      Alert.alert(
+        'Payment status unknown',
+        'We could not confirm the payment status because of a connection issue. Your request may still have been processed. Please check your transaction history before trying again.',
       );
-
-      const errorCode = String(
-        error?.code || '',
-      ).toUpperCase();
-
-      const potentiallyAmbiguous =
-        status === '202' ||
-        status === '408' ||
-        status === '504' ||
-        errorCode === 'ECONNABORTED' ||
-        errorCode === 'ETIMEDOUT' ||
-        errorCode === 'ERR_NETWORK';
-
-      if (potentiallyAmbiguous) {
-        setPaymentStatus('pending');
-
-        setPaymentResult({
-          status: 'processing',
-          message:
-            'Your payment request may have been received. Please check your transaction history before attempting another payment.',
-        });
-
-        Alert.alert(
-          'Payment Status Unconfirmed',
-          'We could not confirm the payment status. Your request may still be processing. Please check your transaction history before trying again.',
-        );
-      } else {
-        setPaymentStatus('failed');
-
-        setPaymentResult({
-          status: 'failed',
-          message:
-            error?.message ||
-            'Your electricity payment could not be completed.',
-        });
-
-        Alert.alert(
-          'Payment Failed',
-          error?.message ||
-            'Your electricity payment could not be completed.',
-        );
-      }
     } finally {
-      setLoadingPayment(false);
-
-      // Never retain the PIN after an attempt.
-      setTransactionPin('');
-      setShowPin(false);
+      setLoading(false);
     }
   };
 
-  // ====================================================
-  // RESET
-  // ====================================================
-
-  const resetForm = () => {
-    if (loadingPayment) return;
-
+  const handleNewPayment = () => {
+    setProvider('');
     setMeterNumber('');
+    setMeterType('prepaid');
+    setCustomer(null);
     setAmount('');
     setTransactionPin('');
-    setCustomer(null);
-    setValidated(false);
     setPaymentResult(null);
-    setPaymentStatus(null);
-    setShowPin(false);
+    setStatus('idle');
   };
-
-  // ====================================================
-  // PAYMENT RESULT
-  // ====================================================
-
-  const electricityToken =
-    paymentResult?.electricity_token ||
-    paymentResult?.token ||
-    null;
-
-  const paymentCompleted =
-    paymentStatus === 'completed';
-
-  const paymentPending =
-    paymentStatus === 'pending';
-
-  const paymentFailed =
-    paymentStatus === 'failed';
-
-  // ====================================================
-  // UI
-  // ====================================================
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
       >
         {/* HEADER */}
-
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>
-              Electricity Bills
-            </Text>
-
-            <Text style={styles.headerSubtitle}>
-              Pay your electricity bill securely
-            </Text>
+          <View style={styles.headerIcon}>
+            <Text style={styles.headerIconText}>⚡</Text>
           </View>
 
-          <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>
-              ⚡
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>Electricity</Text>
+            <Text style={styles.subtitle}>
+              Pay your electricity bill securely
             </Text>
           </View>
         </View>
 
         {/* PROVIDER */}
-
-        <Text style={styles.sectionTitle}>
-          Select Electricity Provider
-        </Text>
-
-        <View style={styles.providerCard}>
-          <Text style={styles.label}>
-            Distribution Company
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Electricity Provider
           </Text>
 
-          <View style={styles.providerList}>
-            {providers.map(provider => {
-              const selected =
-                selectedProvider === provider.id;
+          <View style={styles.providerGrid}>
+            {PROVIDERS.map(item => {
+              const selected = provider === item.id;
 
               return (
                 <TouchableOpacity
-                  key={provider.id}
+                  key={item.id}
                   style={[
-                    styles.providerOption,
-                    selected &&
-                      styles.providerOptionSelected,
+                    styles.providerCard,
+                    selected && styles.providerCardSelected,
                   ]}
-                  onPress={() =>
-                    handleProviderChange(provider.id)
-                  }
-                  disabled={loadingPayment}
+                  onPress={() => handleProviderSelect(item.id)}
+                  disabled={loading}
                   activeOpacity={0.8}
                 >
                   <View
                     style={[
-                      styles.radio,
-                      selected &&
-                        styles.radioSelected,
+                      styles.providerIcon,
+                      selected && styles.providerIconSelected,
                     ]}
                   >
-                    {selected && (
-                      <View style={styles.radioInner} />
-                    )}
+                    <Text
+                      style={[
+                        styles.providerIconText,
+                        selected && styles.providerIconTextSelected,
+                      ]}
+                    >
+                      ⚡
+                    </Text>
                   </View>
 
                   <Text
                     style={[
                       styles.providerName,
-                      selected &&
-                        styles.providerNameSelected,
+                      selected && styles.providerNameSelected,
                     ]}
                   >
-                    {provider.name}
+                    {item.shortName}
                   </Text>
+
+                  <Text
+                    style={[
+                      styles.providerFullName,
+                      selected && styles.providerFullNameSelected,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+
+                  {selected && (
+                    <View style={styles.selectedIndicator}>
+                      <Text style={styles.selectedIndicatorText}>✓</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -589,23 +460,18 @@ export default function ElectricityScreen({
         </View>
 
         {/* METER TYPE */}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Meter Type
-          </Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Meter Type</Text>
 
           <View style={styles.meterTypeContainer}>
             <TouchableOpacity
               style={[
                 styles.meterTypeButton,
                 meterType === 'prepaid' &&
-                  styles.meterTypeSelected,
+                  styles.meterTypeButtonSelected,
               ]}
-              onPress={() =>
-                handleMeterTypeChange('prepaid')
-              }
-              disabled={loadingPayment}
+              onPress={() => handleMeterTypeChange('prepaid')}
+              disabled={loading}
             >
               <Text
                 style={[
@@ -632,12 +498,10 @@ export default function ElectricityScreen({
               style={[
                 styles.meterTypeButton,
                 meterType === 'postpaid' &&
-                  styles.meterTypeSelected,
+                  styles.meterTypeButtonSelected,
               ]}
-              onPress={() =>
-                handleMeterTypeChange('postpaid')
-              }
-              disabled={loadingPayment}
+              onPress={() => handleMeterTypeChange('postpaid')}
+              disabled={loading}
             >
               <Text
                 style={[
@@ -656,16 +520,15 @@ export default function ElectricityScreen({
                     styles.meterTypeDescriptionSelected,
                 ]}
               >
-                Pay your electricity bill
+                Pay electricity bill
               </Text>
             </TouchableOpacity>
           </View>
+        </View>
 
-          {/* METER NUMBER */}
-
-          <Text style={styles.label}>
-            Meter Number
-          </Text>
+        {/* METER NUMBER */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Meter Number</Text>
 
           <TextInput
             style={styles.input}
@@ -673,350 +536,341 @@ export default function ElectricityScreen({
             placeholderTextColor={MUTED}
             keyboardType="numeric"
             value={meterNumber}
-            editable={!loadingPayment}
             onChangeText={value => {
-              setMeterNumber(value);
+              setMeterNumber(value.replace(/\D/g, ''));
               setCustomer(null);
-              setValidated(false);
               setPaymentResult(null);
-              setPaymentStatus(null);
-              setAmount('');
-              setTransactionPin('');
+              setStatus('idle');
             }}
+            editable={!loading}
+            maxLength={20}
           />
 
           <TouchableOpacity
-            style={styles.validateButton}
+            style={[
+              styles.verifyButton,
+              (!provider || !isMeterValid || loading) &&
+                styles.disabledButton,
+            ]}
             onPress={handleValidateMeter}
-            disabled={
-              loadingValidation ||
-              loadingPayment
-            }
+            disabled={!provider || !isMeterValid || loading}
             activeOpacity={0.8}
           >
-            {loadingValidation ? (
+            {status === 'validating' ? (
               <ActivityIndicator color={WHITE} />
             ) : (
-              <Text style={styles.validateButtonText}>
-                Validate Meter
+              <Text style={styles.verifyButtonText}>
+                Verify Meter
               </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* CUSTOMER */}
-
-        {validated && customer && (
+        {/* VERIFIED CUSTOMER */}
+        {customer && (
           <View style={styles.customerCard}>
-            <View style={styles.verifiedIcon}>
-              <Text style={styles.verifiedIconText}>
-                ✓
+            <View style={styles.customerHeader}>
+              <View style={styles.customerCheck}>
+                <Text style={styles.customerCheckText}>✓</Text>
+              </View>
+
+              <Text style={styles.customerHeaderText}>
+                Customer Verified
               </Text>
             </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.customerLabel}>
-                Verified Customer
+            <View style={styles.customerRow}>
+              <Text style={styles.customerLabel}>Customer Name</Text>
+              <Text style={styles.customerValue}>
+                {customer.name || 'Verified Customer'}
               </Text>
+            </View>
 
-              <Text style={styles.customerName}>
-                {customer.customerName}
-              </Text>
-
-              <Text style={styles.customerNumber}>
-                Meter: {customer.meterNumber}
-              </Text>
-
-              {customer.address && (
-                <Text style={styles.customerAddress}>
+            {customer.address ? (
+              <View style={styles.customerRow}>
+                <Text style={styles.customerLabel}>Address</Text>
+                <Text style={styles.customerValue}>
                   {customer.address}
                 </Text>
-              )}
+              </View>
+            ) : null}
+
+            <View style={styles.customerRow}>
+              <Text style={styles.customerLabel}>Meter Number</Text>
+              <Text style={styles.customerValue}>
+                {meterNumber}
+              </Text>
+            </View>
+
+            <View style={styles.customerRow}>
+              <Text style={styles.customerLabel}>Meter Type</Text>
+              <Text style={styles.customerValue}>
+                {meterType.toUpperCase()}
+              </Text>
+            </View>
+
+            <View style={styles.customerRow}>
+              <Text style={styles.customerLabel}>Provider</Text>
+              <Text style={styles.customerValue}>
+                {selectedProvider?.name}
+              </Text>
             </View>
           </View>
         )}
 
         {/* AMOUNT */}
+        {customer && status !== 'success' && status !== 'pending' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Amount</Text>
 
-        {validated && !paymentResult && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>
-              Payment Amount
-            </Text>
+            <View style={styles.amountInputContainer}>
+              <Text style={styles.currencySymbol}>₦</Text>
 
-            <Text style={styles.label}>
-              Amount (₦)
-            </Text>
-
-            <TextInput
-              style={styles.amountInput}
-              placeholder="0.00"
-              placeholderTextColor={MUTED}
-              keyboardType="decimal-pad"
-              value={amount}
-              editable={!loadingPayment}
-              onChangeText={value => {
-                setAmount(value);
-                setPaymentResult(null);
-                setPaymentStatus(null);
-              }}
-            />
-
-            {/* QUICK AMOUNTS */}
-
-            <View style={styles.quickAmounts}>
-              {[1000, 2000, 5000, 10000].map(
-                value => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[
-                      styles.quickAmount,
-                      amount === String(value) &&
-                        styles.quickAmountSelected,
-                    ]}
-                    onPress={() => {
-                      setAmount(String(value));
-                      setPaymentResult(null);
-                      setPaymentStatus(null);
-                    }}
-                    disabled={loadingPayment}
-                  >
-                    <Text
-                      style={[
-                        styles.quickAmountText,
-                        amount === String(value) &&
-                          styles.quickAmountTextSelected,
-                      ]}
-                    >
-                      ₦{value.toLocaleString('en-NG')}
-                    </Text>
-                  </TouchableOpacity>
-                ),
-              )}
+              <TextInput
+                style={styles.amountInput}
+                placeholder="0.00"
+                placeholderTextColor={MUTED}
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={value => {
+                  setAmount(value.replace(/\D/g, ''));
+                  setPaymentResult(null);
+                }}
+                editable={!loading}
+              />
             </View>
 
-            {/* PIN */}
+            <Text style={styles.amountHint}>
+              Minimum: {formatCurrency(MIN_AMOUNT)}
+            </Text>
 
-            <Text style={styles.label}>
+            <View style={styles.quickAmounts}>
+              {QUICK_AMOUNTS.map(value => (
+                <TouchableOpacity
+                  key={value}
+                  style={[
+                    styles.quickAmountButton,
+                    amount === String(value) &&
+                      styles.quickAmountButtonSelected,
+                  ]}
+                  onPress={() => setAmount(String(value))}
+                  disabled={loading}
+                >
+                  <Text
+                    style={[
+                      styles.quickAmountText,
+                      amount === String(value) &&
+                        styles.quickAmountTextSelected,
+                    ]}
+                  >
+                    {formatCurrency(value)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* TRANSACTION PIN */}
+        {customer && status !== 'success' && status !== 'pending' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
               Transaction PIN
             </Text>
 
-            <View style={styles.pinContainer}>
-              <TextInput
-                style={styles.pinInput}
-                placeholder="Enter 4-digit PIN"
-                placeholderTextColor={MUTED}
-                keyboardType="numeric"
-                maxLength={4}
-                secureTextEntry={!showPin}
-                value={transactionPin}
-                editable={!loadingPayment}
-                onChangeText={value =>
-                  setTransactionPin(
-                    value.replace(/\D/g, ''),
-                  )
-                }
-              />
+            <TextInput
+              style={styles.pinInput}
+              placeholder="Enter 4-digit PIN"
+              placeholderTextColor={MUTED}
+              keyboardType="numeric"
+              secureTextEntry
+              value={transactionPin}
+              onChangeText={value =>
+                setTransactionPin(value.replace(/\D/g, '').slice(0, 4))
+              }
+              maxLength={4}
+              editable={!loading}
+            />
 
-              <TouchableOpacity
-                onPress={() =>
-                  setShowPin(!showPin)
-                }
-                disabled={loadingPayment}
-              >
-                <Text style={styles.showPin}>
-                  {showPin ? 'Hide' : 'Show'}
-                </Text>
-              </TouchableOpacity>
+            <Text style={styles.pinHint}>
+              Your transaction PIN is required to authorize this payment.
+            </Text>
+          </View>
+        )}
+
+        {/* PAYMENT BUTTON */}
+        {customer && status !== 'success' && status !== 'pending' && (
+          <TouchableOpacity
+            style={[
+              styles.payButton,
+              (!isAmountValid || !isPinValid || loading) &&
+                styles.disabledButton,
+            ]}
+            onPress={handlePay}
+            disabled={!isAmountValid || !isPinValid || loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.payButtonText}>
+                Pay {isAmountValid ? formatCurrency(numericAmount) : ''}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* SUCCESS */}
+        {status === 'success' && paymentResult && (
+          <View style={styles.resultCard}>
+            <View style={styles.resultIcon}>
+              <Text style={styles.resultIconText}>✓</Text>
             </View>
 
-            {/* PAYMENT BUTTON */}
+            <Text style={styles.resultTitle}>
+              Payment Successful
+            </Text>
+
+            <Text style={styles.resultDescription}>
+              Your electricity payment has been completed successfully.
+            </Text>
+
+            <View style={styles.resultDetails}>
+              <View style={styles.resultRow}>
+                <Text style={styles.resultLabel}>Amount</Text>
+                <Text style={styles.resultValue}>
+                  {formatCurrency(numericAmount)}
+                </Text>
+              </View>
+
+              <View style={styles.resultRow}>
+                <Text style={styles.resultLabel}>Provider</Text>
+                <Text style={styles.resultValue}>
+                  {selectedProvider?.name}
+                </Text>
+              </View>
+
+              <View style={styles.resultRow}>
+                <Text style={styles.resultLabel}>Meter Number</Text>
+                <Text style={styles.resultValue}>
+                  {meterNumber}
+                </Text>
+              </View>
+
+              {paymentResult.reference && (
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>Reference</Text>
+                  <Text style={styles.resultValue}>
+                    {paymentResult.reference}
+                  </Text>
+                </View>
+              )}
+
+              {paymentResult.units !== undefined && (
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>Units</Text>
+                  <Text style={styles.resultValue}>
+                    {paymentResult.units}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {meterType === 'prepaid' && paymentResult.token && (
+              <View style={styles.tokenContainer}>
+                <Text style={styles.tokenTitle}>
+                  Electricity Token
+                </Text>
+
+                <Text style={styles.tokenValue}>
+                  {paymentResult.token}
+                </Text>
+
+                <Text style={styles.tokenHint}>
+                  Enter this token on your electricity meter.
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
-              style={styles.payButton}
-              onPress={handlePayment}
-              disabled={loadingPayment}
-              activeOpacity={0.8}
+              style={styles.newPaymentButton}
+              onPress={handleNewPayment}
             >
-              {loadingPayment ? (
-                <ActivityIndicator color={WHITE} />
-              ) : (
-                <Text style={styles.payButtonText}>
-                  Pay Electricity Bill
-                </Text>
-              )}
+              <Text style={styles.newPaymentButtonText}>
+                Make Another Payment
+              </Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* PAYMENT RESULT */}
+        {/* PENDING */}
+        {status === 'pending' && (
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingIcon}>
+              <Text style={styles.pendingIconText}>⏳</Text>
+            </View>
 
-        {paymentResult && (
-          <View style={styles.resultCard}>
-            <View
-              style={[
-                styles.resultIcon,
-                paymentPending &&
-                  styles.pendingResultIcon,
-                paymentFailed &&
-                  styles.failedResultIcon,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.resultIconText,
-                  paymentPending &&
-                    styles.pendingResultIconText,
-                  paymentFailed &&
-                    styles.failedResultIconText,
-                ]}
-              >
-                {paymentCompleted
-                  ? '✓'
-                  : paymentPending
-                    ? '⏳'
-                    : '✕'}
+            <Text style={styles.pendingTitle}>
+              Payment Processing
+            </Text>
+
+            <Text style={styles.pendingDescription}>
+              Your electricity payment has been submitted, but the
+              final status has not yet been confirmed.
+            </Text>
+
+            <View style={styles.pendingNotice}>
+              <Text style={styles.pendingNoticeText}>
+                Do not make another payment yet. Check your transaction
+                history for the final status before retrying.
               </Text>
             </View>
 
-            <Text
-              style={[
-                styles.resultTitle,
-                paymentPending &&
-                  styles.pendingResultTitle,
-                paymentFailed &&
-                  styles.failedResultTitle,
-              ]}
+            {paymentResult?.reference && (
+              <View style={styles.resultRow}>
+                <Text style={styles.resultLabel}>Reference</Text>
+                <Text style={styles.resultValue}>
+                  {paymentResult.reference}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.newPaymentButton}
+              onPress={handleNewPayment}
             >
-              {paymentCompleted
-                ? 'Payment Successful'
-                : paymentPending
-                  ? 'Payment Processing'
-                  : 'Payment Failed'}
-            </Text>
-
-            <Text style={styles.resultSubtitle}>
-              {paymentResult.message ||
-                (paymentCompleted
-                  ? 'Your electricity payment was successful.'
-                  : paymentPending
-                    ? 'Your payment is being processed.'
-                    : 'Your electricity payment could not be completed.')}
-            </Text>
-
-            {/* TRANSACTION REFERENCE */}
-
-            {paymentResult.reference && (
-              <>
-                <Text style={styles.tokenLabel}>
-                  Transaction Reference
-                </Text>
-
-                <View style={styles.tokenContainer}>
-                  <Text style={styles.referenceText}>
-                    {paymentResult.reference}
-                  </Text>
-                </View>
-              </>
-            )}
-
-            {/* ELECTRICITY TOKEN */}
-
-            {paymentCompleted &&
-              electricityToken && (
-                <>
-                  <Text style={styles.tokenLabel}>
-                    Electricity Token
-                  </Text>
-
-                  <View style={styles.tokenContainer}>
-                    <Text style={styles.tokenText}>
-                      {electricityToken}
-                    </Text>
-                  </View>
-
-                  {paymentResult.units && (
-                    <Text style={styles.unitsText}>
-                      Units: {paymentResult.units}
-                    </Text>
-                  )}
-
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={() => {
-                      Alert.alert(
-                        'Electricity Token',
-                        electricityToken,
-                      );
-                    }}
-                  >
-                    <Text style={styles.copyButtonText}>
-                      View Token
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-            {/* PENDING WARNING */}
-
-            {paymentPending && (
-              <View style={styles.pendingNotice}>
-                <Text style={styles.pendingNoticeText}>
-                  Do not make another payment for this
-                  meter until this transaction has been
-                  confirmed.
-                </Text>
-              </View>
-            )}
-
-            {/* FAILED MESSAGE */}
-
-            {paymentFailed && (
-              <View style={styles.failedNotice}>
-                <Text style={styles.failedNoticeText}>
-                  If your wallet was debited, please
-                  check your transaction history before
-                  trying again.
-                </Text>
-              </View>
-            )}
-
-            {/* NEW PAYMENT */}
-
-            {(paymentCompleted ||
-              paymentFailed) && (
-              <TouchableOpacity
-                style={styles.newPaymentButton}
-                onPress={resetForm}
-              >
-                <Text style={styles.newPaymentButtonText}>
-                  Make Another Payment
-                </Text>
-              </TouchableOpacity>
-            )}
+              <Text style={styles.newPaymentButtonText}>
+                Return
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* SECURITY */}
+        {/* FAILED */}
+        {status === 'failed' && !customer && (
+          <View style={styles.failedNotice}>
+            <Text style={styles.failedNoticeTitle}>
+              Verification unsuccessful
+            </Text>
 
-        <View style={styles.securityNotice}>
-          <Text style={styles.securityIcon}>
-            🔒
-          </Text>
+            <Text style={styles.failedNoticeText}>
+              Please check your meter number and selected provider.
+            </Text>
+          </View>
+        )}
+
+        {/* SECURITY FOOTER */}
+        <View style={styles.securityFooter}>
+          <Text style={styles.securityIcon}>🔒</Text>
 
           <Text style={styles.securityText}>
-            Your electricity payment is protected
-            by ZENIMONIES security.
+            Your payment is protected by ZENIMONIES security.
           </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-// ======================================================
-// STYLES — ZENIMONIES BRAND PALETTE ONLY
-// ======================================================
+};
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1025,166 +879,162 @@ const styles = StyleSheet.create({
   },
 
   container: {
-    flex: 1,
-    backgroundColor: BACKGROUND,
-  },
-
-  content: {
     padding: 20,
     paddingBottom: 40,
   },
 
-  // HEADER
-
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 28,
-  },
-
-  headerTitle: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: BLACK,
-  },
-
-  headerSubtitle: {
-    fontSize: 13,
-    color: MUTED,
-    marginTop: 5,
   },
 
   headerIcon: {
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: BACKGROUND,
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 14,
   },
 
   headerIconText: {
-    fontSize: 24,
+    fontSize: 25,
   },
 
-  // SECTION
+  headerTextContainer: {
+    flex: 1,
+  },
+
+  title: {
+    fontSize: 23,
+    fontWeight: '800',
+    color: BLACK,
+  },
+
+  subtitle: {
+    fontSize: 13,
+    color: MUTED,
+    marginTop: 4,
+  },
+
+  section: {
+    marginBottom: 24,
+  },
 
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     color: BLACK,
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
-  // PROVIDERS
+  providerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
 
   providerCard: {
+    width: '31.5%',
+    minHeight: 105,
     backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 18,
     borderWidth: 1,
     borderColor: BORDER,
-    marginBottom: 20,
-  },
-
-  providerList: {
-    gap: 9,
-  },
-
-  providerOption: {
-    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
     alignItems: 'center',
-    padding: 13,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 12,
-    backgroundColor: WHITE,
+    justifyContent: 'center',
+    position: 'relative',
   },
 
-  providerOptionSelected: {
+  providerCardSelected: {
     borderColor: GREEN,
+    borderWidth: 2,
     backgroundColor: BACKGROUND,
   },
 
+  providerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: BACKGROUND,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 7,
+  },
+
+  providerIconSelected: {
+    backgroundColor: WHITE,
+  },
+
+  providerIconText: {
+    fontSize: 17,
+  },
+
+  providerIconTextSelected: {
+    color: GREEN,
+  },
+
   providerName: {
-    fontSize: 14,
+    fontSize: 11,
+    fontWeight: '800',
     color: BLACK,
-    fontWeight: '600',
-    marginLeft: 12,
+    textAlign: 'center',
   },
 
   providerNameSelected: {
     color: DARK_GREEN,
-    fontWeight: '700',
   },
 
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: BORDER,
+  providerFullName: {
+    fontSize: 9,
+    color: MUTED,
+    textAlign: 'center',
+    marginTop: 3,
+  },
+
+  providerFullNameSelected: {
+    color: DARK_GREEN,
+  },
+
+  selectedIndicator: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  radioSelected: {
-    borderColor: GREEN,
+  selectedIndicatorText: {
+    color: WHITE,
+    fontSize: 11,
+    fontWeight: '800',
   },
-
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: GREEN,
-  },
-
-  // CARD
-
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 20,
-  },
-
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: BLACK,
-    marginBottom: 18,
-  },
-
-  label: {
-    fontSize: 13,
-    color: BLACK,
-    fontWeight: '600',
-    marginBottom: 9,
-    marginTop: 10,
-  },
-
-  // METER TYPE
 
   meterTypeContainer: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
 
   meterTypeButton: {
     flex: 1,
-    padding: 15,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: WHITE,
   },
 
-  meterTypeSelected: {
+  meterTypeButtonSelected: {
     borderColor: GREEN,
     borderWidth: 2,
     backgroundColor: BACKGROUND,
@@ -1194,6 +1044,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: BLACK,
+    marginBottom: 5,
   },
 
   meterTypeTitleSelected: {
@@ -1203,316 +1054,369 @@ const styles = StyleSheet.create({
   meterTypeDescription: {
     fontSize: 11,
     color: MUTED,
-    marginTop: 5,
   },
 
   meterTypeDescriptionSelected: {
     color: DARK_GREEN,
   },
 
-  // INPUT
-
   input: {
-    height: 52,
+    height: 54,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 13,
-    paddingHorizontal: 15,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: WHITE,
     fontSize: 15,
     color: BLACK,
-    backgroundColor: WHITE,
   },
 
-  // VALIDATION
-
-  validateButton: {
+  verifyButton: {
     height: 50,
+    backgroundColor: GREEN,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+
+  verifyButtonText: {
+    color: WHITE,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  disabledButton: {
+    opacity: 0.5,
+  },
+
+  customerCard: {
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+
+  customerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+
+  customerCheck: {
+    width: 26,
+    height: 26,
     borderRadius: 13,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 15,
+    marginRight: 9,
   },
 
-  validateButtonText: {
+  customerCheckText: {
     color: WHITE,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // CUSTOMER
-
-  customerCard: {
-    backgroundColor: BACKGROUND,
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 22,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-
-  verifiedIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: GREEN,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-
-  verifiedIconText: {
-    color: WHITE,
+    fontSize: 14,
     fontWeight: '800',
-    fontSize: 18,
+  },
+
+  customerHeaderText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: DARK_GREEN,
+  },
+
+  customerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
 
   customerLabel: {
-    fontSize: 11,
-    color: DARK_GREEN,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-
-  customerName: {
-    fontSize: 15,
-    color: BLACK,
-    fontWeight: '800',
-  },
-
-  customerNumber: {
     fontSize: 12,
     color: MUTED,
-    marginTop: 4,
+    flex: 1,
   },
 
-  customerAddress: {
-    fontSize: 11,
-    color: MUTED,
-    marginTop: 4,
+  customerValue: {
+    fontSize: 12,
+    color: BLACK,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
   },
 
-  // AMOUNT
-
-  amountInput: {
-    height: 58,
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 13,
-    paddingHorizontal: 15,
+    borderRadius: 14,
+    height: 62,
+    paddingHorizontal: 16,
+  },
+
+  currencySymbol: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: DARK_GREEN,
+    marginRight: 8,
+  },
+
+  amountInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '800',
     color: BLACK,
-    backgroundColor: WHITE,
+  },
+
+  amountHint: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 8,
   },
 
   quickAmounts: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 12,
+    marginTop: 14,
   },
 
-  quickAmount: {
+  quickAmountButton: {
+    flex: 1,
+    minWidth: '22%',
+    paddingVertical: 11,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 10,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
     backgroundColor: WHITE,
+    alignItems: 'center',
   },
 
-  quickAmountSelected: {
+  quickAmountButtonSelected: {
     borderColor: GREEN,
     backgroundColor: BACKGROUND,
   },
 
   quickAmountText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: BLACK,
   },
 
   quickAmountTextSelected: {
     color: DARK_GREEN,
-    fontWeight: '700',
-  },
-
-  // PIN
-
-  pinContainer: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 13,
-    paddingHorizontal: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
 
   pinInput: {
-    flex: 1,
+    height: 54,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    backgroundColor: WHITE,
+    paddingHorizontal: 16,
+    textAlign: 'center',
+    letterSpacing: 8,
+    fontSize: 20,
+    fontWeight: '800',
     color: BLACK,
-    fontSize: 15,
   },
 
-  showPin: {
-    color: GREEN,
-    fontWeight: '700',
-    fontSize: 13,
+  pinHint: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 8,
+    lineHeight: 17,
   },
-
-  // PAYMENT BUTTON
 
   payButton: {
-    height: 54,
+    height: 56,
     borderRadius: 14,
-    backgroundColor: DARK_GREEN,
+    backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginBottom: 20,
   },
 
   payButtonText: {
     color: WHITE,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
 
-  // RESULT
-
   resultCard: {
     backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 22,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: BORDER,
-    alignItems: 'center',
+    padding: 20,
     marginBottom: 20,
+    alignItems: 'center',
   },
 
   resultIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+
+  resultIconText: {
+    color: WHITE,
+    fontSize: 30,
+    fontWeight: '800',
+  },
+
+  resultTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: DARK_GREEN,
+    marginBottom: 8,
+  },
+
+  resultDescription: {
+    fontSize: 12,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+
+  resultDetails: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    marginBottom: 16,
+  },
+
+  resultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+
+  resultLabel: {
+    fontSize: 12,
+    color: MUTED,
+    flex: 1,
+  },
+
+  resultValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BLACK,
+    flex: 1,
+    textAlign: 'right',
+  },
+
+  tokenContainer: {
+    width: '100%',
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  tokenTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: DARK_GREEN,
+    marginBottom: 10,
+  },
+
+  tokenValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: BLACK,
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+
+  tokenHint: {
+    fontSize: 11,
+    color: MUTED,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  newPaymentButton: {
+    width: '100%',
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  newPaymentButtonText: {
+    color: WHITE,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  pendingCard: {
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+
+  pendingIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: BACKGROUND,
     borderWidth: 1,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 14,
   },
 
-  resultIconText: {
-    fontSize: 28,
-    color: DARK_GREEN,
-    fontWeight: '800',
+  pendingIconText: {
+    fontSize: 25,
   },
 
-  pendingResultIcon: {
-    backgroundColor: BACKGROUND,
-    borderColor: BORDER,
-  },
-
-  pendingResultIconText: {
-    color: DARK_GREEN,
-  },
-
-  failedResultIcon: {
-    backgroundColor: BACKGROUND,
-    borderColor: BORDER,
-  },
-
-  failedResultIconText: {
-    color: DARK_GREEN,
-  },
-
-  resultTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: DARK_GREEN,
-    marginTop: 15,
-  },
-
-  pendingResultTitle: {
-    color: DARK_GREEN,
-  },
-
-  failedResultTitle: {
-    color: DARK_GREEN,
-  },
-
-  resultSubtitle: {
-    fontSize: 13,
-    color: MUTED,
-    textAlign: 'center',
-    marginTop: 7,
-  },
-
-  // TOKEN
-
-  tokenLabel: {
-    fontSize: 13,
-    color: BLACK,
-    fontWeight: '700',
-    marginTop: 20,
-  },
-
-  tokenContainer: {
-    backgroundColor: BACKGROUND,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 12,
-    padding: 15,
-    marginTop: 10,
-    width: '100%',
-  },
-
-  tokenText: {
+  pendingTitle: {
     fontSize: 18,
-    color: DARK_GREEN,
     fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: 2,
-  },
-
-  referenceText: {
-    fontSize: 13,
     color: DARK_GREEN,
-    fontWeight: '700',
+    marginBottom: 8,
+  },
+
+  pendingDescription: {
+    fontSize: 12,
+    color: MUTED,
+    lineHeight: 18,
     textAlign: 'center',
+    marginBottom: 16,
   },
-
-  unitsText: {
-    fontSize: 14,
-    color: DARK_GREEN,
-    fontWeight: '700',
-    marginTop: 10,
-  },
-
-  copyButton: {
-    backgroundColor: GREEN,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    marginTop: 12,
-  },
-
-  copyButtonText: {
-    color: WHITE,
-    fontWeight: '700',
-  },
-
-  // PENDING NOTICE
 
   pendingNotice: {
     backgroundColor: BACKGROUND,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
-    padding: 13,
-    marginTop: 15,
     width: '100%',
   },
 
@@ -1520,54 +1424,38 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     fontSize: 12,
     lineHeight: 18,
+    fontWeight: '600',
     textAlign: 'center',
   },
-
-  // FAILED NOTICE
 
   failedNotice: {
     backgroundColor: BACKGROUND,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 12,
-    padding: 13,
-    marginTop: 15,
-    width: '100%',
+    padding: 14,
+    marginBottom: 20,
+  },
+
+  failedNoticeTitle: {
+    color: DARK_GREEN,
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 5,
   },
 
   failedNoticeText: {
-    color: DARK_GREEN,
+    color: MUTED,
     fontSize: 12,
     lineHeight: 18,
-    textAlign: 'center',
   },
 
-  // NEW PAYMENT
-
-  newPaymentButton: {
-    borderWidth: 1,
-    borderColor: GREEN,
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 20,
-    marginTop: 20,
-    width: '100%',
-    alignItems: 'center',
-  },
-
-  newPaymentButtonText: {
-    color: DARK_GREEN,
-    fontWeight: '700',
-  },
-
-  // SECURITY
-
-  securityNotice: {
+  securityFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
-    paddingHorizontal: 10,
+    marginTop: 10,
+    paddingVertical: 14,
   },
 
   securityIcon: {
@@ -1576,9 +1464,9 @@ const styles = StyleSheet.create({
   },
 
   securityText: {
-    color: MUTED,
     fontSize: 11,
-    textAlign: 'center',
-    flex: 1,
+    color: MUTED,
   },
 });
+
+export default ElectricityScreen;
