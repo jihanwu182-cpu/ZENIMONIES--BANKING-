@@ -1010,7 +1010,8 @@ export default function DataScreen({
                   />
                 </TouchableOpacity>
               );
-            }}
+            })}
+          
 
             <TouchableOpacity
               style={styles.modalCancelButton}
