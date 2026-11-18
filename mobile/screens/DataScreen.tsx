@@ -65,7 +65,7 @@ const COLORS = {
   darkGreen: '#527900',
   black: '#172018',
   muted: '#858B83',
-  background: '#F6F8F3',
+  background: '#FFFFFF',
   white: '#FFFFFF',
   border: '#E9EDE5',
   red: '#E53935',
@@ -338,19 +338,16 @@ const normalizeDataPlan = (
 // ======================================================
 // EXTRACT PLANS FROM API RESPONSE
 // ======================================================
-
 const extractPlansFromResponse = (
   response: any,
 ): any[] => {
-  if (!response) {
-    return [];
-  }
+  if (!response) return [];
 
   if (Array.isArray(response)) {
     return response;
   }
 
-  const possibleArrays = [
+  const candidates = [
     response.plans,
     response.data?.plans,
     response.data,
@@ -361,9 +358,11 @@ const extractPlansFromResponse = (
     response.data?.products,
     response.variations,
     response.data?.variations,
+    response.data?.result,
+    response.data?.result?.plans,
   ];
 
-  for (const candidate of possibleArrays) {
+  for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
       return candidate;
     }
@@ -371,7 +370,6 @@ const extractPlansFromResponse = (
 
   return [];
 };
-
 // ======================================================
 // COMPONENT
 // ======================================================
@@ -384,29 +382,15 @@ const DataScreen = ({
   isDark = false,
 }: Props) => {
   const theme = {
-  background:
-    colors?.background ??
-    (isDark ? '#121712' : COLORS.background),
+  background: '#FFFFFF',
+  card: '#FFFFFF',
+  text: COLORS.black,
+  muted: COLORS.muted,
+  border: COLORS.border,
 
-  card:
-    colors?.card ??
-    (isDark ? '#202720' : COLORS.white),
-
-  text:
-    colors?.text ??
-    (isDark ? '#FFFFFF' : COLORS.black),
-
-  muted:
-    colors?.muted ??
-    (isDark ? '#A4ADA4' : COLORS.muted),
-
-  border:
-    colors?.border ??
-    (isDark ? '#303A30' : COLORS.border),
-
-  // ZENIMONIES BRAND COLOURS
-  green: COLORS.darkGreen,
-  darkGreen: COLORS.darkGreen,
+  // ZENIMONIES ORIGINAL DARK GREEN
+  green: '#527900',
+  darkGreen: '#527900',
 };
 
   const authToken = token || '';
@@ -478,160 +462,151 @@ const DataScreen = ({
   // ====================================================
   // LOAD PLANS
   // ====================================================
+const loadPlans = useCallback(async () => {
+  const currentRequest = ++requestIdRef.current;
 
-  const loadPlans = useCallback(async () => {
-    const currentRequest =
-      ++requestIdRef.current;
+  if (!authToken) {
+    setPlans([]);
+    setSelectedPlan(null);
+    setLoadingPlans(false);
 
-    if (!authToken) {
-      setPlans([]);
-      setSelectedPlan(null);
-      setLoadingPlans(false);
+    Alert.alert(
+      'Session expired',
+      'Please log in again to load data plans.',
+    );
 
-      Alert.alert(
-        'Session expired',
-        'Please log in again to load data plans.',
+    return;
+  }
+
+  setLoadingPlans(true);
+  setPlans([]);
+  setSelectedPlan(null);
+
+  try {
+    const url =
+      `${API_BASE}/data/plans?network=` +
+      encodeURIComponent(selectedNetwork.id);
+
+    console.log(
+      'ZENIMONIES DATA PLANS REQUEST:',
+      selectedNetwork.id,
+    );
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        Accept: 'application/json',
+      },
+    });
+
+    const responseText = await response.text();
+
+    let data: any;
+
+    try {
+      data = responseText
+        ? JSON.parse(responseText)
+        : {};
+    } catch {
+      throw new Error(
+        'Invalid response received from the server.',
+      );
+    }
+
+    console.log(
+      'DATA PLANS HTTP STATUS:',
+      response.status,
+    );
+
+    console.log(
+      'DATA PLANS RESPONSE:',
+      JSON.stringify(data),
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          data.error ||
+          data.details ||
+          `Request failed (${response.status})`,
+      );
+    }
+
+    const rawPlans =
+      extractPlansFromResponse(data);
+
+    console.log(
+      'RAW DATA PLANS COUNT:',
+      rawPlans.length,
+    );
+
+    const normalizedPlans = rawPlans
+      .map((plan: any, index: number) =>
+        normalizeDataPlan(plan, index),
+      )
+      .filter(
+        (plan): plan is DataPlan =>
+          plan !== null,
       );
 
+    console.log(
+      'NORMALIZED DATA PLANS COUNT:',
+      normalizedPlans.length,
+    );
+
+    if (
+      currentRequest !== requestIdRef.current
+    ) {
       return;
     }
 
-    setLoadingPlans(true);
-    setPlans([]);
-    setSelectedPlan(null);
+    setPlans(normalizedPlans);
 
-    try {
-      const url =
-        `${API_BASE}/data/plans?network=` +
-        encodeURIComponent(selectedNetwork.id);
+    // Always reset category when plans are loaded.
+    // This prevents a selected Night/Weekly category
+    // from hiding plans returned by the provider.
+    setSelectedCategory('All Plans');
 
+    if (normalizedPlans.length > 0) {
       console.log(
-        'ZENIMONIES DATA PLANS REQUEST:',
-        selectedNetwork.id,
-      );
-
-      const response = await fetch(url, {
-        method: 'GET',
-
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          Accept: 'application/json',
-        },
-      });
-
-      const responseText =
-        await response.text();
-
-      let data: any = {};
-
-      try {
-        data = responseText
-          ? JSON.parse(responseText)
-          : {};
-      } catch {
-        throw new Error(
-          'The server returned an invalid response.',
-        );
-      }
-
-      console.log(
-        'DATA PLANS HTTP STATUS:',
-        response.status,
-      );
-
-      console.log(
-        'DATA PLANS RESPONSE:',
-        JSON.stringify(data),
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            data.error ||
-            data.details ||
-            `Request failed (${response.status})`,
-        );
-      }
-
-      const rawPlans =
-        extractPlansFromResponse(data);
-
-      console.log(
-        'RAW DATA PLANS COUNT:',
-        rawPlans.length,
-      );
-
-      const normalizedPlans = rawPlans
-        .map((plan, index) =>
-          normalizeDataPlan(plan, index),
-        )
-        .filter(
-          (plan): plan is DataPlan =>
-            plan !== null,
-        );
-
-      console.log(
-        'NORMALIZED DATA PLANS COUNT:',
+        'DATA PLANS SUCCESS:',
         normalizedPlans.length,
       );
-
-      if (
-        currentRequest !==
-        requestIdRef.current
-      ) {
-        return;
-      }
-
-      setPlans(normalizedPlans);
-
-      if (normalizedPlans.length === 0) {
-        console.log(
-          'No usable data plans were returned.',
-        );
-
-        console.log(
-          'Raw response:',
-          JSON.stringify(data, null, 2),
-        );
-      }
-    } catch (error: any) {
-      console.error(
-        'ZENIMONIES DATA PLANS ERROR:',
-        error,
+    } else {
+      console.warn(
+        'DATA PLANS EMPTY:',
+        JSON.stringify(data, null, 2),
       );
-
-      if (
-        currentRequest !==
-        requestIdRef.current
-      ) {
-        return;
-      }
-
-      setPlans([]);
-
-      Alert.alert(
-        'Unable to load plans',
-        error?.message ||
-          'Please check your internet connection and try again.',
-      );
-    } finally {
-      if (
-        currentRequest ===
-        requestIdRef.current
-      ) {
-        setLoadingPlans(false);
-      }
     }
-  }, [authToken, selectedNetwork.id]);
+  } catch (error: any) {
+    console.error(
+      'ZENIMONIES DATA PLANS ERROR:',
+      error?.message || error,
+    );
 
-  useEffect(() => {
-    loadPlans();
+    if (
+      currentRequest !== requestIdRef.current
+    ) {
+      return;
+    }
 
-    return () => {
-      requestIdRef.current++;
-    };
-  }, [loadPlans]);
+    setPlans([]);
 
+    Alert.alert(
+      'Unable to load data plans',
+      error?.message ||
+        'Please check your internet connection and try again.',
+    );
+  } finally {
+    if (
+      currentRequest === requestIdRef.current
+    ) {
+      setLoadingPlans(false);
+    }
+  }
+}, [authToken, selectedNetwork.id]);
+  
   // ====================================================
   // PLAN CATEGORIES
   // ====================================================
