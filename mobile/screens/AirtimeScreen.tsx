@@ -49,7 +49,6 @@ const normalizePhone = (value: string) =>
 
 const detectNetwork = (phone: string): Network | null => {
   const prefixes: Record<string, Network> = {
-    // MTN
     '0803': 'MTN',
     '0806': 'MTN',
     '0810': 'MTN',
@@ -61,7 +60,6 @@ const detectNetwork = (phone: string): Network | null => {
     '0913': 'MTN',
     '0916': 'MTN',
 
-    // Airtel
     '0802': 'Airtel',
     '0808': 'Airtel',
     '0812': 'Airtel',
@@ -72,7 +70,6 @@ const detectNetwork = (phone: string): Network | null => {
     '0907': 'Airtel',
     '0912': 'Airtel',
 
-    // Glo
     '0805': 'Glo',
     '0807': 'Glo',
     '0811': 'Glo',
@@ -81,7 +78,6 @@ const detectNetwork = (phone: string): Network | null => {
     '0905': 'Glo',
     '0915': 'Glo',
 
-    // 9mobile / T2 Mobile
     '0809': '9mobile',
     '0817': '9mobile',
     '0818': '9mobile',
@@ -106,26 +102,20 @@ export default function AirtimeScreen({
   const styles = createStyles(colors, isDark);
 
   const [phone, setPhone] = useState('');
+  const [network, setNetwork] = useState<Network | null>(null);
 
-  const [network, setNetwork] =
-    useState<Network | null>(null);
-
-  const [manualNetwork, setManualNetwork] =
-    useState(false);
+  const [manualNetwork, setManualNetwork] = useState(false);
 
   const [networkModalVisible, setNetworkModalVisible] =
     useState(false);
 
   const [amount, setAmount] = useState('');
-
   const [customAmount, setCustomAmount] = useState('');
 
   const [pin, setPin] = useState('');
-
   const [pinVisible, setPinVisible] = useState(false);
 
   const [loading, setLoading] = useState(false);
-
   const [requerying, setRequerying] = useState(false);
 
   const [pendingReference, setPendingReference] =
@@ -144,8 +134,7 @@ export default function AirtimeScreen({
 
   const selectedAmount = Number(amount || customAmount);
 
-  const validPhone =
-    /^0[789][01]\d{8}$/.test(phone);
+  const validPhone = /^0[789][01]\d{8}$/.test(phone);
 
   const selectedNetwork = NETWORKS.find(
     item => item.value === network
@@ -154,19 +143,12 @@ export default function AirtimeScreen({
   const networkLabel = (value: Network) =>
     value === '9mobile' ? 'T2 Mobile' : value;
 
-  // ============================================================
-  // PHONE NUMBER
-  // ============================================================
-
   const handlePhoneChange = (value: string) => {
     const normalized = normalizePhone(value);
 
     setPhone(normalized);
-
     setResult(null);
-
     setPendingReference('');
-
     setManualNetwork(false);
 
     const detected = detectNetwork(normalized);
@@ -178,25 +160,12 @@ export default function AirtimeScreen({
     }
   };
 
-  // ============================================================
-  // NETWORK SELECTION
-  // ============================================================
-
-  const handleNetworkSelection = (
-    value: Network
-  ) => {
+  const handleNetworkSelection = (value: Network) => {
     setNetwork(value);
-
     setManualNetwork(true);
-
     setNetworkModalVisible(false);
-
     setResult(null);
   };
-
-  // ============================================================
-  // PURCHASE VALIDATION
-  // ============================================================
 
   const handlePurchase = async () => {
     if (!token) {
@@ -204,7 +173,6 @@ export default function AirtimeScreen({
         'Session unavailable',
         'Please sign in again.'
       );
-
       return;
     }
 
@@ -213,7 +181,6 @@ export default function AirtimeScreen({
         'Invalid phone number',
         'Enter a valid 11-digit Nigerian phone number.'
       );
-
       return;
     }
 
@@ -222,7 +189,6 @@ export default function AirtimeScreen({
         'Select network',
         'Please select the recipient network.'
       );
-
       return;
     }
 
@@ -237,7 +203,6 @@ export default function AirtimeScreen({
         'Invalid amount',
         'Enter an amount between ₦50 and ₦50,000.'
       );
-
       return;
     }
 
@@ -246,16 +211,11 @@ export default function AirtimeScreen({
         'Transaction pending',
         'Please check the status of your previous transaction before making another purchase.'
       );
-
       return;
     }
 
     setPinVisible(true);
   };
-
-  // ============================================================
-  // CONFIRM PURCHASE
-  // ============================================================
 
   const confirmPurchase = async () => {
     if (!/^\d{4,6}$/.test(pin)) {
@@ -263,7 +223,6 @@ export default function AirtimeScreen({
         'Invalid PIN',
         'Enter your transaction PIN.'
       );
-
       return;
     }
 
@@ -272,30 +231,24 @@ export default function AirtimeScreen({
     setLoading(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE}/airtime`,
-        {
-          method: 'POST',
-
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-
-          body: JSON.stringify({
-            network,
-            phone,
-            amount: selectedAmount,
-            transaction_pin: pin,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/airtime`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          network,
+          phone,
+          amount: selectedAmount,
+          transaction_pin: pin,
+        }),
+      });
 
       const data = await response.json();
 
       setPin('');
-
       setPinVisible(false);
 
       const transaction = data.transaction || {};
@@ -305,7 +258,6 @@ export default function AirtimeScreen({
         data.reference ||
         '';
 
-      // COMPLETED
       if (
         response.status === 200 &&
         data.success === true &&
@@ -320,11 +272,9 @@ export default function AirtimeScreen({
         });
 
         onComplete?.();
-
         return;
       }
 
-      // PENDING
       if (
         response.status === 202 ||
         transaction.status === 'pending' ||
@@ -344,7 +294,6 @@ export default function AirtimeScreen({
         return;
       }
 
-      // FAILED / REFUNDED
       if (
         transaction.status === 'failed' ||
         transaction.status === 'refunded' ||
@@ -359,7 +308,6 @@ export default function AirtimeScreen({
         });
 
         onComplete?.();
-
         return;
       }
 
@@ -370,7 +318,6 @@ export default function AirtimeScreen({
         );
       }
 
-      // UNKNOWN STATUS
       setResult({
         status: 'pending',
         reference,
@@ -391,10 +338,6 @@ export default function AirtimeScreen({
     }
   };
 
-  // ============================================================
-  // REQUERY
-  // ============================================================
-
   const handleRequery = async () => {
     if (!pendingReference || !token) return;
 
@@ -407,7 +350,6 @@ export default function AirtimeScreen({
         )}`,
         {
           method: 'POST',
-
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
@@ -424,7 +366,6 @@ export default function AirtimeScreen({
           ''
       ).toLowerCase();
 
-      // COMPLETED
       if (status === 'completed') {
         setResult({
           status: 'completed',
@@ -435,12 +376,8 @@ export default function AirtimeScreen({
         });
 
         setPendingReference('');
-
         onComplete?.();
-      }
-
-      // FAILED / REFUNDED
-      else if (
+      } else if (
         status === 'failed' ||
         status === 'refunded'
       ) {
@@ -453,12 +390,8 @@ export default function AirtimeScreen({
         });
 
         setPendingReference('');
-
         onComplete?.();
-      }
-
-      // STILL PENDING
-      else {
+      } else {
         setResult({
           status: 'pending',
           reference: pendingReference,
@@ -485,44 +418,21 @@ export default function AirtimeScreen({
     }
   };
 
-  // ============================================================
-  // RESET
-  // ============================================================
-
   const resetForm = () => {
     setPhone('');
-
     setNetwork(null);
-
     setManualNetwork(false);
-
     setAmount('');
-
     setCustomAmount('');
-
     setResult(null);
-
     setPendingReference('');
-
-    setPin('');
   };
-
-  const selected = (value: Network) =>
-    network === value;
-
-  // ============================================================
-  // UI
-  // ============================================================
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar
-        barStyle={
-          isDark ? 'light-content' : 'dark-content'
-        }
+        barStyle={isDark ? 'light-content' : 'dark-content'}
       />
-
-      {/* HEADER */}
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -564,9 +474,7 @@ export default function AirtimeScreen({
             onChangeText={handlePhoneChange}
             keyboardType="phone-pad"
             placeholder="0803 123 4567"
-            placeholderTextColor={
-              colors.textSecondary
-            }
+            placeholderTextColor={colors.textSecondary}
             maxLength={11}
             style={styles.input}
           />
@@ -579,8 +487,6 @@ export default function AirtimeScreen({
             />
           )}
         </View>
-
-        {/* NETWORK DETECTION */}
 
         {detectedNetwork && (
           <View style={styles.detectedBox}>
@@ -600,7 +506,7 @@ export default function AirtimeScreen({
           </View>
         )}
 
-        {/* NETWORK SELECTOR */}
+        {/* NETWORK DROPDOWN */}
 
         <Text style={styles.label}>
           Mobile network
@@ -608,9 +514,7 @@ export default function AirtimeScreen({
 
         <TouchableOpacity
           style={styles.networkSelector}
-          onPress={() =>
-            setNetworkModalVisible(true)
-          }
+          onPress={() => setNetworkModalVisible(true)}
           activeOpacity={0.75}
         >
           {selectedNetwork ? (
@@ -625,13 +529,9 @@ export default function AirtimeScreen({
                 ]}
               >
                 <Text style={styles.networkBadgeText}>
-                  {selectedNetwork.label ===
-                  'T2 Mobile'
+                  {selectedNetwork.label === 'T2 Mobile'
                     ? 'T2'
-                    : selectedNetwork.label.substring(
-                        0,
-                        1
-                      )}
+                    : selectedNetwork.label.substring(0, 1)}
                 </Text>
               </View>
 
@@ -640,9 +540,7 @@ export default function AirtimeScreen({
                   {selectedNetwork.label}
                 </Text>
 
-                <Text
-                  style={styles.networkSelectorSubtitle}
-                >
+                <Text style={styles.networkSelectorSubtitle}>
                   {manualNetwork
                     ? 'Selected manually'
                     : 'Based on phone number'}
@@ -663,12 +561,12 @@ export default function AirtimeScreen({
         </TouchableOpacity>
 
         <Text style={styles.networkNote}>
-          Network detection uses the phone number
-          prefix. If your number has been ported,
-          select your current network manually.
+          Network detection uses the phone number prefix.
+          If your number has been ported, select your
+          current network manually.
         </Text>
 
-        {/* AMOUNTS */}
+        {/* AMOUNT */}
 
         <Text style={styles.label}>
           Choose amount
@@ -684,9 +582,7 @@ export default function AirtimeScreen({
                 key={value}
                 onPress={() => {
                   setAmount(String(value));
-
                   setCustomAmount('');
-
                   setResult(null);
                 }}
                 style={[
@@ -709,8 +605,6 @@ export default function AirtimeScreen({
           })}
         </View>
 
-        {/* CUSTOM AMOUNT */}
-
         <Text style={styles.label}>
           Or enter another amount
         </Text>
@@ -726,21 +620,17 @@ export default function AirtimeScreen({
               setCustomAmount(
                 value.replace(/[^0-9.]/g, '')
               );
-
               setAmount('');
-
               setResult(null);
             }}
             keyboardType="decimal-pad"
             placeholder="Enter amount"
-            placeholderTextColor={
-              colors.textSecondary
-            }
+            placeholderTextColor={colors.textSecondary}
             style={styles.input}
           />
         </View>
 
-        {/* RESULT */}
+        {/* TRANSACTION RESULT */}
 
         {result && (
           <View
@@ -789,8 +679,6 @@ export default function AirtimeScreen({
               </Text>
             )}
 
-            {/* PENDING TRANSACTION */}
-
             {result.status === 'pending' &&
               !!pendingReference && (
                 <TouchableOpacity
@@ -799,9 +687,7 @@ export default function AirtimeScreen({
                   disabled={requerying}
                 >
                   {requerying ? (
-                    <ActivityIndicator
-                      color="#FFFFFF"
-                    />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.requeryText}>
                       Check transaction status
@@ -809,8 +695,6 @@ export default function AirtimeScreen({
                   )}
                 </TouchableOpacity>
               )}
-
-            {/* NEW PURCHASE */}
 
             {result.status !== 'pending' && (
               <TouchableOpacity
@@ -861,17 +745,13 @@ export default function AirtimeScreen({
           />
         </TouchableOpacity>
 
-        {/* FOOTER */}
-
         <Text style={styles.footerNote}>
           Please confirm the phone number and network
           before purchasing.
         </Text>
       </ScrollView>
 
-      {/* ========================================================
-          NETWORK SELECTOR
-      ======================================================== */}
+      {/* NETWORK SELECTOR MODAL */}
 
       <Modal
         visible={networkModalVisible}
@@ -919,9 +799,7 @@ export default function AirtimeScreen({
                       styles.networkOptionSelected,
                   ]}
                   onPress={() =>
-                    handleNetworkSelection(
-                      item.value
-                    )
+                    handleNetworkSelection(item.value)
                   }
                   activeOpacity={0.75}
                 >
@@ -929,8 +807,7 @@ export default function AirtimeScreen({
                     style={[
                       styles.networkBadge,
                       {
-                        backgroundColor:
-                          item.color,
+                        backgroundColor: item.color,
                       },
                     ]}
                   >
@@ -946,9 +823,7 @@ export default function AirtimeScreen({
                       {item.label}
                     </Text>
 
-                    <Text
-                      style={styles.networkOptionSubtitle}
-                    >
+                    <Text style={styles.networkOptionSubtitle}>
                       {suggested
                         ? 'Detected from phone number'
                         : 'Mobile network'}
@@ -957,9 +832,7 @@ export default function AirtimeScreen({
 
                   {suggested && (
                     <View style={styles.suggestedBadge}>
-                      <Text
-                        style={styles.suggestedBadgeText}
-                      >
+                      <Text style={styles.suggestedBadgeText}>
                         Suggested
                       </Text>
                     </View>
@@ -996,9 +869,7 @@ export default function AirtimeScreen({
         </View>
       </Modal>
 
-      {/* ========================================================
-          TRANSACTION PIN CONFIRMATION
-      ======================================================== */}
+      {/* TRANSACTION PIN MODAL */}
 
       <Modal
         visible={pinVisible}
@@ -1007,7 +878,6 @@ export default function AirtimeScreen({
         onRequestClose={() => {
           if (!loading) {
             setPinVisible(false);
-
             setPin('');
           }
         }}
@@ -1061,9 +931,7 @@ export default function AirtimeScreen({
               secureTextEntry
               keyboardType="number-pad"
               placeholder="Transaction PIN"
-              placeholderTextColor={
-                colors.textSecondary
-              }
+              placeholderTextColor={colors.textSecondary}
               style={styles.pinInput}
               maxLength={6}
               autoFocus
@@ -1079,9 +947,7 @@ export default function AirtimeScreen({
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator
-                  color="#FFFFFF"
-                />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.continueText}>
                   Confirm and Pay
@@ -1094,7 +960,6 @@ export default function AirtimeScreen({
                 if (loading) return;
 
                 setPinVisible(false);
-
                 setPin('');
               }}
               disabled={loading}
@@ -1110,10 +975,6 @@ export default function AirtimeScreen({
     </SafeAreaView>
   );
 }
-
-// ============================================================
-// STYLES
-// ============================================================
 
 const createStyles = (
   colors: ReturnType<typeof getColors>,
