@@ -32,15 +32,43 @@ type Props = {
   onComplete?: () => void;
 };
 
-const NETWORKS: {
+type NetworkItem = {
   value: Network;
   label: string;
-  icon: string;
-}[] = [
-  { value: 'MTN', label: 'MTN', icon: 'cellphone' },
-  { value: 'Airtel', label: 'Airtel', icon: 'signal' },
-  { value: 'Glo', label: 'Glo', icon: 'sim' },
-  { value: '9mobile', label: 'T2 Mobile', icon: 'cellphone-wireless' },
+  shortLabel: string;
+  color: string;
+  background: string;
+};
+
+const NETWORKS: NetworkItem[] = [
+  {
+    value: 'MTN',
+    label: 'MTN',
+    shortLabel: 'MTN',
+    color: '#111111',
+    background: '#FFD900',
+  },
+  {
+    value: 'Airtel',
+    label: 'Airtel',
+    shortLabel: 'Airtel',
+    color: '#FFFFFF',
+    background: '#E31B23',
+  },
+  {
+    value: 'Glo',
+    label: 'Glo',
+    shortLabel: 'Glo',
+    color: '#FFFFFF',
+    background: '#00A859',
+  },
+  {
+    value: '9mobile',
+    label: 'T2 Mobile',
+    shortLabel: 'T2',
+    color: '#FFFFFF',
+    background: '#171717',
+  },
 ];
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
@@ -102,13 +130,20 @@ export default function AirtimeScreen({
 
   const [phone, setPhone] = useState('');
   const [network, setNetwork] = useState<Network | null>(null);
+  const [networkModalVisible, setNetworkModalVisible] =
+    useState(false);
+
   const [amount, setAmount] = useState('');
   const [customAmount, setCustomAmount] = useState('');
+
   const [pin, setPin] = useState('');
   const [pinVisible, setPinVisible] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [requerying, setRequerying] = useState(false);
+
   const [pendingReference, setPendingReference] = useState('');
+
   const [result, setResult] = useState<{
     status: string;
     reference: string;
@@ -120,32 +155,65 @@ export default function AirtimeScreen({
     [phone]
   );
 
+  const selectedNetwork = NETWORKS.find(
+    (item) => item.value === network
+  );
+
   const selectedAmount = Number(amount || customAmount);
 
   const validPhone = /^0[789][01]\d{8}$/.test(phone);
+
+  const isPending = result?.status === 'pending';
 
   const networkLabel = (value: Network) =>
     value === '9mobile' ? 'T2 Mobile' : value;
 
   const handlePhoneChange = (value: string) => {
-    setPhone(normalizePhone(value));
+    const normalized = normalizePhone(value);
+
+    setPhone(normalized);
+
+    const detected = detectNetwork(normalized);
+
+    // Automatically suggest/select the detected network.
+    // The customer can still manually override it.
+    if (detected) {
+      setNetwork(detected);
+    } else if (normalized.length < 4) {
+      setNetwork(null);
+    }
+
     setResult(null);
     setPendingReference('');
   };
 
+  const handleNetworkSelection = (value: Network) => {
+    setNetwork(value);
+    setNetworkModalVisible(false);
+  };
+
   const handlePurchase = async () => {
     if (!token) {
-      Alert.alert('Session unavailable', 'Please sign in again.');
+      Alert.alert(
+        'Session unavailable',
+        'Please sign in again.'
+      );
       return;
     }
 
     if (!validPhone) {
-      Alert.alert('Invalid phone number', 'Enter a valid 11-digit Nigerian phone number.');
+      Alert.alert(
+        'Invalid phone number',
+        'Enter a valid 11-digit Nigerian phone number.'
+      );
       return;
     }
 
     if (!network) {
-      Alert.alert('Select network', 'Please select the recipient network.');
+      Alert.alert(
+        'Select network',
+        'Please select the recipient network.'
+      );
       return;
     }
 
@@ -153,11 +221,20 @@ export default function AirtimeScreen({
       !Number.isFinite(selectedAmount) ||
       selectedAmount < 50 ||
       selectedAmount > 50000 ||
-      Math.round(selectedAmount * 100) !== selectedAmount * 100
+      Math.round(selectedAmount * 100) !==
+        selectedAmount * 100
     ) {
       Alert.alert(
         'Invalid amount',
         'Enter an amount between ₦50 and ₦50,000.'
+      );
+      return;
+    }
+
+    if (isPending) {
+      Alert.alert(
+        'Transaction pending',
+        'Please check the status of your current transaction before making another purchase.'
       );
       return;
     }
@@ -167,9 +244,14 @@ export default function AirtimeScreen({
 
   const confirmPurchase = async () => {
     if (!/^\d{4,6}$/.test(pin)) {
-      Alert.alert('Invalid PIN', 'Enter your transaction PIN.');
+      Alert.alert(
+        'Invalid PIN',
+        'Enter your transaction PIN.'
+      );
       return;
     }
+
+    if (loading) return;
 
     setLoading(true);
 
@@ -195,8 +277,11 @@ export default function AirtimeScreen({
       setPinVisible(false);
 
       const transaction = data.transaction || {};
+
       const reference =
-        transaction.reference || data.reference || '';
+        transaction.reference ||
+        data.reference ||
+        '';
 
       if (
         response.status === 200 &&
@@ -206,8 +291,11 @@ export default function AirtimeScreen({
         setResult({
           status: 'completed',
           reference,
-          message: data.message || 'Airtime purchase completed successfully.',
+          message:
+            data.message ||
+            'Airtime purchase completed successfully.',
         });
+
         onComplete?.();
         return;
       }
@@ -227,6 +315,7 @@ export default function AirtimeScreen({
             data.message ||
             'Your Airtime purchase is being processed. Please do not purchase again.',
         });
+
         return;
       }
 
@@ -242,13 +331,15 @@ export default function AirtimeScreen({
             data.message ||
             'The Airtime purchase failed. Check your wallet balance.',
         });
+
         onComplete?.();
         return;
       }
 
       if (!response.ok) {
         throw new Error(
-          data.message || 'Unable to process Airtime purchase.'
+          data.message ||
+            'Unable to process Airtime purchase.'
         );
       }
 
@@ -273,13 +364,17 @@ export default function AirtimeScreen({
   };
 
   const handleRequery = async () => {
-    if (!pendingReference || !token) return;
+    if (!pendingReference || !token || requerying) {
+      return;
+    }
 
     setRequerying(true);
 
     try {
       const response = await fetch(
-        `${API_BASE}/airtime/requery/${encodeURIComponent(pendingReference)}`,
+        `${API_BASE}/airtime/requery/${encodeURIComponent(
+          pendingReference
+        )}`,
         {
           method: 'POST',
           headers: {
@@ -293,17 +388,20 @@ export default function AirtimeScreen({
 
       const status = String(
         data.status ||
-        data.transaction?.status ||
-        data.transaction?.provider_status ||
-        ''
+          data.transaction?.status ||
+          data.transaction?.provider_status ||
+          ''
       ).toLowerCase();
 
       if (status === 'completed') {
         setResult({
           status: 'completed',
           reference: pendingReference,
-          message: data.message || 'Airtime purchase completed successfully.',
+          message:
+            data.message ||
+            'Airtime purchase completed successfully.',
         });
+
         setPendingReference('');
         onComplete?.();
       } else if (
@@ -313,8 +411,11 @@ export default function AirtimeScreen({
         setResult({
           status: 'failed',
           reference: pendingReference,
-          message: data.message || 'The Airtime purchase failed. Check your wallet balance.',
+          message:
+            data.message ||
+            'The Airtime purchase failed. Check your wallet balance.',
         });
+
         setPendingReference('');
         onComplete?.();
       } else {
@@ -330,7 +431,8 @@ export default function AirtimeScreen({
       if (!response.ok && response.status !== 202) {
         Alert.alert(
           'Reconciliation',
-          data.message || 'We could not retrieve the transaction status.'
+          data.message ||
+            'We could not retrieve the transaction status.'
         );
       }
     } catch {
@@ -350,14 +452,25 @@ export default function AirtimeScreen({
     setCustomAmount('');
     setResult(null);
     setPendingReference('');
+    setPin('');
   };
+
+  const formatAmount = (value: number) =>
+    `₦${value.toLocaleString('en-NG')}`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+      />
 
+      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
           <MaterialCommunityIcons
             name="arrow-left"
             size={24}
@@ -365,9 +478,11 @@ export default function AirtimeScreen({
           />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Buy Airtime</Text>
+        <Text style={styles.headerTitle}>
+          Buy Airtime
+        </Text>
 
-        <View style={{ width: 40 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
@@ -375,25 +490,19 @@ export default function AirtimeScreen({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.intro}>
-          <View style={styles.introIcon}>
-            <MaterialCommunityIcons
-              name="cellphone"
-              size={27}
-              color="#FFFFFF"
-            />
-          </View>
-
-          <Text style={styles.title}>Recharge instantly</Text>
-          <Text style={styles.subtitle}>
-            Buy airtime for yourself or someone else.
-          </Text>
-        </View>
-
-        <Text style={styles.label}>Phone number</Text>
+        {/* PHONE NUMBER */}
+        <Text style={styles.sectionLabel}>
+          Phone number
+        </Text>
 
         <View style={styles.phoneInput}>
-          <Text style={styles.countryCode}>+234</Text>
+          <View style={styles.countryCodeContainer}>
+            <Text style={styles.countryCode}>
+              +234
+            </Text>
+            <View style={styles.countryDivider} />
+          </View>
+
           <TextInput
             value={phone}
             onChangeText={handlePhoneChange}
@@ -401,8 +510,9 @@ export default function AirtimeScreen({
             placeholder="0803 123 4567"
             placeholderTextColor={colors.textSecondary}
             maxLength={11}
-            style={styles.input}
+            style={styles.phoneTextInput}
           />
+
           {validPhone && (
             <MaterialCommunityIcons
               name="check-circle"
@@ -412,75 +522,81 @@ export default function AirtimeScreen({
           )}
         </View>
 
+        {/* NETWORK */}
+        <Text style={styles.sectionLabel}>
+          Mobile network
+        </Text>
+
+        <TouchableOpacity
+          style={styles.networkSelector}
+          onPress={() => setNetworkModalVisible(true)}
+          activeOpacity={0.75}
+        >
+          {selectedNetwork ? (
+            <View style={styles.selectedNetworkContent}>
+              <NetworkBadge
+                item={selectedNetwork}
+                size={38}
+              />
+
+              <View style={styles.selectedNetworkText}>
+                <Text style={styles.selectedNetworkName}>
+                  {selectedNetwork.label}
+                </Text>
+
+                <Text style={styles.selectedNetworkSubtext}>
+                  {detectedNetwork === network
+                    ? 'Detected from phone number'
+                    : 'Selected network'}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.networkPlaceholder}>
+              <View style={styles.networkPlaceholderIcon}>
+                <MaterialCommunityIcons
+                  name="sim"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </View>
+
+              <Text style={styles.networkPlaceholderText}>
+                Select mobile network
+              </Text>
+            </View>
+          )}
+
+          <MaterialCommunityIcons
+            name="chevron-down"
+            size={24}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
         {detectedNetwork && (
-          <View style={styles.detectedBox}>
+          <View style={styles.detectedNotice}>
             <MaterialCommunityIcons
-              name="check-circle"
-              size={20}
-              color={colors.success}
+              name="information-outline"
+              size={17}
+              color={colors.primary}
             />
-            <Text style={styles.detectedText}>
-              Likely network: {networkLabel(detectedNetwork)}
+
+            <Text style={styles.detectedNoticeText}>
+              Number prefix suggests{' '}
+              <Text style={styles.detectedNoticeBold}>
+                {networkLabel(detectedNetwork)}
+              </Text>
+              . You can change the network if this number
+              has been ported.
             </Text>
           </View>
         )}
 
-        <Text style={styles.label}>Select network</Text>
-
-        <View style={styles.networkGrid}>
-          {NETWORKS.map((item) => {
-            const selected = network === item.value;
-            const suggested =
-              detectedNetwork === item.value;
-
-            return (
-              <TouchableOpacity
-                key={item.value}
-                onPress={() => setNetwork(item.value)}
-                style={[
-                  styles.networkItem,
-                  selected && styles.networkSelected,
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={item.icon as any}
-                  size={25}
-                  color={
-                    selected
-                      ? colors.primary
-                      : colors.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.networkName,
-                    selected && styles.networkNameSelected,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                {suggested && (
-                  <Text style={styles.suggestedText}>Suggested</Text>
-                )}
-                {selected && (
-                  <MaterialCommunityIcons
-                    name="check-circle"
-                    size={16}
-                    color={colors.primary}
-                    style={styles.selectedCheck}
-                  />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text style={styles.networkNote}>
-          Network detection is based on the phone number prefix. If your
-          number has been ported, select your current network manually.
+        {/* AMOUNT */}
+        <Text style={styles.sectionLabel}>
+          Select amount
         </Text>
-
-        <Text style={styles.label}>Choose amount</Text>
 
         <View style={styles.amountGrid}>
           {AMOUNTS.map((value) => {
@@ -497,6 +613,7 @@ export default function AirtimeScreen({
                   styles.amountItem,
                   selected && styles.amountSelected,
                 ]}
+                activeOpacity={0.75}
               >
                 <Text
                   style={[
@@ -504,41 +621,68 @@ export default function AirtimeScreen({
                     selected && styles.amountTextSelected,
                   ]}
                 >
-                  ₦{value.toLocaleString('en-NG')}
+                  {formatAmount(value)}
                 </Text>
+
+                {selected && (
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={15}
+                    color={colors.primary}
+                    style={styles.amountCheck}
+                  />
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <Text style={styles.label}>Or enter another amount</Text>
+        {/* CUSTOM AMOUNT */}
+        <Text style={styles.sectionLabel}>
+          Other amount
+        </Text>
 
         <View style={styles.customAmountInput}>
-          <Text style={styles.currencyPrefix}>₦</Text>
+          <Text style={styles.currencyPrefix}>
+            ₦
+          </Text>
+
           <TextInput
             value={customAmount}
             onChangeText={(value) => {
-              setCustomAmount(value.replace(/[^0-9.]/g, ''));
+              setCustomAmount(
+                value.replace(/[^0-9.]/g, '')
+              );
               setAmount('');
             }}
             keyboardType="decimal-pad"
             placeholder="Enter amount"
             placeholderTextColor={colors.textSecondary}
-            style={styles.input}
+            style={styles.customAmountTextInput}
           />
         </View>
 
-        <View style={styles.infoBox}>
-          <MaterialCommunityIcons
-            name="shield-check-outline"
-            size={20}
-            color={colors.primary}
-          />
-          <Text style={styles.infoText}>
-            Your transaction PIN is verified securely by ZENIMONIES.
+        <Text style={styles.amountHint}>
+          Minimum ₦50 · Maximum ₦50,000
+        </Text>
+
+        {/* SECURITY */}
+        <View style={styles.securityNotice}>
+          <View style={styles.securityIcon}>
+            <MaterialCommunityIcons
+              name="shield-check"
+              size={21}
+              color={colors.primary}
+            />
+          </View>
+
+          <Text style={styles.securityText}>
+            Your transaction PIN is verified securely by
+            ZENIMONIES.
           </Text>
         </View>
 
+        {/* RESULT */}
         {result && (
           <View
             style={[
@@ -558,13 +702,13 @@ export default function AirtimeScreen({
                   ? 'alert-circle'
                   : 'clock-outline'
               }
-              size={26}
+              size={30}
               color={
                 result.status === 'completed'
-                ? colors.success
-                : result.status === 'failed'
-                ? '#D64545'
-                : '#C58A19'
+                  ? colors.success
+                  : result.status === 'failed'
+                  ? '#D64545'
+                  : '#C58A19'
               }
             />
 
@@ -586,26 +730,37 @@ export default function AirtimeScreen({
               </Text>
             )}
 
-            {result.status === 'pending' && !!pendingReference && (
-              <TouchableOpacity
-                style={styles.requeryButton}
-                onPress={handleRequery}
-                disabled={requerying}
-              >
-                {requerying ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.requeryText}>
-                    Check transaction status
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
+            {result.status === 'pending' &&
+              !!pendingReference && (
+                <TouchableOpacity
+                  style={styles.requeryButton}
+                  onPress={handleRequery}
+                  disabled={requerying}
+                  activeOpacity={0.8}
+                >
+                  {requerying ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons
+                        name="refresh"
+                        size={17}
+                        color="#FFFFFF"
+                      />
+
+                      <Text style={styles.requeryText}>
+                        Check transaction status
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
 
             {result.status !== 'pending' && (
               <TouchableOpacity
                 style={styles.newPurchaseButton}
                 onPress={resetForm}
+                activeOpacity={0.75}
               >
                 <Text style={styles.newPurchaseText}>
                   Make another purchase
@@ -615,15 +770,18 @@ export default function AirtimeScreen({
           </View>
         )}
 
+        {/* CONTINUE */}
         <TouchableOpacity
           style={[
             styles.continueButton,
-            (loading ||
+            (
+              loading ||
               !validPhone ||
               !network ||
               selectedAmount < 50 ||
-              selectedAmount > 50000) &&
-              styles.disabledButton,
+              selectedAmount > 50000 ||
+              isPending
+            ) && styles.disabledButton,
           ]}
           onPress={handlePurchase}
           disabled={
@@ -631,24 +789,142 @@ export default function AirtimeScreen({
             !validPhone ||
             !network ||
             selectedAmount < 50 ||
-            selectedAmount > 50000
+            selectedAmount > 50000 ||
+            isPending
           }
+          activeOpacity={0.8}
         >
           <Text style={styles.continueText}>
-            Continue
+            {isPending
+              ? 'Transaction pending'
+              : 'Continue'}
           </Text>
+
           <MaterialCommunityIcons
-            name="arrow-right"
+            name={isPending ? 'clock-outline' : 'arrow-right'}
             size={20}
             color="#FFFFFF"
           />
         </TouchableOpacity>
 
         <Text style={styles.footerNote}>
-          Please confirm the phone number and network before purchasing.
+          Confirm the phone number, network and amount
+          before continuing.
         </Text>
       </ScrollView>
 
+      {/* NETWORK SELECTOR MODAL */}
+      <Modal
+        visible={networkModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setNetworkModalVisible(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.networkModal}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.networkModalHeader}>
+              <View>
+                <Text style={styles.networkModalTitle}>
+                  Select network
+                </Text>
+
+                <Text style={styles.networkModalSubtitle}>
+                  Choose the recipient's mobile network
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() =>
+                  setNetworkModalVisible(false)
+                }
+                style={styles.modalCloseButton}
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {NETWORKS.map((item) => {
+              const selected = network === item.value;
+              const suggested =
+                detectedNetwork === item.value;
+
+              return (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[
+                    styles.networkOption,
+                    selected && styles.networkOptionSelected,
+                  ]}
+                  onPress={() =>
+                    handleNetworkSelection(item.value)
+                  }
+                  activeOpacity={0.75}
+                >
+                  <NetworkBadge
+                    item={item}
+                    size={42}
+                  />
+
+                  <View style={styles.networkOptionContent}>
+                    <Text style={styles.networkOptionTitle}>
+                      {item.label}
+                    </Text>
+
+                    <Text style={styles.networkOptionSubtitle}>
+                      {suggested
+                        ? 'Detected from phone number'
+                        : 'Mobile network'}
+                    </Text>
+                  </View>
+
+                  {suggested && (
+                    <View style={styles.suggestedBadge}>
+                      <Text style={styles.suggestedBadgeText}>
+                        Suggested
+                      </Text>
+                    </View>
+                  )}
+
+                  <MaterialCommunityIcons
+                    name={
+                      selected
+                        ? 'check-circle'
+                        : 'circle-outline'
+                    }
+                    size={22}
+                    color={
+                      selected
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() =>
+                setNetworkModalVisible(false)
+              }
+            >
+              <Text style={styles.modalCancelText}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TRANSACTION PIN MODAL */}
       <Modal
         visible={pinVisible}
         transparent
@@ -680,16 +956,22 @@ export default function AirtimeScreen({
             </Text>
 
             <Text style={styles.pinAmount}>
-              ₦{Number(selectedAmount || 0).toLocaleString('en-NG', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              ₦
+              {Number(selectedAmount || 0).toLocaleString(
+                'en-NG',
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
             </Text>
 
             <TextInput
               value={pin}
               onChangeText={(value) =>
-                setPin(value.replace(/\D/g, '').slice(0, 6))
+                setPin(
+                  value.replace(/\D/g, '').slice(0, 6)
+                )
               }
               secureTextEntry
               keyboardType="number-pad"
@@ -707,6 +989,7 @@ export default function AirtimeScreen({
               ]}
               onPress={confirmPurchase}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
@@ -726,7 +1009,9 @@ export default function AirtimeScreen({
               disabled={loading}
               style={styles.cancelButton}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -734,6 +1019,48 @@ export default function AirtimeScreen({
     </SafeAreaView>
   );
 }
+
+/* =========================================================
+   NETWORK BADGE
+========================================================= */
+
+function NetworkBadge({
+  item,
+  size = 38,
+}: {
+  item: NetworkItem;
+  size?: number;
+}) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.28,
+        backgroundColor: item.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: item.value === 'MTN' ? 0 : 0.5,
+        borderColor: 'rgba(0,0,0,0.08)',
+      }}
+    >
+      <Text
+        style={{
+          color: item.color,
+          fontSize: size * 0.28,
+          fontWeight: '900',
+          letterSpacing: -0.5,
+        }}
+      >
+        {item.shortLabel}
+      </Text>
+    </View>
+  );
+}
+
+/* =========================================================
+   STYLES
+========================================================= */
 
 const createStyles = (
   colors: ReturnType<typeof getColors>,
@@ -744,6 +1071,7 @@ const createStyles = (
       flex: 1,
       backgroundColor: colors.background,
     },
+
     header: {
       height: 58,
       flexDirection: 'row',
@@ -754,50 +1082,37 @@ const createStyles = (
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
+
     backButton: {
       width: 40,
       height: 40,
       justifyContent: 'center',
     },
+
     headerTitle: {
       color: colors.text,
       fontSize: 17,
       fontWeight: '800',
     },
+
+    headerSpacer: {
+      width: 40,
+    },
+
     content: {
-      padding: 20,
+      paddingHorizontal: 20,
+      paddingTop: 10,
       paddingBottom: 40,
     },
-    intro: {
-      alignItems: 'center',
-      marginBottom: 25,
-    },
-    introIcon: {
-      width: 57,
-      height: 57,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12,
-    },
-    title: {
-      color: colors.text,
-      fontSize: 22,
-      fontWeight: '900',
-    },
-    subtitle: {
-      color: colors.textSecondary,
-      fontSize: 12,
-      marginTop: 5,
-    },
-    label: {
+
+    sectionLabel: {
       color: colors.text,
       fontSize: 13,
       fontWeight: '800',
+      marginTop: 21,
       marginBottom: 9,
-      marginTop: 17,
     },
+
     phoneInput: {
       minHeight: 55,
       borderWidth: 1,
@@ -808,107 +1123,151 @@ const createStyles = (
       alignItems: 'center',
       paddingHorizontal: 13,
     },
+
+    countryCodeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+
     countryCode: {
       color: colors.text,
       fontSize: 14,
       fontWeight: '800',
-      marginRight: 10,
     },
-    input: {
+
+    countryDivider: {
+      height: 23,
+      width: 1,
+      backgroundColor: colors.border,
+      marginLeft: 12,
+    },
+
+    phoneTextInput: {
       flex: 1,
       color: colors.text,
       fontSize: 15,
       paddingVertical: 12,
     },
-    detectedBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 9,
-      gap: 7,
-    },
-    detectedText: {
-      color: colors.success,
-      fontSize: 11,
-      fontWeight: '700',
-    },
-    networkGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      gap: 9,
-    },
-    networkItem: {
-      width: '48%',
-      minHeight: 86,
+
+    networkSelector: {
+      minHeight: 62,
       borderWidth: 1,
       borderColor: colors.border,
+      borderRadius: 13,
       backgroundColor: colors.surface,
-      borderRadius: 14,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      padding: 10,
+      justifyContent: 'space-between',
+      paddingHorizontal: 13,
     },
-    networkSelected: {
-      borderColor: colors.primary,
-      borderWidth: 2,
-      backgroundColor: colors.primaryLight,
+
+    selectedNetworkContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
     },
-    networkName: {
+
+    selectedNetworkText: {
+      marginLeft: 11,
+    },
+
+    selectedNetworkName: {
       color: colors.text,
+      fontSize: 14,
       fontWeight: '800',
-      fontSize: 12,
-      marginTop: 5,
     },
-    networkNameSelected: {
-      color: colors.primary,
-    },
-    suggestedText: {
-      color: colors.success,
-      fontSize: 9,
-      fontWeight: '800',
+
+    selectedNetworkSubtext: {
+      color: colors.textSecondary,
+      fontSize: 10,
       marginTop: 3,
     },
-    selectedCheck: {
-      position: 'absolute',
-      right: 7,
-      top: 7,
+
+    networkPlaceholder: {
+      flexDirection: 'row',
+      alignItems: 'center',
     },
-    networkNote: {
+
+    networkPlaceholderIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+
+    networkPlaceholderText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      marginLeft: 10,
+    },
+
+    detectedNotice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 10,
+      gap: 7,
+    },
+
+    detectedNoticeText: {
+      flex: 1,
       color: colors.textSecondary,
       fontSize: 10,
       lineHeight: 15,
-      marginTop: 9,
     },
+
+    detectedNoticeBold: {
+      color: colors.primary,
+      fontWeight: '800',
+    },
+
     amountGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
       gap: 9,
     },
+
     amountItem: {
       width: '31%',
-      minHeight: 48,
+      minHeight: 49,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
       borderRadius: 11,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 5,
     },
+
     amountSelected: {
       borderColor: colors.primary,
+      borderWidth: 1.5,
       backgroundColor: colors.primaryLight,
     },
+
     amountText: {
       color: colors.text,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '800',
     },
+
     amountTextSelected: {
       color: colors.primary,
     },
+
+    amountCheck: {
+      position: 'absolute',
+      right: 4,
+      top: 4,
+    },
+
     customAmountInput: {
-      minHeight: 52,
+      minHeight: 53,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 13,
@@ -917,27 +1276,53 @@ const createStyles = (
       borderRadius: 12,
       backgroundColor: colors.surface,
     },
+
     currencyPrefix: {
       color: colors.text,
       fontSize: 16,
       fontWeight: '800',
       marginRight: 9,
     },
-    infoBox: {
+
+    customAmountTextInput: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      paddingVertical: 12,
+    },
+
+    amountHint: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      marginTop: 7,
+    },
+
+    securityNotice: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.primaryLight,
       borderRadius: 12,
       padding: 12,
-      marginTop: 20,
+      marginTop: 21,
       gap: 9,
     },
-    infoText: {
+
+    securityIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    securityText: {
       flex: 1,
       color: colors.text,
       fontSize: 10,
       lineHeight: 15,
     },
+
     continueButton: {
       minHeight: 54,
       borderRadius: 13,
@@ -948,14 +1333,17 @@ const createStyles = (
       gap: 9,
       marginTop: 23,
     },
+
     continueText: {
       color: '#FFFFFF',
       fontSize: 14,
       fontWeight: '900',
     },
+
     disabledButton: {
       opacity: 0.45,
     },
+
     footerNote: {
       textAlign: 'center',
       color: colors.textSecondary,
@@ -963,6 +1351,7 @@ const createStyles = (
       lineHeight: 15,
       marginTop: 12,
     },
+
     resultBox: {
       borderRadius: 14,
       padding: 15,
@@ -971,21 +1360,26 @@ const createStyles = (
       borderWidth: 1,
       borderColor: colors.border,
     },
+
     successBox: {
       backgroundColor: colors.primaryLight,
     },
+
     failedBox: {
       backgroundColor: isDark ? '#3C2222' : '#FCEEEE',
     },
+
     pendingBox: {
       backgroundColor: isDark ? '#3C3321' : '#FFF7E6',
     },
+
     resultTitle: {
       color: colors.text,
       fontSize: 15,
       fontWeight: '900',
       marginTop: 8,
     },
+
     resultMessage: {
       color: colors.textSecondary,
       fontSize: 11,
@@ -993,37 +1387,148 @@ const createStyles = (
       lineHeight: 17,
       marginTop: 6,
     },
+
     reference: {
       color: colors.textSecondary,
       fontSize: 9,
       marginTop: 8,
     },
+
     requeryButton: {
       backgroundColor: colors.primary,
       borderRadius: 10,
       paddingHorizontal: 17,
       paddingVertical: 11,
       marginTop: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
     },
+
     requeryText: {
       color: '#FFFFFF',
       fontWeight: '800',
       fontSize: 11,
     },
+
     newPurchaseButton: {
       marginTop: 13,
       padding: 10,
     },
+
     newPurchaseText: {
       color: colors.primary,
       fontWeight: '800',
       fontSize: 12,
     },
+
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.55)',
       justifyContent: 'flex-end',
     },
+
+    networkModal: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 28,
+    },
+
+    networkModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 18,
+    },
+
+    networkModalTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+
+    networkModalSubtitle: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      marginTop: 5,
+    },
+
+    modalCloseButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+
+    networkOption: {
+      minHeight: 63,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.background,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 11,
+      marginBottom: 9,
+    },
+
+    networkOptionSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primaryLight,
+    },
+
+    networkOptionContent: {
+      flex: 1,
+      marginLeft: 11,
+    },
+
+    networkOptionTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+
+    networkOptionSubtitle: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      marginTop: 4,
+    },
+
+    suggestedBadge: {
+      backgroundColor: colors.primaryLight,
+      borderRadius: 6,
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+      marginRight: 8,
+    },
+
+    suggestedBadgeText: {
+      color: colors.primary,
+      fontSize: 9,
+      fontWeight: '800',
+    },
+
+    modalCancelButton: {
+      minHeight: 45,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 4,
+    },
+
+    modalCancelText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
     pinModal: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: 24,
@@ -1032,6 +1537,7 @@ const createStyles = (
       paddingTop: 12,
       paddingBottom: 30,
     },
+
     modalHandle: {
       width: 42,
       height: 4,
@@ -1040,18 +1546,21 @@ const createStyles = (
       alignSelf: 'center',
       marginBottom: 20,
     },
+
     pinTitle: {
       color: colors.text,
       fontSize: 19,
       fontWeight: '900',
       textAlign: 'center',
     },
+
     pinDescription: {
       color: colors.textSecondary,
       fontSize: 11,
       textAlign: 'center',
       marginTop: 7,
     },
+
     pinSummary: {
       color: colors.textSecondary,
       textAlign: 'center',
@@ -1059,6 +1568,7 @@ const createStyles = (
       fontSize: 12,
       fontWeight: '700',
     },
+
     pinAmount: {
       color: colors.text,
       textAlign: 'center',
@@ -1066,6 +1576,7 @@ const createStyles = (
       fontSize: 25,
       fontWeight: '900',
     },
+
     pinInput: {
       height: 53,
       borderWidth: 1,
@@ -1078,6 +1589,7 @@ const createStyles = (
       marginTop: 20,
       backgroundColor: colors.background,
     },
+
     confirmButton: {
       minHeight: 53,
       borderRadius: 12,
@@ -1086,10 +1598,12 @@ const createStyles = (
       justifyContent: 'center',
       marginTop: 17,
     },
+
     cancelButton: {
       padding: 13,
       alignItems: 'center',
     },
+
     cancelText: {
       color: colors.textSecondary,
       fontSize: 12,
