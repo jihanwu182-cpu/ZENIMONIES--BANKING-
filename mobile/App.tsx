@@ -2055,7 +2055,7 @@ export default function App() {
       </SafeAreaView>
     );
   }
-// ======================================================
+  // ======================================================
 // BILLS
 // ======================================================
 
@@ -2068,7 +2068,8 @@ if (screen === 'bills' && session) {
         onBack={() => setScreen('home')}
         onElectricityPress={() =>
           setScreen('electricity')
-        />
+        }
+      />
     </SafeAreaView>
   );
 }
