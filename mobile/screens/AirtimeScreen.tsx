@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 
 import {
@@ -61,6 +60,10 @@ const NETWORKS: NetworkItem[] = [
     logo: require('../assets/network-logos/T2-Mobilr.jpg'),
   },
 ];
+
+const BRAND_DARK_GREEN = '#527900';
+const BRAND_GREEN = '#78A900';
+const BRAND_LIGHT_GREEN = '#E8F3D9';
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
@@ -843,7 +846,7 @@ export default function AirtimeScreen({
                     size={22}
                     color={
                       isSelected
-                        ? colors.primary
+                        ? BRAND_DARK_GREEN
                         : colors.textSecondary
                     }
                   />
@@ -1119,8 +1122,8 @@ const createStyles = (
     },
 
     amountSelected: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primaryLight,
+      borderColor: BRAND_DARK_GREEN,
+      backgroundColor: BRAND_LIGHT_GREEN,
     },
 
     amountText: {
@@ -1130,7 +1133,7 @@ const createStyles = (
     },
 
     amountTextSelected: {
-      color: colors.primary,
+      color: BRAND_DARK_GREEN,
     },
 
     customAmountInput: {
@@ -1154,7 +1157,7 @@ const createStyles = (
     continueButton: {
       minHeight: 54,
       borderRadius: 13,
-      backgroundColor: colors.primary,
+      backgroundColor: BRAND_DARK_GREEN,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1182,7 +1185,7 @@ const createStyles = (
     },
 
     successBox: {
-      backgroundColor: colors.primaryLight,
+      backgroundColor: BRAND_LIGHT_GREEN,
     },
 
     failedBox: {
@@ -1219,7 +1222,7 @@ const createStyles = (
     },
 
     requeryButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: BRAND_DARK_GREEN,
       borderRadius: 10,
       paddingHorizontal: 17,
       paddingVertical: 11,
@@ -1238,7 +1241,7 @@ const createStyles = (
     },
 
     newPurchaseText: {
-      color: colors.primary,
+      color: BRAND_DARK_GREEN,
       fontWeight: '800',
       fontSize: 12,
     },
@@ -1293,8 +1296,8 @@ const createStyles = (
     },
 
     networkOptionSelected: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primaryLight,
+      borderColor: BRAND_DARK_GREEN,
+      backgroundColor: BRAND_LIGHT_GREEN,
     },
 
     modalNetworkLogo: {
@@ -1320,7 +1323,7 @@ const createStyles = (
     },
 
     suggestedBadge: {
-      backgroundColor: colors.primaryLight,
+      backgroundColor: BRAND_LIGHT_GREEN,
       paddingHorizontal: 8,
       paddingVertical: 5,
       borderRadius: 8,
@@ -1328,7 +1331,7 @@ const createStyles = (
     },
 
     suggestedBadgeText: {
-      color: colors.primary,
+      color: BRAND_DARK_GREEN,
       fontSize: 9,
       fontWeight: '800',
     },
@@ -1400,7 +1403,7 @@ const createStyles = (
     confirmButton: {
       minHeight: 53,
       borderRadius: 12,
-      backgroundColor: colors.primary,
+      backgroundColor: BRAND_DARK_GREEN,
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: 17,
