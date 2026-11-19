@@ -92,11 +92,6 @@ const BillsScreen: React.FC<BillsScreenProps> = ({
         { backgroundColor: colors.background },
       ]}
     >
-      <StatusBar
-        barStyle={darkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.header}
-      />
-
       {/* Header */}
       <View
         style={[
