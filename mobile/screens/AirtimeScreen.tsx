@@ -61,10 +61,6 @@ const NETWORKS: NetworkItem[] = [
   },
 ];
 
-const BRAND_DARK_GREEN = '#527900';
-const BRAND_GREEN = '#78A900';
-const BRAND_LIGHT_GREEN = '#E8F3D9';
-
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
 // Keep the customer's entered national number as-is (with or without the leading 0).
@@ -543,10 +539,6 @@ export default function AirtimeScreen({
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.phoneHelperText}>
-          Enter a Nigerian phone number with or without the first 0. Network detection is automatic.
-        </Text>
-
 
         {/* AMOUNT */}
 
@@ -817,7 +809,7 @@ export default function AirtimeScreen({
                     size={22}
                     color={
                       isSelected
-                        ? BRAND_DARK_GREEN
+                        ? colors.primary
                         : colors.textSecondary
                     }
                   />
@@ -996,7 +988,7 @@ const createStyles = (
       minHeight: 55,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 13,
+      borderRadius: 0,
       backgroundColor: colors.surface,
       flexDirection: 'row',
       alignItems: 'center',
@@ -1007,7 +999,10 @@ const createStyles = (
       color: colors.text,
       fontSize: 14,
       fontWeight: '800',
-      marginRight: 10,
+      marginRight: 9,
+      flexShrink: 0,
+      minWidth: 54,
+      textAlign: 'left',
     },
 
     input: {
@@ -1047,13 +1042,6 @@ const createStyles = (
       marginRight: 4,
     },
 
-    phoneHelperText: {
-      color: colors.textSecondary,
-      fontSize: 11,
-      lineHeight: 17,
-      marginTop: 10,
-    },
-
     amountGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1073,8 +1061,8 @@ const createStyles = (
     },
 
     amountSelected: {
-      borderColor: BRAND_DARK_GREEN,
-      backgroundColor: BRAND_LIGHT_GREEN,
+      borderColor: colors.primary,
+      backgroundColor: colors.primaryLight,
     },
 
     amountText: {
@@ -1084,7 +1072,7 @@ const createStyles = (
     },
 
     amountTextSelected: {
-      color: BRAND_DARK_GREEN,
+      color: colors.primary,
     },
 
     customAmountInput: {
@@ -1108,7 +1096,7 @@ const createStyles = (
     continueButton: {
       minHeight: 54,
       borderRadius: 13,
-      backgroundColor: BRAND_DARK_GREEN,
+      backgroundColor: colors.primary,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1136,7 +1124,7 @@ const createStyles = (
     },
 
     successBox: {
-      backgroundColor: BRAND_LIGHT_GREEN,
+      backgroundColor: colors.primaryLight,
     },
 
     failedBox: {
@@ -1173,7 +1161,7 @@ const createStyles = (
     },
 
     requeryButton: {
-      backgroundColor: BRAND_DARK_GREEN,
+      backgroundColor: colors.primary,
       borderRadius: 10,
       paddingHorizontal: 17,
       paddingVertical: 11,
@@ -1192,7 +1180,7 @@ const createStyles = (
     },
 
     newPurchaseText: {
-      color: BRAND_DARK_GREEN,
+      color: colors.primary,
       fontWeight: '800',
       fontSize: 12,
     },
@@ -1247,8 +1235,8 @@ const createStyles = (
     },
 
     networkOptionSelected: {
-      borderColor: BRAND_DARK_GREEN,
-      backgroundColor: BRAND_LIGHT_GREEN,
+      borderColor: colors.primary,
+      backgroundColor: colors.primaryLight,
     },
 
     modalNetworkLogo: {
@@ -1274,7 +1262,7 @@ const createStyles = (
     },
 
     suggestedBadge: {
-      backgroundColor: BRAND_LIGHT_GREEN,
+      backgroundColor: colors.primaryLight,
       paddingHorizontal: 8,
       paddingVertical: 5,
       borderRadius: 8,
@@ -1282,7 +1270,7 @@ const createStyles = (
     },
 
     suggestedBadgeText: {
-      color: BRAND_DARK_GREEN,
+      color: colors.primary,
       fontSize: 9,
       fontWeight: '800',
     },
@@ -1354,7 +1342,7 @@ const createStyles = (
     confirmButton: {
       minHeight: 53,
       borderRadius: 12,
-      backgroundColor: BRAND_DARK_GREEN,
+      backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: 17,
