@@ -50,14 +50,14 @@ interface TVScreenProps {
 // ZENIMONIES BRAND COLORS
 // ============================================================
 
-const GREEN = '#527900';
-const DARK_GREEN = '#527900';
+const GREEN = '#00843D';
+const DARK_GREEN = '#006B32';
 const BLACK = '#172018';
 const MUTED = '#858B83';
 const BACKGROUND = '#F6F8F3';
 const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
-const LIGHT_GREEN = '#F5FAED';
+const LIGHT_GREEN = '#E8F3D9';
 const SUCCESS_BACKGROUND = '#EAF5DE';
 const SUCCESS_BORDER = '#D4E8BD';
 const PENDING_BACKGROUND = '#F6F8F3';
