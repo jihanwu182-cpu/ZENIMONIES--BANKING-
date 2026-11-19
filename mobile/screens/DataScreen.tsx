@@ -1412,12 +1412,7 @@ const theme = {
               </Text>
             </View>
 
-            <View
-              style={[
-                styles.summaryDivider,
-                { borderColor: theme.border },
-              ]}
-            />
+
 
             <View style={styles.summaryRow}>
               <Text
@@ -2231,22 +2226,22 @@ const styles = StyleSheet.create({
   },
 
   planCard: {
-    width: '48.2%',
-    minHeight: 140,
-    borderRadius: 11,
-    padding: 8,
+    width: '32%',
+    minHeight: 132,
+    borderRadius: 10,
+    padding: 7,
     justifyContent: 'space-between',
   },
 
   planSelectArea: {
     flex: 1,
-    minHeight: 90,
+    minHeight: 82,
   },
 
   planName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    lineHeight: 14,
+    lineHeight: 13,
   },
 
   planAllowance: {
@@ -2260,7 +2255,7 @@ const styles = StyleSheet.create({
   },
 
   planPrice: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900',
     marginTop: 6,
   },
@@ -2289,7 +2284,7 @@ const styles = StyleSheet.create({
   },
 
   planBuyButton: {
-    height: 29,
+    height: 26,
     borderRadius: 7,
     marginTop: 6,
     alignItems: 'center',
@@ -2401,11 +2396,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  summaryDivider: {
-    borderTopWidth: 1,
-    borderStyle: 'dashed',
-    marginVertical: 12,
-  },
+
 
   totalLabel: {
     fontSize: 14,
