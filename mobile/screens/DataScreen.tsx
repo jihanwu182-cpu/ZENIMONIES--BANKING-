@@ -66,11 +66,11 @@ const API_BASE =
 const PALETTE = {
   background: '#FFFFFF',
   card: '#FFFFFF',
-  text: '#234B2A',
+  text: '#172018',
   muted: '#858B83',
   border: '#E9EDE5',
-  green: '#234B2A',
-  darkGreen: '#234B2A',
+  green: '#78A900',
+  darkGreen: '#527900',
   white: '#FFFFFF',
   black: '#000000',
 };
@@ -1084,84 +1084,41 @@ const theme = {
           Phone Number
         </Text>
 
-        <View
-          style={[
-            styles.phoneInputContainer,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.countryCode,
-              { color: theme.text },
-            ]}
-          >
-            🇳🇬 +234
-          </Text>
+        <View style={styles.phoneInputContainer}>
+          <Text style={styles.countryCode}>🇳🇬 +234</Text>
 
           <TextInput
-            style={[
-              styles.phoneInput,
-              { color: theme.text },
-            ]}
-            placeholder="8012345678"
+            style={styles.phoneInput}
+            placeholder="803 123 4567"
             placeholderTextColor={theme.muted}
             keyboardType="phone-pad"
             value={phone}
             onChangeText={handlePhoneChange}
-            maxLength={13}
+            maxLength={11}
           />
 
           <TouchableOpacity
-            style={[
-              styles.networkDropdown,
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.border,
-              },
-            ]}
-            onPress={() =>
-              setNetworkModalVisible(true)
-            }
+            style={styles.networkDropdown}
+            onPress={() => setNetworkModalVisible(true)}
+            activeOpacity={0.75}
           >
-            <Image
-              source={selectedNetwork.logo}
-              style={styles.dropdownLogo}
-              resizeMode="contain"
-            />
-
-            <Text
-              style={[
-                styles.dropdownNetworkName,
-                { color: theme.text },
-              ]}
-            >
-              {selectedNetwork.name}
-            </Text>
-
-            <Text
-              style={[
-                styles.dropdownArrow,
-                { color: theme.green },
-              ]}
-            >
-              ▾
-            </Text>
+            {selectedNetwork ? (
+              <>
+                <Image
+                  source={selectedNetwork.logo}
+                  style={styles.dropdownLogo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.dropdownNetworkName}>
+                  {selectedNetwork.name}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.dropdownNetworkName}>Network</Text>
+            )}
+            <Text style={styles.dropdownArrow}>▾</Text>
           </TouchableOpacity>
         </View>
-
-        <Text
-          style={[
-            styles.helperText,
-            { color: theme.muted },
-          ]}
-        >
-          Enter a Nigerian phone number. Network
-          detection is automatic.
-        </Text>
 
         {/* SEARCH */}
 
@@ -2271,41 +2228,45 @@ const styles = StyleSheet.create({
   },
 
   phoneInputContainer: {
-    minHeight: 58,
-    borderWidth: 1,
-    borderRadius: 14,
+    minHeight: 55,
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
+    borderWidth: 0,
   },
 
   countryCode: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginRight: 8,
+    fontSize: 14,
+    fontWeight: '800',
+    marginRight: 9,
+    minWidth: 54,
+    flexShrink: 0,
   },
 
   phoneInput: {
     flex: 1,
-    minWidth: 65,
+    minWidth: 0,
     fontSize: 15,
-    fontWeight: '600',
     paddingVertical: 10,
+    paddingHorizontal: 3,
+    borderWidth: 0,
   },
 
   networkDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 6,
-    marginLeft: 5,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    marginLeft: 4,
+    minHeight: 42,
+    width: 108,
+    flexShrink: 0,
   },
 
   dropdownLogo: {
-    width: 24,
-    height: 24,
+    width: 30,
+    height: 30,
   },
 
   dropdownNetworkName: {
