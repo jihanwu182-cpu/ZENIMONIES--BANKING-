@@ -2228,20 +2228,24 @@ const styles = StyleSheet.create({
   },
 
   phoneInputContainer: {
-    minHeight: 55,
-    backgroundColor: 'transparent',
+    minHeight: 58,
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    borderWidth: 0,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
 
   countryCode: {
     fontSize: 14,
     fontWeight: '800',
-    marginRight: 9,
-    minWidth: 54,
+    marginRight: 10,
+    minWidth: 64,
     flexShrink: 0,
+    color: PALETTE.text,
   },
 
   phoneInput: {
@@ -2249,24 +2253,27 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 15,
     paddingVertical: 10,
-    paddingHorizontal: 3,
+    paddingHorizontal: 2,
     borderWidth: 0,
+    color: PALETTE.text,
   },
 
   networkDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    marginLeft: 4,
-    minHeight: 42,
-    width: 108,
+    paddingHorizontal: 7,
+    marginLeft: 5,
+    minHeight: 44,
+    width: 106,
     flexShrink: 0,
+    borderLeftWidth: 1,
+    borderLeftColor: PALETTE.border,
   },
 
   dropdownLogo: {
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
   },
 
   dropdownNetworkName: {
@@ -2340,12 +2347,12 @@ const styles = StyleSheet.create({
   },
 
   plansContainer: {
-    gap: 10,
+    gap: 9,
   },
 
   planCard: {
-    borderRadius: 15,
-    padding: 15,
+    borderRadius: 14,
+    padding: 13,
   },
 
   planTop: {
@@ -2359,18 +2366,19 @@ const styles = StyleSheet.create({
   },
 
   planName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
+    lineHeight: 19,
   },
 
   planAllowance: {
-    fontSize: 13,
-    marginTop: 5,
+    fontSize: 12,
+    marginTop: 4,
   },
 
   planValidity: {
     fontSize: 11,
-    marginTop: 4,
+    marginTop: 3,
   },
 
   planPriceContainer: {
@@ -2379,7 +2387,7 @@ const styles = StyleSheet.create({
   },
 
   planPrice: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
 
