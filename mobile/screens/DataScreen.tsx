@@ -69,8 +69,8 @@ const PALETTE = {
   text: '#172018',
   muted: '#858B83',
   border: '#E9EDE5',
-  green: '#78A900',
-  darkGreen: '#527900',
+  green: '#087C3D',
+  darkGreen: '#087C3D',
   white: '#FFFFFF',
   black: '#000000',
 };
@@ -1304,155 +1304,32 @@ const theme = {
           </View>
         ) : (
           <View style={styles.plansContainer}>
-            {filteredPlans.map(
-              (plan, index) => {
-                const active =
-                  selectedPlan?.variation_code ===
-                  plan.variation_code;
-
-                const category =
-                  getPlanCategory(plan);
-
-                return (
-                  <TouchableOpacity
-                    key={`${plan.variation_code}-${index}`}
-                    style={[
-                      styles.planCard,
-                      {
-                        backgroundColor: theme.card,
-                        borderColor: active
-                          ? theme.green
-                          : theme.border,
-                        borderWidth: active ? 2 : 1,
-                      },
-                    ]}
-                    onPress={() =>
-                      setSelectedPlan(plan)
-                    }
-                  >
-                    <View style={styles.planTop}>
-                      <View
-                        style={styles.planDetails}
-                      >
-                        <Text
-                          style={[
-                            styles.planName,
-                            { color: theme.text },
-                          ]}
-                        >
-                          {plan.name}
-                        </Text>
-
-                        {plan.allowance && (
-                          <Text
-                            style={[
-                              styles.planAllowance,
-                              { color: theme.muted },
-                            ]}
-                          >
-                            {plan.allowance}
-                          </Text>
-                        )}
-
-                        {plan.validity && (
-                          <Text
-                            style={[
-                              styles.planValidity,
-                              { color: theme.muted },
-                            ]}
-                          >
-                            Validity: {plan.validity}
-                          </Text>
-                        )}
+            {filteredPlans.map((plan, index) => {
+              const active = selectedPlan?.variation_code === plan.variation_code;
+              const category = getPlanCategory(plan);
+              return (
+                <View key={`${plan.variation_code}-${index}`} style={[styles.planCard, { backgroundColor: theme.card, borderColor: active ? theme.green : theme.border, borderWidth: active ? 1.5 : 1 }]}>
+                  <TouchableOpacity style={styles.planSelectArea} activeOpacity={0.8} onPress={() => setSelectedPlan(plan)}>
+                    <Text style={[styles.planName, { color: theme.text }]} numberOfLines={3}>{plan.name}</Text>
+                    {plan.allowance ? <Text style={[styles.planAllowance, { color: theme.muted }]} numberOfLines={1}>{plan.allowance}</Text> : null}
+                    {plan.validity ? <Text style={[styles.planValidity, { color: theme.muted }]} numberOfLines={2}>Validity: {plan.validity}</Text> : null}
+                    <Text style={[styles.planPrice, { color: theme.green }]}>{formatAmount(Number(plan.amount) || 0)}</Text>
+                    <View style={styles.planBottom}>
+                      <View style={[styles.planCategoryBadge, { backgroundColor: theme.background }]}>
+                        <Text style={[styles.planCategoryText, { color: theme.darkGreen }]} numberOfLines={1}>{category}</Text>
                       </View>
-
-                      <View
-                        style={
-                          styles.planPriceContainer
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.planPrice,
-                            { color: theme.green },
-                          ]}
-                        >
-                          {formatAmount(
-                            Number(plan.amount) || 0,
-                          )}
-                        </Text>
-
-                        {active && (
-                          <View
-                            style={[
-                              styles.selectedIndicator,
-                              {
-                                backgroundColor:
-                                  theme.green,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={styles.checkText}
-                            >
-                              ✓
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                      {plan.isPromotional ? <View style={[styles.promoBadge, { backgroundColor: theme.background, borderColor: theme.border }]}><Text style={[styles.promoText, { color: theme.darkGreen }]}>PROMO</Text></View> : null}
                     </View>
-
-                    <View
-                      style={styles.planBottom}
-                    >
-                      <View
-                        style={[
-                          styles.planCategoryBadge,
-                          {
-                            backgroundColor:
-                              theme.background,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.planCategoryText,
-                            { color: theme.darkGreen },
-                          ]}
-                        >
-                          {category}
-                        </Text>
-                      </View>
-
-                      {plan.isPromotional && (
-                        <View
-                          style={[
-                            styles.promoBadge,
-                            {
-                              backgroundColor:
-                                theme.background,
-                              borderColor: theme.border,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.promoText,
-                              { color: theme.darkGreen },
-                            ]}
-                          >
-                            PROMO
-                          </Text>
-                        </View>
-                      )}
-                    </View>
+                    {active ? <View style={[styles.selectedIndicator, { backgroundColor: theme.green }]}><Text style={styles.checkText}>✓</Text></View> : null}
                   </TouchableOpacity>
-                );
-              },
-            )}
+                  <TouchableOpacity style={[styles.planBuyButton, { backgroundColor: theme.darkGreen }]} activeOpacity={0.85} onPress={() => setSelectedPlan(plan)}>
+                    <Text style={styles.planBuyButtonText}>Buy Data</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         )}
-
         {/* PURCHASE SUMMARY */}
 
         {selectedPlan && (
@@ -2350,35 +2227,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 9,
+    gap: 7,
   },
 
   planCard: {
-    width: '48.5%',
-    minHeight: 154,
-    borderRadius: 13,
-    padding: 11,
+    width: '48.2%',
+    minHeight: 140,
+    borderRadius: 11,
+    padding: 8,
     justifyContent: 'space-between',
   },
 
-  planTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-
-  planDetails: {
+  planSelectArea: {
     flex: 1,
-    paddingRight: 10,
+    minHeight: 90,
   },
 
   planName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    lineHeight: 16,
+    lineHeight: 14,
   },
 
   planAllowance: {
-    fontSize: 10,
+    fontSize: 9,
     marginTop: 3,
   },
 
@@ -2387,14 +2259,10 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  planPriceContainer: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-
   planPrice: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
+    marginTop: 6,
   },
 
   selectedIndicator: {
@@ -2415,9 +2283,23 @@ const styles = StyleSheet.create({
   planBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    gap: 5,
+    marginTop: 5,
+    gap: 4,
     flexWrap: 'wrap',
+  },
+
+  planBuyButton: {
+    height: 29,
+    borderRadius: 7,
+    marginTop: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  planBuyButtonText: {
+    color: PALETTE.white,
+    fontSize: 10,
+    fontWeight: '800',
   },
 
   planCategoryBadge: {
