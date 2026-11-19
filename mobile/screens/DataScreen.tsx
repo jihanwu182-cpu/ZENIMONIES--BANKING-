@@ -2221,43 +2221,48 @@ const styles = StyleSheet.create({
   plansContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 7,
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+    gap: 5,
   },
 
   planCard: {
-    width: '32%',
-    minHeight: 132,
-    borderRadius: 10,
-    padding: 7,
+    width: '31.5%',
+    flexBasis: '31.5%',
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
+    minHeight: 112,
+    borderRadius: 9,
+    padding: 6,
     justifyContent: 'space-between',
   },
 
   planSelectArea: {
-    flex: 1,
-    minHeight: 82,
+    flexGrow: 1,
+    minHeight: 72,
   },
 
   planName: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    lineHeight: 13,
+    lineHeight: 11,
   },
 
   planAllowance: {
-    fontSize: 9,
-    marginTop: 3,
+    fontSize: 8,
+    marginTop: 2,
   },
 
   planValidity: {
-    fontSize: 9,
-    marginTop: 3,
+    fontSize: 8,
+    marginTop: 2,
   },
 
   planPrice: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
-    marginTop: 6,
+    marginTop: 4,
   },
 
   selectedIndicator: {
@@ -2284,16 +2289,16 @@ const styles = StyleSheet.create({
   },
 
   planBuyButton: {
-    height: 26,
-    borderRadius: 7,
-    marginTop: 6,
+    height: 24,
+    borderRadius: 6,
+    marginTop: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   planBuyButtonText: {
     color: PALETTE.white,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
   },
 
