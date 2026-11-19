@@ -64,13 +64,13 @@ type TransactionStatus =
 const API_BASE =
   'https://zenimonies-banking.onrender.com/api';
 const PALETTE = {
-  background: '#F6F8F3',
+  background: '#FFFFFF',
   card: '#FFFFFF',
-  text: '#172018',
+  text: '#234B2A',
   muted: '#858B83',
   border: '#E9EDE5',
-  green: '#78A900',
-  darkGreen: '#527900',
+  green: '#527900',
+  darkGreen: '#234B2A',
   white: '#FFFFFF',
   black: '#000000',
 };
@@ -2432,7 +2432,7 @@ const styles = StyleSheet.create({
   },
 
   checkText: {
-    color: COLORS.white,
+    color: PALETTE.white,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -2508,7 +2508,7 @@ const styles = StyleSheet.create({
   },
 
   retryButtonText: {
-    color: COLORS.white,
+    color: PALETTE.white,
     fontWeight: '700',
   },
 
@@ -2569,13 +2569,13 @@ const styles = StyleSheet.create({
   },
 
   continueButtonText: {
-    color: COLORS.white,
+    color: PALETTE.white,
     fontSize: 15,
     fontWeight: '800',
   },
 
   continueArrow: {
-    color: COLORS.white,
+    color: PALETTE.white,
     fontSize: 20,
     fontWeight: '700',
     marginLeft: 10,
@@ -2587,7 +2587,7 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: COLORS.black,
+    backgroundColor: PALETTE.black,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -2597,7 +2597,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 5,
-    backgroundColor: COLORS.border,
+    backgroundColor: PALETTE.border,
     marginBottom: 20,
   },
 
@@ -2740,7 +2740,7 @@ const styles = StyleSheet.create({
   },
 
   confirmButtonText: {
-    color: COLORS.white,
+    color: PALETTE.white,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -2838,7 +2838,7 @@ const styles = StyleSheet.create({
   },
 
   resultButtonText: {
-    color: COLORS.white,
+    color: PALETTE.white,
     fontSize: 14,
     fontWeight: '800',
   },
