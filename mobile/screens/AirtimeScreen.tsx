@@ -67,8 +67,18 @@ const BRAND_LIGHT_GREEN = '#E8F3D9';
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
-const normalizePhone = (value: string) =>
-  value.replace(/\D/g, '').slice(0, 11);
+// Keep the customer's entered national number as-is (with or without the leading 0).
+// If +234 is pasted, remove that country prefix because it is displayed separately.
+const normalizePhone = (value: string) => {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('234')) digits = digits.slice(3);
+  return digits.slice(0, 11);
+};
+
+// Prefix detection uses a temporary 0-prefixed form for 10-digit input,
+// without changing the number stored or sent to the backend.
+const phoneForDetection = (phone: string) =>
+  phone.length === 10 ? `0${phone}` : phone;
 
 const detectNetwork = (phone: string): Network | null => {
   const prefixes: Record<string, Network> = {
@@ -113,8 +123,8 @@ const detectNetwork = (phone: string): Network | null => {
   };
 
   if (phone.length < 4) return null;
-
-  return prefixes[phone.substring(0, 4)] || null;
+  const detectionPhone = phoneForDetection(phone);
+  return prefixes[detectionPhone.substring(0, 4)] || null;
 };
 
 export default function AirtimeScreen({
@@ -161,7 +171,7 @@ export default function AirtimeScreen({
 
   const selectedAmount = Number(amount || customAmount);
 
-  const validPhone = /^0[789][01]\d{8}$/.test(phone);
+  const validPhone = /^(?:0[789][01]\d{8}|[789][01]\d{8})$/.test(phone);
 
   const selectedNetwork = NETWORKS.find(
     item => item.value === network
@@ -202,7 +212,7 @@ export default function AirtimeScreen({
     if (!validPhone) {
       Alert.alert(
         'Invalid phone number',
-        'Enter a valid 11-digit Nigerian phone number.'
+        'Enter a valid Nigerian phone number (10 digits without the first 0, or 11 digits with it).'
       );
       return;
     }
@@ -498,7 +508,7 @@ export default function AirtimeScreen({
             value={phone}
             onChangeText={handlePhoneChange}
             keyboardType="phone-pad"
-            placeholder="0803 123 4567"
+            placeholder="803 123 4567"
             placeholderTextColor={colors.textSecondary}
             maxLength={11}
             style={styles.input}
@@ -534,7 +544,7 @@ export default function AirtimeScreen({
         </View>
 
         <Text style={styles.phoneHelperText}>
-          Enter a Nigerian phone number. Network detection is automatic.
+          Enter a Nigerian phone number with or without the first 0. Network detection is automatic.
         </Text>
 
 
