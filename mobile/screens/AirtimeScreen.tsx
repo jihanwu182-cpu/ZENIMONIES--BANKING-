@@ -483,7 +483,7 @@ export default function AirtimeScreen({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* PHONE NUMBER */}
+        {/* PHONE NUMBER + NETWORK PICKER */}
 
         <Text style={styles.label}>
           Phone number
@@ -491,7 +491,7 @@ export default function AirtimeScreen({
 
         <View style={styles.phoneInput}>
           <Text style={styles.countryCode}>
-            +234
+            🇳🇬 +234
           </Text>
 
           <TextInput
@@ -504,78 +504,39 @@ export default function AirtimeScreen({
             style={styles.input}
           />
 
-          {validPhone && (
-            <MaterialCommunityIcons
-              name="check-circle"
-              size={21}
-              color={colors.success}
-            />
-          )}
-        </View>
-
-        {/* NETWORK DETECTION */}
-
-        {detectedNetwork && (
-          <View style={styles.detectedBox}>
-            <MaterialCommunityIcons
-              name="check-circle"
-              size={16}
-              color={colors.success}
-            />
-
-            <Text style={styles.detectedText}>
-              {manualNetwork
-                ? 'Network selected manually'
-                : `Network detected: ${networkLabel(
-                    detectedNetwork
-                  )}`}
-            </Text>
-          </View>
-        )}
-
-        {/* NETWORK SELECTOR */}
-
-        <Text style={styles.label}>
-          Mobile network
-        </Text>
-
-        <TouchableOpacity
-          style={styles.networkSelector}
-          onPress={() => setNetworkModalVisible(true)}
-          activeOpacity={0.75}
-        >
-          {selectedNetwork ? (
-            <View style={styles.selectedNetworkContent}>
-              <Image
-                source={selectedNetwork.logo}
-                style={styles.networkLogo}
-                resizeMode="contain"
-              />
-
-              <View style={styles.networkSelectorText}>
-                <Text style={styles.networkSelectorTitle}>
+          <TouchableOpacity
+            style={styles.inlineNetworkPicker}
+            onPress={() => setNetworkModalVisible(true)}
+            activeOpacity={0.75}
+          >
+            {selectedNetwork ? (
+              <>
+                <Image
+                  source={selectedNetwork.logo}
+                  style={styles.inlineNetworkLogo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.inlineNetworkName}>
                   {selectedNetwork.label}
                 </Text>
+              </>
+            ) : (
+              <Text style={styles.inlineNetworkPlaceholder}>
+                Network
+              </Text>
+            )}
+            <MaterialCommunityIcons
+              name="chevron-down"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
 
-                <Text style={styles.networkSelectorSubtitle}>
-                  {manualNetwork
-                    ? 'Selected manually'
-                    : 'Automatically detected'}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.networkPlaceholder}>
-              Select mobile network
-            </Text>
-          )}
+        <Text style={styles.phoneHelperText}>
+          Enter a Nigerian phone number. Network detection is automatic.
+        </Text>
 
-          <MaterialCommunityIcons
-            name="chevron-down"
-            size={23}
-            color={colors.textSecondary}
-          />
-        </TouchableOpacity>
 
         {/* AMOUNT */}
 
@@ -1046,61 +1007,41 @@ const createStyles = (
       paddingVertical: 12,
     },
 
-    detectedBox: {
+    inlineNetworkPicker: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 9,
-      gap: 7,
+      justifyContent: 'center',
+      borderLeftWidth: 1,
+      borderLeftColor: colors.border,
+      paddingLeft: 9,
+      marginLeft: 5,
+      minHeight: 42,
+      maxWidth: 125,
     },
 
-    detectedText: {
-      color: colors.success,
-      fontSize: 11,
-      fontWeight: '700',
+    inlineNetworkLogo: {
+      width: 30,
+      height: 28,
     },
 
-    networkSelector: {
-      minHeight: 58,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      backgroundColor: colors.surface,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-    },
-
-    selectedNetworkContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flex: 1,
-    },
-
-    networkLogo: {
-      width: 40,
-      height: 36,
-    },
-
-    networkSelectorText: {
-      marginLeft: 10,
-    },
-
-    networkSelectorTitle: {
+    inlineNetworkName: {
       color: colors.text,
+      fontSize: 11,
       fontWeight: '800',
-      fontSize: 13,
+      marginHorizontal: 5,
     },
 
-    networkSelectorSubtitle: {
+    inlineNetworkPlaceholder: {
       color: colors.textSecondary,
-      fontSize: 10,
-      marginTop: 3,
+      fontSize: 11,
+      marginRight: 4,
     },
 
-    networkPlaceholder: {
+    phoneHelperText: {
       color: colors.textSecondary,
-      fontSize: 13,
+      fontSize: 11,
+      lineHeight: 17,
+      marginTop: 10,
     },
 
     amountGrid: {
