@@ -37,6 +37,7 @@ import AirtimeScreen from './screens/AirtimeScreen';
 import DataScreen from './screens/DataScreen';
 import ElectricityScreen from './screens/ElectricityScreen';
 import TVScreen from './screens/TVScreen';
+import BillsScreen from './screens/BillsScreen';
 
 import {
   registerPushNotifications,
@@ -72,6 +73,7 @@ type Screen =
   | 'transaction-details'
   | 'airtime'
   | 'data'
+  | 'bills'
   | 'electricity'
   | 'tv';
 
@@ -1054,6 +1056,24 @@ export default function App() {
         authenticatedPost,
       ]
     );
+  // ====================================================
+// BILLS
+// ====================================================
+
+if (screen === 'bills' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <BillsScreen
+        onBack={() => setScreen('home')}
+        onElectricityPress={() =>
+          setScreen('electricity')
+        }
+      />
+    </SafeAreaView>
+  );
+}
 
   // ====================================================
   // ELECTRICITY PAYMENT
@@ -1660,6 +1680,10 @@ export default function App() {
       setScreen('data');
       return;
     }
+    if (action === 'bills') {
+      setScreen('bills');
+     return;
+   }
 
     if (
       action === 'electricity' ||
