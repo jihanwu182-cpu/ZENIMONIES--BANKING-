@@ -30,14 +30,14 @@ export default function BillsScreen({
 }: BillsScreenProps) {
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBack}
-          activeOpacity={0.75}
+          activeOpacity={0.7}
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
@@ -51,17 +51,13 @@ export default function BillsScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* SECTION LABEL */}
+        {/* PAYMENTS BADGE */}
         <View style={styles.sectionBadge}>
-          <Text style={styles.sectionBadgeText}>
-            PAYMENTS
-          </Text>
+          <Text style={styles.sectionBadgeText}>PAYMENTS</Text>
         </View>
 
-        {/* TITLE */}
-        <Text style={styles.title}>
-          Pay Your Bills
-        </Text>
+        {/* PAGE TITLE */}
+        <Text style={styles.title}>Pay Your Bills</Text>
 
         <Text style={styles.subtitle}>
           Select a bill or service you want to pay.
@@ -69,7 +65,6 @@ export default function BillsScreen({
 
         {/* BILL CATEGORIES */}
         <View style={styles.categoryContainer}>
-
           {/* ELECTRICITY */}
           <TouchableOpacity
             style={styles.categoryCard}
@@ -77,16 +72,11 @@ export default function BillsScreen({
             activeOpacity={0.75}
           >
             <View style={styles.iconBox}>
-              <Text style={styles.electricityIcon}>
-                ⚡
-              </Text>
+              <Text style={styles.electricityIcon}>⚡</Text>
             </View>
 
             <View style={styles.categoryContent}>
-              <Text style={styles.categoryTitle}>
-                Electricity
-              </Text>
-
+              <Text style={styles.categoryTitle}>Electricity</Text>
               <Text style={styles.categoryDescription}>
                 Pay prepaid and postpaid electricity bills
               </Text>
@@ -98,20 +88,15 @@ export default function BillsScreen({
           {/* INTERNET */}
           <TouchableOpacity
             style={styles.categoryCard}
-            onPress={() => undefined}
+            onPress={() => {}}
             activeOpacity={0.75}
           >
             <View style={styles.iconBox}>
-              <Text style={styles.internetIcon}>
-                🌐
-              </Text>
+              <Text style={styles.internetIcon}>🌐</Text>
             </View>
 
             <View style={styles.categoryContent}>
-              <Text style={styles.categoryTitle}>
-                Internet
-              </Text>
-
+              <Text style={styles.categoryTitle}>Internet</Text>
               <Text style={styles.categoryDescription}>
                 Pay internet and broadband bills
               </Text>
@@ -122,24 +107,16 @@ export default function BillsScreen({
 
           {/* OTHER BILLS */}
           <TouchableOpacity
-            style={[
-              styles.categoryCard,
-              styles.lastCategoryCard,
-            ]}
-            onPress={() => undefined}
+            style={[styles.categoryCard, styles.lastCategoryCard]}
+            onPress={() => {}}
             activeOpacity={0.75}
           >
             <View style={styles.iconBox}>
-              <Text style={styles.otherBillsIcon}>
-                🧾
-              </Text>
+              <Text style={styles.otherBillsIcon}>🧾</Text>
             </View>
 
             <View style={styles.categoryContent}>
-              <Text style={styles.categoryTitle}>
-                Other Bills
-              </Text>
-
+              <Text style={styles.categoryTitle}>Other Bills</Text>
               <Text style={styles.categoryDescription}>
                 Pay other supported bills and services
               </Text>
@@ -147,19 +124,15 @@ export default function BillsScreen({
 
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
-
         </View>
 
         {/* SECURITY NOTICE */}
         <View style={styles.securityNotice}>
-          <Text style={styles.securityIcon}>
-            🔒
-          </Text>
+          <Text style={styles.securityIcon}>🔒</Text>
 
           <Text style={styles.securityText}>
-            Payments are processed securely through
-            ZENIMONIES. Always verify your bill details
-            before confirming a payment.
+            Payments are processed securely through ZENIMONIES. Always verify
+            your bill details before confirming a payment.
           </Text>
         </View>
       </ScrollView>
@@ -173,6 +146,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
+  /* HEADER */
   header: {
     height: 62,
     flexDirection: 'row',
@@ -205,10 +179,11 @@ const styles = StyleSheet.create({
     width: 42,
   },
 
+  /* CONTENT */
   content: {
     paddingHorizontal: 22,
     paddingTop: 30,
-    paddingBottom: 35,
+    paddingBottom: 30,
   },
 
   sectionBadge: {
@@ -217,7 +192,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    marginBottom: 18,
+    marginBottom: 24,
   },
 
   sectionBadgeText: {
@@ -239,23 +214,24 @@ const styles = StyleSheet.create({
     color: MUTED_TEXT,
     lineHeight: 23,
     marginTop: 10,
-    marginBottom: 25,
+    marginBottom: 32,
   },
 
+  /* CATEGORY CARD GROUP */
   categoryContainer: {
     backgroundColor: WHITE,
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BORDER,
     overflow: 'hidden',
   },
 
   categoryCard: {
-    minHeight: 125,
+    minHeight: 150,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 17,
-    paddingVertical: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     backgroundColor: WHITE,
@@ -265,18 +241,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
 
+  /* SMALLER ICONS */
   iconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 17,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
     backgroundColor: LIGHT_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 18,
   },
 
   electricityIcon: {
-    fontSize: 24,
+    fontSize: 25,
   },
 
   internetIcon: {
@@ -287,6 +264,7 @@ const styles = StyleSheet.create({
     fontSize: 23,
   },
 
+  /* TEXT */
   categoryContent: {
     flex: 1,
   },
@@ -302,26 +280,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: MUTED_TEXT,
     lineHeight: 22,
-    maxWidth: 220,
+    maxWidth: 225,
   },
 
   chevron: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '500',
     color: BRAND_GREEN,
-    marginLeft: 7,
+    marginLeft: 8,
   },
 
+  /* SECURITY NOTICE */
   securityNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: 30,
+    marginTop: 34,
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
 
   securityIcon: {
-    fontSize: 17,
+    fontSize: 16,
     marginRight: 12,
     marginTop: 2,
   },
