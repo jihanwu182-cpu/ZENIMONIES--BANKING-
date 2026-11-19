@@ -1,396 +1,310 @@
+
 import React from 'react';
 import {
-  View,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  StatusBar,
+  View,
 } from 'react-native';
 
-type BillCategory = 'electricity' | 'internet' | 'other';
+import colors from '../theme/colors';
 
 type BillsScreenProps = {
-  darkMode?: boolean;
-  onSelectBill?: (category: BillCategory) => void;
+  onBack: () => void;
+  onElectricityPress: () => void;
 };
 
-const BillsScreen: React.FC<BillsScreenProps> = ({
-  darkMode = false,
-  onSelectBill,
-}) => {
-  const colors = darkMode
-    ? {
-        background: '#0D1712',
-        header: '#101C16',
-        card: '#101C16',
-        border: '#294238',
-        divider: '#22372D',
-        text: '#F3F8F5',
-        secondary: '#A9B8B0',
-        muted: '#82958B',
-        green: '#00843D',
-        greenDark: '#006B32',
-        iconBg: '#123A29',
-        noticeBg: '#0D2A1E',
-        noticeBorder: '#1C4A35',
-        noticeText: '#A8C8B8',
-        arrowBg: '#183126',
-      }
-    : {
-        background: '#F6FAF8',
-        header: '#FFFFFF',
-        card: '#FFFFFF',
-        border: '#E7EEE9',
-        divider: '#E6EFEA',
-        text: '#172018',
-        secondary: '#7B8982',
-        muted: '#98A49F',
-        green: '#00843D',
-        greenDark: '#006B32',
-        iconBg: '#E9F3D9',
-        noticeBg: '#E9F3D9',
-        noticeBorder: '#D4E8C3',
-        noticeText: '#356B57',
-        arrowBg: '#F0F7F4',
-      };
-
-  const billOptions: {
-    id: BillCategory;
-    title: string;
-    description: string;
-    icon: string;
-    iconColor: string;
-  }[] = [
-    {
-      id: 'electricity',
-      title: 'Electricity',
-      description: 'Pay prepaid and postpaid electricity bills',
-      icon: '⚡',
-      iconColor: '#E9B900',
-    },
-    {
-      id: 'internet',
-      title: 'Internet',
-      description: 'Pay internet and broadband bills',
-      icon: '🌐',
-      iconColor: '#2797C7',
-    },
-    {
-      id: 'other',
-      title: 'Other Bills',
-      description: 'Pay other supported bills and services',
-      icon: '🧾',
-      iconColor: colors.green,
-    },
-  ];
-
+export default function BillsScreen({
+  onBack,
+  onElectricityPress,
+}: BillsScreenProps) {
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.background },
-      ]}
-    >
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: colors.header,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => onSelectBill?.('other')}
-          style={[
-            styles.backButton,
-            { backgroundColor: colors.arrowBg },
-          ]}
+          style={styles.backButton}
+          onPress={onBack}
           activeOpacity={0.75}
         >
-          <Text style={[styles.backIcon, { color: colors.green }]}>
-            ‹
-          </Text>
+          <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Bills
-        </Text>
+        <Text style={styles.headerTitle}>Bills</Text>
 
-        <View style={styles.headerRight} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.content}
       >
-        {/* Intro */}
-        <View style={styles.intro}>
-          <View
-            style={[
-              styles.labelBadge,
-              {
-                backgroundColor: colors.iconBg,
-                borderColor: colors.noticeBorder,
-              },
-            ]}
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>
+            PAYMENTS
+          </Text>
+        </View>
+
+        <Text style={styles.title}>
+          Pay Your Bills
+        </Text>
+
+        <Text style={styles.subtitle}>
+          Select a bill or service you want to pay.
+        </Text>
+
+        <View style={styles.categoryContainer}>
+          {/* ELECTRICITY */}
+          <TouchableOpacity
+            style={styles.categoryCard}
+            onPress={onElectricityPress}
+            activeOpacity={0.75}
           >
-            <Text style={[styles.labelText, { color: colors.green }]}>
-              PAYMENTS
-            </Text>
-          </View>
+            <View style={styles.iconBox}>
+              <Text style={styles.electricityIcon}>⚡</Text>
+            </View>
 
-          <Text style={[styles.heading, { color: colors.text }]}>
-            Pay Your Bills
-          </Text>
+            <View style={styles.categoryContent}>
+              <Text style={styles.categoryTitle}>
+                Electricity
+              </Text>
 
-          <Text style={[styles.subtitle, { color: colors.secondary }]}>
-            Select a bill or service you want to pay.
-          </Text>
+              <Text style={styles.categoryDescription}>
+                Pay prepaid and postpaid electricity bills
+              </Text>
+            </View>
+
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+
+          {/* INTERNET */}
+          <TouchableOpacity
+            style={styles.categoryCard}
+            onPress={() =>
+              // Internet screen will be connected in a later stage.
+              undefined
+            }
+            activeOpacity={0.75}
+          >
+            <View style={styles.iconBox}>
+              <Text style={styles.internetIcon}>🌐</Text>
+            </View>
+
+            <View style={styles.categoryContent}>
+              <Text style={styles.categoryTitle}>
+                Internet
+              </Text>
+
+              <Text style={styles.categoryDescription}>
+                Pay internet and broadband bills
+              </Text>
+            </View>
+
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+
+          {/* OTHER BILLS */}
+          <TouchableOpacity
+            style={styles.categoryCard}
+            onPress={() =>
+              // Other Bills screen will be connected in a later stage.
+              undefined
+            }
+            activeOpacity={0.75}
+          >
+            <View style={styles.iconBox}>
+              <Text style={styles.otherBillsIcon}>🧾</Text>
+            </View>
+
+            <View style={styles.categoryContent}>
+              <Text style={styles.categoryTitle}>
+                Other Bills
+              </Text>
+
+              <Text style={styles.categoryDescription}>
+                Pay other supported bills and services
+              </Text>
+            </View>
+
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Bill options */}
-        <View
-          style={[
-            styles.optionsCard,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          {billOptions.map((bill, index) => (
-            <TouchableOpacity
-              key={bill.id}
-              activeOpacity={0.75}
-              onPress={() => onSelectBill?.(bill.id)}
-              style={[
-                styles.billRow,
-                index !== billOptions.length - 1 && {
-                  borderBottomColor: colors.divider,
-                  borderBottomWidth: 1,
-                },
-              ]}
-            >
-              {/* Icon */}
-              <View
-                style={[
-                  styles.iconContainer,
-                  { backgroundColor: colors.iconBg },
-                ]}
-              >
-                <Text style={styles.billIcon}>{bill.icon}</Text>
-              </View>
-
-              {/* Text */}
-              <View style={styles.billTextContainer}>
-                <Text
-                  style={[
-                    styles.billTitle,
-                    { color: colors.green },
-                  ]}
-                >
-                  {bill.title}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.billDescription,
-                    { color: colors.secondary },
-                  ]}
-                >
-                  {bill.description}
-                </Text>
-              </View>
-
-              {/* Arrow */}
-              <View
-                style={[
-                  styles.arrowContainer,
-                  { backgroundColor: colors.arrowBg },
-                ]}
-              >
-                <Text style={[styles.arrow, { color: colors.green }]}>
-                  ›
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Security notice */}
-        <View
-          style={[
-            styles.securityNotice,
-            {
-              backgroundColor: colors.noticeBg,
-              borderColor: colors.noticeBorder,
-            },
-          ]}
-        >
+        <View style={styles.securityNotice}>
           <Text style={styles.securityIcon}>🔒</Text>
 
-          <Text
-            style={[
-              styles.securityText,
-              { color: colors.noticeText },
-            ]}
-          >
-            Payments are processed securely through ZENIMONIES.
-            Always verify your bill details before confirming a payment.
+          <Text style={styles.securityText}>
+            Payments are processed securely through
+            ZENIMONIES. Always verify your bill details
+            before confirming a payment.
           </Text>
         </View>
-
-        {/* Footer */}
-        <Text style={[styles.footer, { color: colors.muted }]}>
-          ZENIMONIES • Secure Bill Payments
-        </Text>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
+
   header: {
-    height: 64,
+    height: 62,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 18,
-    borderBottomWidth: 1,
+    backgroundColor: colors.background,
   },
+
   backButton: {
-    position: 'absolute',
-    left: 18,
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    alignItems: 'center',
+    width: 42,
+    height: 42,
     justifyContent: 'center',
   },
+
   backIcon: {
-    fontSize: 30,
-    lineHeight: 32,
-    marginTop: -2,
+    fontSize: 35,
+    color: colors.text,
+    fontWeight: '400',
+    marginTop: -4,
   },
+
   headerTitle: {
-    fontSize: 21,
+    fontSize: 20,
     fontWeight: '800',
+    color: colors.text,
   },
-  headerRight: {
-    position: 'absolute',
-    right: 18,
-    width: 40,
-    height: 40,
+
+  headerSpacer: {
+    width: 42,
   },
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 35,
+
+  content: {
+    paddingHorizontal: 22,
+    paddingTop: 30,
+    paddingBottom: 30,
   },
-  intro: {
-    marginBottom: 20,
-  },
-  labelBadge: {
+
+  sectionBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 11,
+    backgroundColor: '#E8F3D9',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 18,
+    marginBottom: 18,
   },
-  labelText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-  heading: {
-    fontSize: 27,
+
+  sectionBadgeText: {
+    color: '#00843D',
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: -0.6,
+    letterSpacing: 1.2,
   },
+
+  title: {
+    fontSize: 31,
+    fontWeight: '900',
+    color: '#172018',
+    letterSpacing: -0.7,
+  },
+
   subtitle: {
-    marginTop: 7,
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 15,
+    color: '#858B83',
+    lineHeight: 23,
+    marginTop: 10,
+    marginBottom: 25,
   },
-  optionsCard: {
+
+  categoryContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     borderWidth: 1,
-    borderRadius: 20,
+    borderColor: '#E9EDE5',
     overflow: 'hidden',
   },
-  billRow: {
-    minHeight: 112,
+
+  categoryCard: {
+    minHeight: 155,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: 17,
+    paddingVertical: 23,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9EDE5',
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 17,
+
+  iconBox: {
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    backgroundColor: '#E8F3D9',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 17,
   },
-  billIcon: {
-    fontSize: 26,
+
+  electricityIcon: {
+    fontSize: 32,
   },
-  billTextContainer: {
+
+  internetIcon: {
+    fontSize: 29,
+  },
+
+  otherBillsIcon: {
+    fontSize: 29,
+  },
+
+  categoryContent: {
     flex: 1,
-    minWidth: 0,
   },
-  billTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 4,
+
+  categoryTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#00843D',
+    marginBottom: 8,
   },
-  billDescription: {
-    fontSize: 12.5,
-    lineHeight: 18,
+
+  categoryDescription: {
+    fontSize: 14,
+    color: '#858B83',
+    lineHeight: 22,
+    maxWidth: 220,
   },
-  arrowContainer: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
+
+  chevron: {
+    fontSize: 30,
+    fontWeight: '500',
+    color: '#00843D',
+    marginLeft: 8,
   },
-  arrow: {
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 26,
-    marginTop: -2,
-  },
+
   securityNotice: {
-    marginTop: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 9,
+    marginTop: 35,
+    paddingHorizontal: 8,
   },
+
   securityIcon: {
-    fontSize: 17,
+    fontSize: 18,
+    marginRight: 12,
+    marginTop: 2,
   },
+
   securityText: {
     flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  footer: {
-    textAlign: 'center',
-    marginTop: 18,
-    fontSize: 10,
+    fontSize: 14,
+    color: '#718078',
+    lineHeight: 25,
   },
 });
-
-export default BillsScreen;
