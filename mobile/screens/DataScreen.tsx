@@ -69,7 +69,7 @@ const PALETTE = {
   text: '#234B2A',
   muted: '#858B83',
   border: '#E9EDE5',
-  green: '#527900',
+  green: '#234B2A',
   darkGreen: '#234B2A',
   white: '#FFFFFF',
   black: '#000000',
@@ -440,8 +440,8 @@ const theme = {
   text: colors?.text ?? PALETTE.text,
   muted: colors?.muted ?? PALETTE.muted,
   border: colors?.border ?? PALETTE.border,
-  green: colors?.green ?? PALETTE.green,
-  darkGreen: colors?.darkGreen ?? PALETTE.darkGreen,
+  green: PALETTE.green,
+  darkGreen: PALETTE.darkGreen,
   white: PALETTE.white,
 };
   const authToken = token || '';
