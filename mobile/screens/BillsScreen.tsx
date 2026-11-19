@@ -69,6 +69,7 @@ export default function BillsScreen({
 
         {/* BILL CATEGORIES */}
         <View style={styles.categoryContainer}>
+
           {/* ELECTRICITY */}
           <TouchableOpacity
             style={styles.categoryCard}
@@ -146,6 +147,7 @@ export default function BillsScreen({
 
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
+
         </View>
 
         {/* SECURITY NOTICE */}
@@ -249,11 +251,11 @@ const styles = StyleSheet.create({
   },
 
   categoryCard: {
-    minHeight: 145,
+    minHeight: 125,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 17,
-    paddingVertical: 22,
+    paddingVertical: 18,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     backgroundColor: WHITE,
@@ -264,9 +266,9 @@ const styles = StyleSheet.create({
   },
 
   iconBox: {
-    width: 70,
-    height: 70,
-    borderRadius: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 17,
     backgroundColor: LIGHT_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -274,15 +276,15 @@ const styles = StyleSheet.create({
   },
 
   electricityIcon: {
-    fontSize: 32,
+    fontSize: 24,
   },
 
   internetIcon: {
-    fontSize: 29,
+    fontSize: 23,
   },
 
   otherBillsIcon: {
-    fontSize: 29,
+    fontSize: 23,
   },
 
   categoryContent: {
