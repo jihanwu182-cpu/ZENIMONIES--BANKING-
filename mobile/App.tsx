@@ -992,7 +992,6 @@ export default function App() {
       },
       [authenticatedFetch]
     );
-
   // ====================================================
   // ELECTRICITY METER VERIFICATION
   // ====================================================
@@ -1056,24 +1055,6 @@ export default function App() {
         authenticatedPost,
       ]
     );
-  // ====================================================
-// BILLS
-// ====================================================
-
-if (screen === 'bills' && session) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
-      <BillsScreen
-        onBack={() => setScreen('home')}
-        onElectricityPress={() =>
-          setScreen('electricity')
-        }
-      />
-    </SafeAreaView>
-  );
-}
 
   // ====================================================
   // ELECTRICITY PAYMENT
@@ -1718,7 +1699,6 @@ if (screen === 'bills' && session) {
       transfer: 'Bank transfers',
       'add-money': 'Add money',
       withdraw: 'Withdrawals',
-      bills: 'Bill payments',
       cards: 'Cards',
       savings: 'ZENIMONIES Save',
     };
@@ -2075,7 +2055,23 @@ if (screen === 'bills' && session) {
       </SafeAreaView>
     );
   }
+// ======================================================
+// BILLS
+// ======================================================
 
+if (screen === 'bills' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <BillsScreen
+        onBack={() => setScreen('home')}
+        onElectricityPress={() =>
+          setScreen('electricity')
+        />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // ELECTRICITY
   // ====================================================
