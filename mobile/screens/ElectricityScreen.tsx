@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -54,8 +54,9 @@ interface ElectricityScreenProps {
   ) => Promise<ElectricityPaymentResult>;
 }
 
-const GREEN = '#78A900';
-const DARK_GREEN = '#527900';
+// ZENIMONIES ORIGINAL COLORS
+const GREEN = '#00843D';
+const DARK_GREEN = '#006B32';
 const BLACK = '#172018';
 const MUTED = '#858B83';
 const BACKGROUND = '#F6F8F3';
@@ -63,21 +64,21 @@ const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
 
 const PROVIDERS: ElectricityProvider[] = [
-  { id: 'IKEDC', name: 'Ikeja Electric', shortName: 'IKEDC' },
-  { id: 'EKEDC', name: 'Eko Electric', shortName: 'EKEDC' },
-  { id: 'AEDC', name: 'Abuja Electric', shortName: 'AEDC' },
-  { id: 'IBEDC', name: 'Ibadan Electric', shortName: 'IBEDC' },
-  { id: 'KEDCO', name: 'Kano Electric', shortName: 'KEDCO' },
-  { id: 'KAEDCO', name: 'Kaduna Electric', shortName: 'KAEDCO' },
-  { id: 'JED', name: 'Jos Electric', shortName: 'JED' },
-  { id: 'EEDC', name: 'Enugu Electric', shortName: 'EEDC' },
-  { id: 'PHEDC', name: 'Port Harcourt Electric', shortName: 'PHEDC' },
-  { id: 'BEDC', name: 'Benin Electric', shortName: 'BEDC' },
-  { id: 'YEDC', name: 'Yola Electric', shortName: 'YEDC' },
+  {id: 'APLE', name: 'Aba Electricity', shortName: 'APLE'},
+  {id: 'AEDC', name: 'Abuja Electricity', shortName: 'AEDC'},
+  {id: 'BEDC', name: 'Benin Electricity', shortName: 'BEDC'},
+  {id: 'EKEDC', name: 'Eko Electricity', shortName: 'EKEDC'},
+  {id: 'EEDC', name: 'Enugu Electricity', shortName: 'EEDC'},
+  {id: 'IBEDC', name: 'Ibadan Electricity', shortName: 'IBEDC'},
+  {id: 'IKEDC', name: 'Ikeja Electricity', shortName: 'IKEDC'},
+  {id: 'JED', name: 'Jos Electricity', shortName: 'JED'},
+  {id: 'KAEDCO', name: 'Kaduna Electricity', shortName: 'KAEDCO'},
+  {id: 'KEDCO', name: 'Kano Electricity', shortName: 'KEDCO'},
+  {id: 'PHEDC', name: 'Port Harcourt Electricity', shortName: 'PHEDC'},
+  {id: 'YEDC', name: 'Yola Electricity', shortName: 'YEDC'},
 ];
 
 const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
-
 const MIN_AMOUNT = 500;
 const MAX_AMOUNT = 1000000;
 
@@ -96,26 +97,22 @@ const formatCurrency = (amount: number) =>
 const isPendingResponse = (result: ElectricityPaymentResult) => {
   const status = String(result.status || '').toLowerCase();
 
-  return (
-    status === 'pending' ||
-    status === 'processing' ||
-    status === 'queued' ||
-    status === 'unknown' ||
-    status === 'initiated'
-  );
+  return [
+    'pending',
+    'processing',
+    'queued',
+    'unknown',
+    'initiated',
+  ].includes(status);
 };
 
 const isSuccessfulResponse = (result: ElectricityPaymentResult) => {
   const status = String(result.status || '').toLowerCase();
 
-  if (isPendingResponse(result)) {
-    return false;
-  }
+  if (isPendingResponse(result)) return false;
 
   return (
-    status === 'success' ||
-    status === 'successful' ||
-    status === 'completed' ||
+    ['success', 'successful', 'completed'].includes(status) ||
     result.success === true
   );
 };
@@ -125,25 +122,20 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   onPay,
 }) => {
   const [provider, setProvider] = useState('');
+  const [showProviders, setShowProviders] = useState(false);
   const [meterNumber, setMeterNumber] = useState('');
   const [meterType, setMeterType] = useState<'prepaid' | 'postpaid'>(
     'prepaid',
   );
-
   const [amount, setAmount] = useState('');
   const [transactionPin, setTransactionPin] = useState('');
-
   const [customer, setCustomer] = useState<MeterCustomer | null>(null);
   const [paymentResult, setPaymentResult] =
     useState<ElectricityPaymentResult | null>(null);
-
   const [status, setStatus] = useState<PaymentStatus>('idle');
   const [loading, setLoading] = useState(false);
 
-  const selectedProvider = PROVIDERS.find(
-    item => item.id === provider,
-  );
-
+  const selectedProvider = PROVIDERS.find(item => item.id === provider);
   const numericAmount = Number(amount.replace(/,/g, ''));
 
   const isAmountValid =
@@ -152,7 +144,6 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     numericAmount <= MAX_AMOUNT;
 
   const isMeterValid = meterNumber.trim().length >= 6;
-
   const isPinValid = /^\d{4}$/.test(transactionPin);
 
   const resetPayment = () => {
@@ -164,6 +155,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
   const handleProviderSelect = (selectedProvider: string) => {
     setProvider(selectedProvider);
+    setShowProviders(false);
     setCustomer(null);
     setPaymentResult(null);
     setStatus('idle');
@@ -192,18 +184,12 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
 
     if (!isMeterValid) {
-      Alert.alert(
-        'Invalid meter number',
-        'Please enter a valid meter number.',
-      );
+      Alert.alert('Invalid meter number', 'Please enter a valid meter number.');
       return;
     }
 
     if (!onValidate) {
-      Alert.alert(
-        'Unavailable',
-        'Meter validation is currently unavailable.',
-      );
+      Alert.alert('Unavailable', 'Meter validation is currently unavailable.');
       return;
     }
 
@@ -240,6 +226,66 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
   };
 
+  const executePayment = async () => {
+    setLoading(true);
+    setStatus('paying');
+    setPaymentResult(null);
+
+    const submittedPin = transactionPin;
+    setTransactionPin('');
+
+    try {
+      const result = await onPay!(
+        provider,
+        meterNumber.trim(),
+        meterType,
+        numericAmount,
+        submittedPin,
+      );
+
+      setPaymentResult(result);
+
+      if (isPendingResponse(result)) {
+        setStatus('pending');
+
+        Alert.alert(
+          'Payment processing',
+          'Your electricity payment is being processed. Do not make another payment yet. Check your transaction history for the final status.',
+        );
+        return;
+      }
+
+      if (isSuccessfulResponse(result)) {
+        setStatus('success');
+
+        Alert.alert(
+          'Payment successful',
+          meterType === 'prepaid' && result.token
+            ? `Your electricity payment was successful.\n\nToken: ${result.token}`
+            : 'Your electricity payment was successful.',
+        );
+        return;
+      }
+
+      setStatus('failed');
+
+      Alert.alert(
+        'Payment unsuccessful',
+        result.message ||
+          'The payment could not be completed. Check your transaction history before attempting another payment.',
+      );
+    } catch {
+      setStatus('pending');
+
+      Alert.alert(
+        'Payment status unknown',
+        'We could not confirm the payment status because of a connection issue. Your request may still have been processed. Please check your transaction history before trying again.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePay = async () => {
     if (!customer) {
       Alert.alert(
@@ -268,10 +314,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
 
     if (!onPay) {
-      Alert.alert(
-        'Unavailable',
-        'Electricity payment is currently unavailable.',
-      );
+      Alert.alert('Unavailable', 'Electricity payment is currently unavailable.');
       return;
     }
 
@@ -281,89 +324,15 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         numericAmount,
       )}\n\nDo you want to continue?`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Pay Now',
-          onPress: executePayment,
-        },
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Pay Now', onPress: executePayment},
       ],
     );
   };
 
-  const executePayment = async () => {
-    setLoading(true);
-    setStatus('paying');
-    setPaymentResult(null);
-
-    const submittedPin = transactionPin;
-
-    // Clear the PIN immediately after submitting.
-    setTransactionPin('');
-
-    try {
-      const result = await onPay!(
-        provider,
-        meterNumber.trim(),
-        meterType,
-        numericAmount,
-        submittedPin,
-      );
-
-      setPaymentResult(result);
-
-      // Pending/processing must take precedence over success:true.
-      if (isPendingResponse(result)) {
-        setStatus('pending');
-
-        Alert.alert(
-          'Payment processing',
-          'Your electricity payment is being processed. Do not make another payment yet. Check your transaction history for the final status.',
-        );
-
-        return;
-      }
-
-      if (isSuccessfulResponse(result)) {
-        setStatus('success');
-
-        Alert.alert(
-          'Payment successful',
-          meterType === 'prepaid' && result.token
-            ? `Your electricity payment was successful.\n\nToken: ${result.token}`
-            : 'Your electricity payment was successful.',
-        );
-
-        return;
-      }
-
-      setStatus('failed');
-
-      Alert.alert(
-        'Payment unsuccessful',
-        result.message ||
-          'The payment could not be completed. Check your transaction history before attempting another payment.',
-      );
-    } catch (error: any) {
-      /*
-       * A network failure may happen after the backend/provider
-       * receives the payment request. Never assume the payment failed.
-       */
-      setStatus('pending');
-
-      Alert.alert(
-        'Payment status unknown',
-        'We could not confirm the payment status because of a connection issue. Your request may still have been processed. Please check your transaction history before trying again.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleNewPayment = () => {
     setProvider('');
+    setShowProviders(false);
     setMeterNumber('');
     setMeterType('prepaid');
     setCustomer(null);
@@ -387,76 +356,92 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
           <View style={styles.headerTextContainer}>
             <Text style={styles.title}>Electricity</Text>
-            <Text style={styles.subtitle}>
-              Pay your electricity bill securely
-            </Text>
+            <Text style={styles.subtitle}>Pay your electricity bill securely</Text>
           </View>
         </View>
 
-        {/* PROVIDER */}
+        {/* PROVIDER DROPDOWN */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Electricity Provider
-          </Text>
+          <Text style={styles.sectionTitle}>Electricity Provider</Text>
 
-          <View style={styles.providerGrid}>
-            {PROVIDERS.map(item => {
-              const selected = provider === item.id;
+          <TouchableOpacity
+            style={styles.providerDropdown}
+            onPress={() => setShowProviders(prev => !prev)}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <View style={styles.providerDropdownLeft}>
+              <View style={styles.providerIcon}>
+                <Text style={styles.providerIconText}>⚡</Text>
+              </View>
 
-              return (
-                <TouchableOpacity
-                  key={item.id}
+              <View style={styles.providerDropdownText}>
+                <Text
                   style={[
-                    styles.providerCard,
-                    selected && styles.providerCardSelected,
+                    styles.providerDropdownName,
+                    !selectedProvider && styles.placeholderText,
                   ]}
-                  onPress={() => handleProviderSelect(item.id)}
-                  disabled={loading}
-                  activeOpacity={0.8}
                 >
-                  <View
+                  {selectedProvider?.name || 'Select electricity provider'}
+                </Text>
+
+                <Text style={styles.providerDropdownSub}>
+                  {selectedProvider?.shortName || 'Choose your distribution company'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.dropdownArrow}>
+              {showProviders ? '⌃' : '⌄'}
+            </Text>
+          </TouchableOpacity>
+
+          {showProviders && (
+            <View style={styles.providerList}>
+              {PROVIDERS.map(item => {
+                const selected = provider === item.id;
+
+                return (
+                  <TouchableOpacity
+                    key={item.id}
                     style={[
-                      styles.providerIcon,
-                      selected && styles.providerIconSelected,
+                      styles.providerOption,
+                      selected && styles.providerOptionSelected,
                     ]}
+                    onPress={() => handleProviderSelect(item.id)}
+                    activeOpacity={0.7}
                   >
-                    <Text
+                    <View style={styles.providerOptionIcon}>
+                      <Text style={styles.providerIconText}>⚡</Text>
+                    </View>
+
+                    <View style={styles.providerOptionDetails}>
+                      <Text
+                        style={[
+                          styles.providerOptionName,
+                          selected && styles.providerOptionNameSelected,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      <Text style={styles.providerOptionCode}>
+                        {item.shortName}
+                      </Text>
+                    </View>
+
+                    <View
                       style={[
-                        styles.providerIconText,
-                        selected && styles.providerIconTextSelected,
+                        styles.radioOuter,
+                        selected && styles.radioOuterSelected,
                       ]}
                     >
-                      ⚡
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.providerName,
-                      selected && styles.providerNameSelected,
-                    ]}
-                  >
-                    {item.shortName}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.providerFullName,
-                      selected && styles.providerFullNameSelected,
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
-
-                  {selected && (
-                    <View style={styles.selectedIndicator}>
-                      <Text style={styles.selectedIndicatorText}>✓</Text>
+                      {selected && <View style={styles.radioInner} />}
                     </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* METER TYPE */}
@@ -467,60 +452,38 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             <TouchableOpacity
               style={[
                 styles.meterTypeButton,
-                meterType === 'prepaid' &&
-                  styles.meterTypeButtonSelected,
+                meterType === 'prepaid' && styles.meterTypeButtonSelected,
               ]}
               onPress={() => handleMeterTypeChange('prepaid')}
               disabled={loading}
+              activeOpacity={0.8}
             >
               <Text
                 style={[
                   styles.meterTypeTitle,
-                  meterType === 'prepaid' &&
-                    styles.meterTypeTitleSelected,
+                  meterType === 'prepaid' && styles.meterTypeTitleSelected,
                 ]}
               >
                 Prepaid
-              </Text>
-
-              <Text
-                style={[
-                  styles.meterTypeDescription,
-                  meterType === 'prepaid' &&
-                    styles.meterTypeDescriptionSelected,
-                ]}
-              >
-                Buy electricity units
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.meterTypeButton,
-                meterType === 'postpaid' &&
-                  styles.meterTypeButtonSelected,
+                meterType === 'postpaid' && styles.meterTypeButtonSelected,
               ]}
               onPress={() => handleMeterTypeChange('postpaid')}
               disabled={loading}
+              activeOpacity={0.8}
             >
               <Text
                 style={[
                   styles.meterTypeTitle,
-                  meterType === 'postpaid' &&
-                    styles.meterTypeTitleSelected,
+                  meterType === 'postpaid' && styles.meterTypeTitleSelected,
                 ]}
               >
                 Postpaid
-              </Text>
-
-              <Text
-                style={[
-                  styles.meterTypeDescription,
-                  meterType === 'postpaid' &&
-                    styles.meterTypeDescriptionSelected,
-                ]}
-              >
-                Pay electricity bill
               </Text>
             </TouchableOpacity>
           </View>
@@ -549,8 +512,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              (!provider || !isMeterValid || loading) &&
-                styles.disabledButton,
+              (!provider || !isMeterValid || loading) && styles.disabledButton,
             ]}
             onPress={handleValidateMeter}
             disabled={!provider || !isMeterValid || loading}
@@ -559,9 +521,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             {status === 'validating' ? (
               <ActivityIndicator color={WHITE} />
             ) : (
-              <Text style={styles.verifyButtonText}>
-                Verify Meter
-              </Text>
+              <Text style={styles.verifyButtonText}>Verify Meter</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -573,10 +533,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               <View style={styles.customerCheck}>
                 <Text style={styles.customerCheckText}>✓</Text>
               </View>
-
-              <Text style={styles.customerHeaderText}>
-                Customer Verified
-              </Text>
+              <Text style={styles.customerHeaderText}>Customer Verified</Text>
             </View>
 
             <View style={styles.customerRow}>
@@ -589,31 +546,23 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             {customer.address ? (
               <View style={styles.customerRow}>
                 <Text style={styles.customerLabel}>Address</Text>
-                <Text style={styles.customerValue}>
-                  {customer.address}
-                </Text>
+                <Text style={styles.customerValue}>{customer.address}</Text>
               </View>
             ) : null}
 
             <View style={styles.customerRow}>
               <Text style={styles.customerLabel}>Meter Number</Text>
-              <Text style={styles.customerValue}>
-                {meterNumber}
-              </Text>
+              <Text style={styles.customerValue}>{meterNumber}</Text>
             </View>
 
             <View style={styles.customerRow}>
               <Text style={styles.customerLabel}>Meter Type</Text>
-              <Text style={styles.customerValue}>
-                {meterType.toUpperCase()}
-              </Text>
+              <Text style={styles.customerValue}>{meterType.toUpperCase()}</Text>
             </View>
 
             <View style={styles.customerRow}>
               <Text style={styles.customerLabel}>Provider</Text>
-              <Text style={styles.customerValue}>
-                {selectedProvider?.name}
-              </Text>
+              <Text style={styles.customerValue}>{selectedProvider?.name}</Text>
             </View>
           </View>
         )}
@@ -625,7 +574,6 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
             <View style={styles.amountInputContainer}>
               <Text style={styles.currencySymbol}>₦</Text>
-
               <TextInput
                 style={styles.amountInput}
                 placeholder="0.00"
@@ -650,8 +598,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                   key={value}
                   style={[
                     styles.quickAmountButton,
-                    amount === String(value) &&
-                      styles.quickAmountButtonSelected,
+                    amount === String(value) && styles.quickAmountButtonSelected,
                   ]}
                   onPress={() => setAmount(String(value))}
                   disabled={loading}
@@ -659,8 +606,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                   <Text
                     style={[
                       styles.quickAmountText,
-                      amount === String(value) &&
-                        styles.quickAmountTextSelected,
+                      amount === String(value) && styles.quickAmountTextSelected,
                     ]}
                   >
                     {formatCurrency(value)}
@@ -674,9 +620,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         {/* TRANSACTION PIN */}
         {customer && status !== 'success' && status !== 'pending' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Transaction PIN
-            </Text>
+            <Text style={styles.sectionTitle}>Transaction PIN</Text>
 
             <TextInput
               style={styles.pinInput}
@@ -703,8 +647,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
           <TouchableOpacity
             style={[
               styles.payButton,
-              (!isAmountValid || !isPinValid || loading) &&
-                styles.disabledButton,
+              (!isAmountValid || !isPinValid || loading) && styles.disabledButton,
             ]}
             onPress={handlePay}
             disabled={!isAmountValid || !isPinValid || loading}
@@ -727,10 +670,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               <Text style={styles.resultIconText}>✓</Text>
             </View>
 
-            <Text style={styles.resultTitle}>
-              Payment Successful
-            </Text>
-
+            <Text style={styles.resultTitle}>Payment Successful</Text>
             <Text style={styles.resultDescription}>
               Your electricity payment has been completed successfully.
             </Text>
@@ -738,54 +678,38 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             <View style={styles.resultDetails}>
               <View style={styles.resultRow}>
                 <Text style={styles.resultLabel}>Amount</Text>
-                <Text style={styles.resultValue}>
-                  {formatCurrency(numericAmount)}
-                </Text>
+                <Text style={styles.resultValue}>{formatCurrency(numericAmount)}</Text>
               </View>
 
               <View style={styles.resultRow}>
                 <Text style={styles.resultLabel}>Provider</Text>
-                <Text style={styles.resultValue}>
-                  {selectedProvider?.name}
-                </Text>
+                <Text style={styles.resultValue}>{selectedProvider?.name}</Text>
               </View>
 
               <View style={styles.resultRow}>
                 <Text style={styles.resultLabel}>Meter Number</Text>
-                <Text style={styles.resultValue}>
-                  {meterNumber}
-                </Text>
+                <Text style={styles.resultValue}>{meterNumber}</Text>
               </View>
 
               {paymentResult.reference && (
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Reference</Text>
-                  <Text style={styles.resultValue}>
-                    {paymentResult.reference}
-                  </Text>
+                  <Text style={styles.resultValue}>{paymentResult.reference}</Text>
                 </View>
               )}
 
               {paymentResult.units !== undefined && (
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Units</Text>
-                  <Text style={styles.resultValue}>
-                    {paymentResult.units}
-                  </Text>
+                  <Text style={styles.resultValue}>{paymentResult.units}</Text>
                 </View>
               )}
             </View>
 
             {meterType === 'prepaid' && paymentResult.token && (
               <View style={styles.tokenContainer}>
-                <Text style={styles.tokenTitle}>
-                  Electricity Token
-                </Text>
-
-                <Text style={styles.tokenValue}>
-                  {paymentResult.token}
-                </Text>
-
+                <Text style={styles.tokenTitle}>Electricity Token</Text>
+                <Text style={styles.tokenValue}>{paymentResult.token}</Text>
                 <Text style={styles.tokenHint}>
                   Enter this token on your electricity meter.
                 </Text>
@@ -796,9 +720,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               style={styles.newPaymentButton}
               onPress={handleNewPayment}
             >
-              <Text style={styles.newPaymentButtonText}>
-                Make Another Payment
-              </Text>
+              <Text style={styles.newPaymentButtonText}>Make Another Payment</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -810,28 +732,23 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               <Text style={styles.pendingIconText}>⏳</Text>
             </View>
 
-            <Text style={styles.pendingTitle}>
-              Payment Processing
-            </Text>
-
+            <Text style={styles.pendingTitle}>Payment Processing</Text>
             <Text style={styles.pendingDescription}>
-              Your electricity payment has been submitted, but the
-              final status has not yet been confirmed.
+              Your electricity payment has been submitted, but the final status has
+              not yet been confirmed.
             </Text>
 
             <View style={styles.pendingNotice}>
               <Text style={styles.pendingNoticeText}>
-                Do not make another payment yet. Check your transaction
-                history for the final status before retrying.
+                Do not make another payment yet. Check your transaction history for
+                the final status before retrying.
               </Text>
             </View>
 
             {paymentResult?.reference && (
               <View style={styles.resultRow}>
                 <Text style={styles.resultLabel}>Reference</Text>
-                <Text style={styles.resultValue}>
-                  {paymentResult.reference}
-                </Text>
+                <Text style={styles.resultValue}>{paymentResult.reference}</Text>
               </View>
             )}
 
@@ -839,9 +756,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               style={styles.newPaymentButton}
               onPress={handleNewPayment}
             >
-              <Text style={styles.newPaymentButtonText}>
-                Return
-              </Text>
+              <Text style={styles.newPaymentButtonText}>Return</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -849,10 +764,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         {/* FAILED */}
         {status === 'failed' && !customer && (
           <View style={styles.failedNotice}>
-            <Text style={styles.failedNoticeTitle}>
-              Verification unsuccessful
-            </Text>
-
+            <Text style={styles.failedNoticeTitle}>Verification unsuccessful</Text>
             <Text style={styles.failedNoticeText}>
               Please check your meter number and selected provider.
             </Text>
@@ -862,7 +774,6 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         {/* SECURITY FOOTER */}
         <View style={styles.securityFooter}>
           <Text style={styles.securityIcon}>🔒</Text>
-
           <Text style={styles.securityText}>
             Your payment is protected by ZENIMONIES security.
           </Text>
@@ -932,94 +843,145 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  providerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-
-  providerCard: {
-    width: '31.5%',
-    minHeight: 105,
+  // Provider dropdown
+  providerDropdown: {
+    minHeight: 72,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 14,
-    padding: 10,
-    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    justifyContent: 'space-between',
   },
 
-  providerCardSelected: {
-    borderColor: GREEN,
-    borderWidth: 2,
-    backgroundColor: BACKGROUND,
+  providerDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
 
   providerIcon: {
-    width: 34,
-    height: 34,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  providerIconText: {
+    fontSize: 18,
+  },
+
+  providerDropdownText: {
+    flex: 1,
+  },
+
+  providerDropdownName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: BLACK,
+  },
+
+  providerDropdownSub: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 4,
+  },
+
+  placeholderText: {
+    color: MUTED,
+    fontWeight: '600',
+  },
+
+  dropdownArrow: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: DARK_GREEN,
+    paddingHorizontal: 8,
+  },
+
+  providerList: {
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+
+  providerOption: {
+    minHeight: 66,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+
+  providerOptionSelected: {
+    backgroundColor: BACKGROUND,
+  },
+
+  providerOptionIcon: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: BACKGROUND,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 7,
+    marginRight: 12,
   },
 
-  providerIconSelected: {
-    backgroundColor: WHITE,
+  providerOptionDetails: {
+    flex: 1,
   },
 
-  providerIconText: {
-    fontSize: 17,
-  },
-
-  providerIconTextSelected: {
-    color: GREEN,
-  },
-
-  providerName: {
-    fontSize: 11,
-    fontWeight: '800',
+  providerOptionName: {
+    fontSize: 13,
+    fontWeight: '700',
     color: BLACK,
-    textAlign: 'center',
   },
 
-  providerNameSelected: {
+  providerOptionNameSelected: {
     color: DARK_GREEN,
   },
 
-  providerFullName: {
-    fontSize: 9,
+  providerOptionCode: {
+    fontSize: 11,
     color: MUTED,
-    textAlign: 'center',
     marginTop: 3,
   },
 
-  providerFullNameSelected: {
-    color: DARK_GREEN,
-  },
-
-  selectedIndicator: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: GREEN,
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  selectedIndicatorText: {
-    color: WHITE,
-    fontSize: 11,
-    fontWeight: '800',
+  radioOuterSelected: {
+    borderColor: GREEN,
   },
 
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: GREEN,
+  },
+
+  // Prepaid / Postpaid
   meterTypeContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -1027,39 +989,33 @@ const styles = StyleSheet.create({
 
   meterTypeButton: {
     flex: 1,
+    minHeight: 58,
     padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: WHITE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   meterTypeButtonSelected: {
     borderColor: GREEN,
     borderWidth: 2,
-    backgroundColor: BACKGROUND,
+    backgroundColor: WHITE,
   },
 
   meterTypeTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: BLACK,
-    marginBottom: 5,
   },
 
   meterTypeTitleSelected: {
-    color: DARK_GREEN,
+    color: GREEN,
   },
 
-  meterTypeDescription: {
-    fontSize: 11,
-    color: MUTED,
-  },
-
-  meterTypeDescriptionSelected: {
-    color: DARK_GREEN,
-  },
-
+  // Meter number
   input: {
     height: 54,
     borderWidth: 1,
@@ -1090,6 +1046,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 
+  // Customer verification
   customerCard: {
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -1150,6 +1107,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
+  // Amount
   amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1164,7 +1122,7 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 22,
     fontWeight: '800',
-    color: DARK_GREEN,
+    color: GREEN,
     marginRight: 8,
   },
 
@@ -1201,7 +1159,8 @@ const styles = StyleSheet.create({
 
   quickAmountButtonSelected: {
     borderColor: GREEN,
-    backgroundColor: BACKGROUND,
+    borderWidth: 1.5,
+    backgroundColor: WHITE,
   },
 
   quickAmountText: {
@@ -1211,9 +1170,10 @@ const styles = StyleSheet.create({
   },
 
   quickAmountTextSelected: {
-    color: DARK_GREEN,
+    color: GREEN,
   },
 
+  // PIN
   pinInput: {
     height: 54,
     borderWidth: 1,
@@ -1235,6 +1195,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
+  // Payment button
   payButton: {
     height: 56,
     borderRadius: 14,
@@ -1250,6 +1211,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  // Successful payment
   resultCard: {
     backgroundColor: WHITE,
     borderRadius: 18,
@@ -1369,6 +1331,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  // Pending payment
   pendingCard: {
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -1428,8 +1391,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // Failed verification
   failedNotice: {
-    backgroundColor: BACKGROUND,
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 12,
@@ -1450,6 +1414,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
+  // Footer
   securityFooter: {
     flexDirection: 'row',
     alignItems: 'center',
