@@ -2319,20 +2319,20 @@ const styles = StyleSheet.create({
   },
 
   categoryContainer: {
-    paddingVertical: 15,
-    gap: 8,
+    paddingVertical: 12,
+    gap: 6,
   },
 
   categoryButton: {
     borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    borderRadius: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
   },
 
   categoryText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
   },
 
   plansHeader: {
@@ -2347,12 +2347,18 @@ const styles = StyleSheet.create({
   },
 
   plansContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: 9,
   },
 
   planCard: {
-    borderRadius: 14,
-    padding: 13,
+    width: '48.5%',
+    minHeight: 154,
+    borderRadius: 13,
+    padding: 11,
+    justifyContent: 'space-between',
   },
 
   planTop: {
@@ -2366,18 +2372,18 @@ const styles = StyleSheet.create({
   },
 
   planName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '800',
-    lineHeight: 19,
+    lineHeight: 16,
   },
 
   planAllowance: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 10,
+    marginTop: 3,
   },
 
   planValidity: {
-    fontSize: 11,
+    fontSize: 9,
     marginTop: 3,
   },
 
@@ -2387,8 +2393,8 @@ const styles = StyleSheet.create({
   },
 
   planPrice: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
   },
 
   selectedIndicator: {
@@ -2409,30 +2415,31 @@ const styles = StyleSheet.create({
   planBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    gap: 8,
+    marginTop: 8,
+    gap: 5,
+    flexWrap: 'wrap',
   },
 
   planCategoryBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
 
   planCategoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
   },
 
   promoBadge: {
     borderWidth: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
 
   promoText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
   },
 
