@@ -9,14 +9,12 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
-  Image,
 } from 'react-native';
 
 interface TVProvider {
   id: string;
   name: string;
   shortName: string;
-  logo: any;
 }
 
 interface TVPackage {
@@ -73,19 +71,16 @@ const providers: TVProvider[] = [
     id: 'dstv',
     name: 'DStv',
     shortName: 'DStv',
-    logo: require('../../assets/logos/dstv.png'),
   },
   {
     id: 'gotv',
     name: 'GOtv',
     shortName: 'GOtv',
-    logo: require('../../assets/logos/gotv.png'),
   },
   {
     id: 'startimes',
     name: 'StarTimes',
     shortName: 'StarTimes',
-    logo: require('../../assets/logos/startimes.png'),
   },
 ];
 
@@ -554,11 +549,9 @@ export default function TVScreen({
                       styles.providerLogoContainerSelected,
                   ]}
                 >
-                  <Image
-                    source={provider.logo}
-                    style={styles.providerLogo}
-                    resizeMode="contain"
-                  />
+                  <Text style={styles.providerMark}>
+                    {provider.shortName}
+                  </Text>
                 </View>
 
                 {/* PROVIDER NAME */}
@@ -1045,9 +1038,12 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
-  providerLogo: {
+  providerMark: {
+    color: DARK_GREEN,
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
     width: '100%',
-    height: 42,
   },
 
   providerName: {
