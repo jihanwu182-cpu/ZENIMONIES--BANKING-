@@ -986,13 +986,11 @@ const createStyles = (
 
     phoneInput: {
       minHeight: 55,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 0,
       backgroundColor: colors.surface,
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 13,
+      paddingHorizontal: 8,
+      borderWidth: 0,
     },
 
     countryCode: {
@@ -1007,9 +1005,12 @@ const createStyles = (
 
     input: {
       flex: 1,
+      minWidth: 0,
       color: colors.text,
       fontSize: 15,
-      paddingVertical: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 3,
+      borderWidth: 0,
     },
 
     inlineNetworkPicker: {
@@ -1018,10 +1019,11 @@ const createStyles = (
       justifyContent: 'center',
       borderLeftWidth: 1,
       borderLeftColor: colors.border,
-      paddingLeft: 9,
-      marginLeft: 5,
+      paddingLeft: 8,
+      marginLeft: 4,
       minHeight: 42,
-      maxWidth: 125,
+      width: 108,
+      flexShrink: 0,
     },
 
     inlineNetworkLogo: {
