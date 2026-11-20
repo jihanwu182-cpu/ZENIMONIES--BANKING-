@@ -1930,8 +1930,6 @@ const [profileReturnScreen, setProfileReturnScreen] =
          setProfileReturnScreen('settings');
          setScreen('profile');
         }}
-       >
-          onLogout={handleLogout}
         />
       </SafeAreaView>
     );
