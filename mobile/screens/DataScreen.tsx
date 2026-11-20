@@ -1840,7 +1840,7 @@ const theme = {
                     { color: theme.text },
                   ]}
                 >
-                  Transaction Pending
+                  Processing Purchase
                 </Text>
 
                 <Text
@@ -1849,9 +1849,8 @@ const theme = {
                     { color: theme.muted },
                   ]}
                 >
-                  Your transaction has been
-                  submitted but has not yet been
-                  confirmed.
+                  We're confirming your data
+                  purchase. This may take a moment.
                 </Text>
 
                 <View
@@ -1870,10 +1869,10 @@ const theme = {
                       { color: theme.darkGreen },
                     ]}
                   >
-                    Do not purchase this data
-                    bundle again yet. Check your
-                    transaction history for the
-                    final status before retrying.
+                    Please wait for confirmation
+                    before making another purchase.
+                    You can check Transaction History
+                    for updates.
                   </Text>
                 </View>
               </>
