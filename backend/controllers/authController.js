@@ -1820,6 +1820,9 @@ if (!passwordMatches) {
     console.log(
       'LOGIN: password verified'
     );
+   console.log('LOGIN: phone_verified value:', user.phone_verified);
+console.log('LOGIN: phone_verified type:', typeof user.phone_verified);
+console.log('LOGIN: checking phone verification');
   // ========================================================
 // ENFORCE PHONE VERIFICATION
 // ========================================================
