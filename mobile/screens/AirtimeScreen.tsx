@@ -935,7 +935,7 @@ const [pinError, setPinError] = useState('');
           <View style={styles.pinModal}>
             <View style={styles.pinModalHandle} />
 
-            <Text style={styles.pinTitle>>
+            <Text style={styles.pinTitle}>
               Confirm Airtime Purchase
             </Text>
 
