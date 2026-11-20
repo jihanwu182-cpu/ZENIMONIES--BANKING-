@@ -29,6 +29,7 @@ const API_BASE =
 type SettingsScreenProps = {
   onBack: () => void;
   onLogout: () => void;
+  onOpenProfile: () => void;
   token: string;
 };
 
@@ -425,6 +426,7 @@ function normalizeSmsPreferences(
 export default function SettingsScreen({
   onBack,
   onLogout,
+  onOpenProfile,
   token,
 }: SettingsScreenProps) {
   const { colors, preference, setPreference } = useTheme();
@@ -1134,10 +1136,8 @@ export default function SettingsScreen({
     }
 
     if (panel === 'profile') {
-      Alert.alert(
-        'My Profile',
-        'Your personal information is managed from the Profile section of the app.',
-      );
+      onOpenProfile();
+      return;
     }
 
     if (panel === 'close-account') {
@@ -1984,6 +1984,29 @@ export default function SettingsScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {activePanel ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>
+                {getPanelTitle()}
+              </Text>
+
+              <TouchableOpacity
+                onPress={closePanel}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>
+                  ✕
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.panelContent}>
+              {renderPanelContent()}
+            </View>
+          </View>
+        ) : (
+          <>
         {/* GREEN ACCOUNT SETTINGS BANNER */}
 
         <View style={styles.hero}>
@@ -2078,31 +2101,6 @@ export default function SettingsScreen({
           </View>
         ))}
 
-        {/* SELECTED SETTINGS PANEL */}
-
-        {activePanel ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>
-                {getPanelTitle()}
-              </Text>
-
-              <TouchableOpacity
-                onPress={closePanel}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>
-                  ✕
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.panelContent}>
-              {renderPanelContent()}
-            </View>
-          </View>
-        ) : null}
-
         {/* FOOTER */}
          <View style={styles.footer}>
        <Text style={styles.footerText}>
@@ -2113,6 +2111,8 @@ export default function SettingsScreen({
        Version 8.21.0
        </Text>
        </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
