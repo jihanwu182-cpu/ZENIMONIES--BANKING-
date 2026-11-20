@@ -373,7 +373,7 @@ const [pinError, setPinError] = useState('');
           reference,
           message:
             data.message ||
-            'We're completing your Airtime purchase. Please wait; do not purchase again.',
+            'We are completing your Airtime purchase. Please wait; do not purchase again.',
         });
 
         return;
@@ -421,7 +421,7 @@ const [pinError, setPinError] = useState('');
         reference,
         message:
           data.message ||
-          'We're confirming your purchase. Please wait; do not purchase again.',
+          'We are confirming your purchase. Please wait; do not purchase again.',
       });
 
       setPendingReference(reference);
@@ -499,7 +499,7 @@ const [pinError, setPinError] = useState('');
           reference: pendingReference,
           message:
             data.message ||
-            'We're still confirming your purchase. Please wait.',
+            'We are still confirming your purchase. Please wait.',
         });
       }
 
