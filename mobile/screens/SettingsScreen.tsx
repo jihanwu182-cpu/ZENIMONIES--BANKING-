@@ -1350,7 +1350,7 @@ export default function SettingsScreen({
           </View>
         );
 
-      case 'transaction-pin':
+            case 'transaction-pin':
         return (
           <>
             <Text style={styles.bodyText}>
@@ -1368,39 +1368,92 @@ export default function SettingsScreen({
             ) : (
               <View style={styles.statusCard}>
                 {renderStatus(
-          {transactionPinStatus?.exists
-            ? renderTransactionPinInput(
-      'Current Transaction PIN',
-      transactionPinForm.current,
-      value =>
-        setTransactionPinForm(previous => ({
-          ...previous,
-          current: value,
-        })),
-    )
-  : null}
+                  'Transaction PIN',
+                  transactionPinStatus?.exists
+                    ? 'Set up'
+                    : 'Not set up',
+                  Boolean(transactionPinStatus?.exists),
+                )}
 
-{renderTransactionPinInput(
-  transactionPinStatus?.exists
-    ? 'New Transaction PIN'
-    : 'Create Transaction PIN',
-  transactionPinForm.newPin,
-  value =>
-    setTransactionPinForm(previous => ({
-      ...previous,
-      newPin: value,
-    })),
-)}
+                {renderStatus(
+                  'Security status',
+                  transactionPinStatus?.locked
+                    ? 'Temporarily locked'
+                    : 'Active',
+                  !transactionPinStatus?.locked,
+                )}
 
-{renderTransactionPinInput(
-  'Confirm Transaction PIN',
-  transactionPinForm.confirm,
-  value =>
-    setTransactionPinForm(previous => ({
-      ...previous,
-      confirm: value,
-    })),
-)}
+                {renderStatus(
+                  'Failed attempts',
+                  String(
+                    transactionPinStatus?.failedAttempts ?? 0,
+                  ),
+                )}
+
+                {transactionPinStatus?.lockedUntil
+                  ? renderStatus(
+                      'Locked until',
+                      formatDate(
+                        transactionPinStatus.lockedUntil,
+                      ),
+                    )
+                  : null}
+
+                {transactionPinStatus?.lastUsedAt
+                  ? renderStatus(
+                      'Last used',
+                      formatDate(
+                        transactionPinStatus.lastUsedAt,
+                      ),
+                    )
+                  : null}
+              </View>
+            )}
+
+            {transactionPinStatus?.exists
+              ? renderTransactionPinInput(
+                  'Current Transaction PIN',
+                  transactionPinForm.current,
+                  value =>
+                    setTransactionPinForm(previous => ({
+                      ...previous,
+                      current: value,
+                    })),
+                )
+              : null}
+
+            {renderTransactionPinInput(
+              transactionPinStatus?.exists
+                ? 'New Transaction PIN'
+                : 'Create Transaction PIN',
+              transactionPinForm.newPin,
+              value =>
+                setTransactionPinForm(previous => ({
+                  ...previous,
+                  newPin: value,
+                })),
+            )}
+
+            {renderTransactionPinInput(
+              'Confirm Transaction PIN',
+              transactionPinForm.confirm,
+              value =>
+                setTransactionPinForm(previous => ({
+                  ...previous,
+                  confirm: value,
+                })),
+            )}
+
+            {renderButton(
+              transactionPinStatus?.exists
+                ? 'Change Transaction PIN'
+                : 'Set Up Transaction PIN',
+              submitTransactionPin,
+              savingTransactionPin,
+              Boolean(transactionPinStatus?.locked),
+            )}
+          </>
+        );
       
       case 'login-settings':
         return (
