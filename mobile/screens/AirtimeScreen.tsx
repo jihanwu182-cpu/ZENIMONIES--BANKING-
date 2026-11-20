@@ -243,8 +243,8 @@ const [pinError, setPinError] = useState('');
 
     if (pendingReference) {
       Alert.alert(
-        'Transaction pending',
-        'Please check the status of your previous transaction before making another purchase.'
+        'Purchase processing',
+        'Your previous purchase is still being confirmed. Please wait before making another purchase.'
       );
       return;
     }
@@ -373,7 +373,7 @@ const [pinError, setPinError] = useState('');
           reference,
           message:
             data.message ||
-            'Your Airtime purchase is being processed. Please do not purchase again.',
+            'We're completing your Airtime purchase. Please wait; do not purchase again.',
         });
 
         return;
@@ -421,7 +421,7 @@ const [pinError, setPinError] = useState('');
         reference,
         message:
           data.message ||
-          'Your transaction requires confirmation. Please do not retry.',
+          'We're confirming your purchase. Please wait; do not purchase again.',
       });
 
       setPendingReference(reference);
@@ -499,7 +499,7 @@ const [pinError, setPinError] = useState('');
           reference: pendingReference,
           message:
             data.message ||
-            'The transaction is still awaiting confirmation.',
+            'We're still confirming your purchase. Please wait.',
         });
       }
 
@@ -721,7 +721,7 @@ const [pinError, setPinError] = useState('');
                 ? 'Purchase successful'
                 : result.status === 'failed'
                 ? 'Purchase failed'
-                : 'Purchase pending'}
+                : 'Processing purchase'}
             </Text>
 
             <Text style={styles.resultMessage}>
@@ -789,7 +789,7 @@ const [pinError, setPinError] = useState('');
         >
           <Text style={styles.continueText}>
             {pendingReference
-              ? 'Transaction pending'
+              ? 'Processing…'
               : 'Continue'}
           </Text>
 
