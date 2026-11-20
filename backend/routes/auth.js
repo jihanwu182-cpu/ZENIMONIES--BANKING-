@@ -120,7 +120,34 @@ router.post(
   registrationCompleteLimit,
   completeRegistration
 );
+// ============================================================
+// AUTHENTICATION RATE LIMITS
+// ============================================================
 
+// Login: 10 requests per 15 minutes per IP and email.
+const loginLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 10,
+  bucket: 'auth-login',
+  identityField: 'email',
+  maxIdentityRequests: 10,
+});
+
+// Forgot password: 5 requests per 15 minutes per IP and email.
+const forgotPasswordLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 5,
+  bucket: 'auth-forgot-password',
+  identityField: 'email',
+  maxIdentityRequests: 5,
+});
+
+// Reset password: 10 requests per 15 minutes per IP.
+const resetPasswordLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 10,
+  bucket: 'auth-reset-password',
+});
 // ============================================================
 // EXISTING PUBLIC AUTH ROUTES
 // ============================================================
