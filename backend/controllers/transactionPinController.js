@@ -67,13 +67,15 @@ const handleTransactionPinError = (
     statusMap[error?.code] || 500;
 
   const response = {
-    success: false,
+  success: false,
 
-    message:
-      error?.message ||
-      fallbackMessage ||
-      'An error occurred while processing the Transaction PIN.',
-  };
+  code: error?.code || 'TRANSACTION_PIN_ERROR',
+
+  message:
+    error?.message ||
+    fallbackMessage ||
+    'An error occurred while processing the Transaction PIN.',
+};
 
   if (
     error?.failedAttempts !==
