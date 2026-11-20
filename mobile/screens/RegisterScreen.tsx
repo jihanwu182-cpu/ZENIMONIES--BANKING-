@@ -15,6 +15,12 @@ import colors from '../theme/colors';
 import PrimaryButton from '../components/PrimaryButton';
 
 const API_URL = 'https://zenimonies-banking.onrender.com/api/auth';
+const REQUEST_TIMEOUT_MS = 25000;
+const OTP_LENGTH = 6;
+
+// ============================================================
+// TYPES
+// ============================================================
 
 type RegistrationStep =
   | 'phone'
@@ -55,6 +61,51 @@ type RegisterScreenProps = {
   ) => void;
 };
 
+type ApiError = Error & {
+  retryAfter?: number;
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+const normalizeNigerianPhone = (value: string): string => {
+  let digits = value.replace(/\D/g, '');
+
+  if (digits.startsWith('234')) {
+    digits = `0${digits.slice(3)}`;
+  }
+
+  if (digits.length === 10 && !digits.startsWith('0')) {
+    digits = `0${digits}`;
+  }
+
+  return digits;
+};
+
+const isValidNigerianPhone = (value: string): boolean => {
+  const normalized = normalizeNigerianPhone(value);
+
+  // Nigerian mobile numbers in local format:
+  // 11 digits, beginning with 070–079, 080–089, or 090–099.
+  return /^0[789]\d{9}$/.test(normalized);
+};
+
+const numericOnly = (value: string, maxLength: number): string =>
+  value.replace(/\D/g, '').slice(0, maxLength);
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'Unable to complete this step. Please try again.';
+};
+
+// ============================================================
+// SCREEN
+// ============================================================
+
 export default function RegisterScreen({
   onRegistrationSuccess,
 }: RegisterScreenProps) {
@@ -85,13 +136,13 @@ export default function RegisterScreen({
   useEffect(() => {
     if (resendSeconds <= 0) return;
 
-    const timer = setInterval(() => {
+    const timer = setTimeout(() => {
       setResendSeconds((previous) =>
         Math.max(0, previous - 1)
       );
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, [resendSeconds]);
 
   // ============================================================
@@ -102,51 +153,95 @@ export default function RegisterScreen({
     endpoint: string,
     body: Record<string, string>
   ) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
 
-    let data: any;
+    const timeout = setTimeout(
+      () => controller.abort(),
+      REQUEST_TIMEOUT_MS
+    );
 
     try {
-      data = await response.json();
-    } catch {
-      throw new Error(
-        'The server returned an invalid response.'
-      );
-    }
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    if (!response.ok || data.success !== true) {
-      const error: any = new Error(
-        data.message ||
-          'Something went wrong. Please try again.'
-      );
+      let data: any = {};
 
-      error.retryAfter = data.retry_after_seconds;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          'The server returned an invalid response. Please try again.'
+        );
+      }
+
+      if (!response.ok || data?.success !== true) {
+        const error = new Error(
+          data?.message ||
+            data?.error ||
+            `Request failed (${response.status}). Please try again.`
+        ) as ApiError;
+
+        const retryAfter = Number(data?.retry_after_seconds);
+
+        if (
+          Number.isFinite(retryAfter) &&
+          retryAfter > 0
+        ) {
+          error.retryAfter = retryAfter;
+        }
+
+        throw error;
+      }
+
+      return data;
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        throw new Error(
+          'The request timed out. Please check your internet connection and try again.'
+        );
+      }
+
+      if (
+        error instanceof TypeError ||
+        error?.message?.toLowerCase().includes('network request failed')
+      ) {
+        throw new Error(
+          'Unable to connect to ZENIMONIES. Check your internet connection and try again.'
+        );
+      }
+
       throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return data;
   };
 
   // ============================================================
   // ERROR HANDLER
   // ============================================================
 
-  const handleError = (error: any) => {
-    if (error.retryAfter) {
-      setResendSeconds(Number(error.retryAfter));
+  const handleError = (error: unknown) => {
+    const apiError = error as ApiError;
+
+    if (
+      apiError?.retryAfter &&
+      Number.isFinite(Number(apiError.retryAfter))
+    ) {
+      setResendSeconds(
+        Math.max(0, Number(apiError.retryAfter))
+      );
     }
 
     Alert.alert(
       'Registration',
-      error.message ||
-        'Unable to complete this step. Please try again.'
+      getErrorMessage(error)
     );
   };
 
@@ -155,17 +250,17 @@ export default function RegisterScreen({
   // ============================================================
 
   const startPhoneVerification = async () => {
-    const cleanPhone = phone.trim();
+    if (loading) return;
 
-    if (
-      !/^(\+234|234|0)?[0-9\s()-]{10,15}$/.test(cleanPhone)
-    ) {
+    if (!isValidNigerianPhone(phone)) {
       Alert.alert(
         'Invalid phone number',
-        'Enter a valid Nigerian phone number, for example 08012345678.'
+        'Enter a valid Nigerian mobile number, for example 08012345678.'
       );
       return;
     }
+
+    const cleanPhone = normalizeNigerianPhone(phone);
 
     setLoading(true);
 
@@ -174,9 +269,13 @@ export default function RegisterScreen({
         phone: cleanPhone,
       });
 
+      setPhone(cleanPhone);
+      setPhoneVerified(false);
+      setEmailVerified(false);
+      setEmail('');
       setOtp('');
-      setStep('phoneOtp');
       setResendSeconds(60);
+      setStep('phoneOtp');
 
       if (data.development_otp) {
         Alert.alert(
@@ -201,10 +300,22 @@ export default function RegisterScreen({
   // ============================================================
 
   const verifyPhone = async () => {
-    if (!/^\d{6}$/.test(otp.trim())) {
+    if (loading) return;
+
+    const cleanOtp = numericOnly(otp, OTP_LENGTH);
+
+    if (!/^\d{6}$/.test(cleanOtp)) {
       Alert.alert(
         'Invalid code',
         'Enter the six-digit code sent to your phone.'
+      );
+      return;
+    }
+
+    if (!isValidNigerianPhone(phone)) {
+      Alert.alert(
+        'Invalid phone number',
+        'Please return and enter a valid Nigerian mobile number.'
       );
       return;
     }
@@ -213,8 +324,8 @@ export default function RegisterScreen({
 
     try {
       await request('/registration/phone/verify', {
-        phone: phone.trim(),
-        otp: otp.trim(),
+        phone: normalizeNigerianPhone(phone),
+        otp: cleanOtp,
       });
 
       setPhoneVerified(true);
@@ -238,6 +349,8 @@ export default function RegisterScreen({
   // ============================================================
 
   const startEmailVerification = async () => {
+    if (loading) return;
+
     const cleanEmail = email.trim().toLowerCase();
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -260,14 +373,15 @@ export default function RegisterScreen({
 
     try {
       const data = await request('/registration/email', {
-        phone: phone.trim(),
+        phone: normalizeNigerianPhone(phone),
         email: cleanEmail,
       });
 
       setEmail(cleanEmail);
+      setEmailVerified(false);
       setOtp('');
-      setStep('emailOtp');
       setResendSeconds(60);
+      setStep('emailOtp');
 
       if (data.development_otp) {
         Alert.alert(
@@ -292,10 +406,30 @@ export default function RegisterScreen({
   // ============================================================
 
   const verifyEmail = async () => {
-    if (!/^\d{6}$/.test(otp.trim())) {
+    if (loading) return;
+
+    const cleanOtp = numericOnly(otp, OTP_LENGTH);
+
+    if (!/^\d{6}$/.test(cleanOtp)) {
       Alert.alert(
         'Invalid code',
         'Enter the six-digit code sent to your email.'
+      );
+      return;
+    }
+
+    if (!phoneVerified) {
+      Alert.alert(
+        'Phone verification required',
+        'Your phone number must be verified first.'
+      );
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert(
+        'Invalid email',
+        'Please return and enter a valid email address.'
       );
       return;
     }
@@ -304,9 +438,9 @@ export default function RegisterScreen({
 
     try {
       await request('/registration/email/verify', {
-        phone: phone.trim(),
+        phone: normalizeNigerianPhone(phone),
         email: email.trim().toLowerCase(),
-        otp: otp.trim(),
+        otp: cleanOtp,
       });
 
       setEmailVerified(true);
@@ -330,23 +464,29 @@ export default function RegisterScreen({
   // ============================================================
 
   const resendCode = async () => {
-    if (resendSeconds > 0 || loading) return;
+    if (loading || resendSeconds > 0) return;
+
+    if (step !== 'phoneOtp' && step !== 'emailOtp') {
+      return;
+    }
 
     setLoading(true);
 
     try {
-      const endpoint =
-        step === 'phoneOtp'
-          ? '/registration/phone'
-          : '/registration/email';
+      const isPhoneStep = step === 'phoneOtp';
 
-const body: Record<string, string> =
-  step === 'phoneOtp'
-    ? { phone: phone.trim() }
-    : {
-        phone: phone.trim(),
-        email: email.trim().toLowerCase(),
-      };
+      const endpoint = isPhoneStep
+        ? '/registration/phone'
+        : '/registration/email';
+
+      const body: Record<string, string> = isPhoneStep
+        ? {
+            phone: normalizeNigerianPhone(phone),
+          }
+        : {
+            phone: normalizeNigerianPhone(phone),
+            email: email.trim().toLowerCase(),
+          };
 
       const data = await request(endpoint, body);
 
@@ -361,7 +501,9 @@ const body: Record<string, string> =
       } else {
         Alert.alert(
           'Code resent',
-          'A new verification code has been sent.'
+          isPhoneStep
+            ? 'A new phone verification code has been sent.'
+            : 'A new email verification code has been sent.'
         );
       }
     } catch (error) {
@@ -376,6 +518,8 @@ const body: Record<string, string> =
   // ============================================================
 
   const completeRegistration = async () => {
+    if (loading) return;
+
     if (!phoneVerified || !emailVerified) {
       Alert.alert(
         'Verification required',
@@ -399,6 +543,18 @@ const body: Record<string, string> =
       return;
     }
 
+    if (
+      cleanFirstName.length > 100 ||
+      cleanMiddleName.length > 100 ||
+      cleanSurname.length > 100
+    ) {
+      Alert.alert(
+        'Name too long',
+        'Please shorten your name and try again.'
+      );
+      return;
+    }
+
     if (password.length < 8 || password.length > 128) {
       Alert.alert(
         'Invalid password',
@@ -415,22 +571,35 @@ const body: Record<string, string> =
       return;
     }
 
+    if (!isValidNigerianPhone(phone)) {
+      Alert.alert(
+        'Invalid phone number',
+        'Your phone number is invalid. Please restart registration.'
+      );
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert(
+        'Invalid email',
+        'Your email address is invalid. Please restart registration.'
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const data = await request(
-        '/registration/complete',
-        {
-          phone: phone.trim(),
-          first_name: cleanFirstName,
-          middle_name: cleanMiddleName,
-          surname: cleanSurname,
-          password,
-        }
-      );
+      const data = await request('/registration/complete', {
+        phone: normalizeNigerianPhone(phone),
+        first_name: cleanFirstName,
+        middle_name: cleanMiddleName,
+        surname: cleanSurname,
+        password,
+      });
 
-      // The account has been created successfully.
-      // Do not repeat registration if session creation fails.
+      // Account creation has succeeded.
+      // Do not attempt registration again if session setup is incomplete.
       setPassword('');
       setConfirmPassword('');
       setOtp('');
@@ -473,6 +642,44 @@ const body: Record<string, string> =
       handleError(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // BACK NAVIGATION
+  // ============================================================
+
+  const goBack = () => {
+    if (loading) return;
+
+    setOtp('');
+    setResendSeconds(0);
+
+    switch (step) {
+      case 'phoneOtp':
+        setPhoneVerified(false);
+        setStep('phone');
+        break;
+
+      case 'email':
+        setPhoneVerified(false);
+        setEmailVerified(false);
+        setEmail('');
+        setStep('phone');
+        break;
+
+      case 'emailOtp':
+        setEmailVerified(false);
+        setStep('email');
+        break;
+
+      case 'profile':
+        setEmailVerified(false);
+        setStep('email');
+        break;
+
+      default:
+        break;
     }
   };
 
@@ -570,6 +777,8 @@ const body: Record<string, string> =
           </Text>
         </View>
 
+        {/* PROGRESS */}
+
         <View style={styles.progressArea}>
           <View style={styles.progressLabels}>
             <Text style={styles.progressText}>
@@ -621,6 +830,8 @@ const body: Record<string, string> =
           </View>
         </View>
 
+        {/* FORM */}
+
         <View style={styles.form}>
           {/* PHONE */}
 
@@ -662,11 +873,11 @@ const body: Record<string, string> =
               {renderField(
                 'Six-digit phone code',
                 otp,
-                setOtp,
+                (value) => setOtp(numericOnly(value, OTP_LENGTH)),
                 '000000',
                 {
                   keyboardType: 'number-pad',
-                  maxLength: 6,
+                  maxLength: OTP_LENGTH,
                 }
               )}
 
@@ -713,6 +924,7 @@ const body: Record<string, string> =
                 {
                   keyboardType: 'email-address',
                   autoCapitalize: 'none',
+                  maxLength: 254,
                 }
               )}
 
@@ -745,11 +957,11 @@ const body: Record<string, string> =
               {renderField(
                 'Six-digit email code',
                 otp,
-                setOtp,
+                (value) => setOtp(numericOnly(value, OTP_LENGTH)),
                 '000000',
                 {
                   keyboardType: 'number-pad',
-                  maxLength: 6,
+                  maxLength: OTP_LENGTH,
                 }
               )}
 
@@ -796,21 +1008,24 @@ const body: Record<string, string> =
                 'First name',
                 firstName,
                 setFirstName,
-                'Enter your first name'
+                'Enter your first name',
+                { maxLength: 100 }
               )}
 
               {renderField(
                 'Middle name (optional)',
                 middleName,
                 setMiddleName,
-                'Enter your middle name'
+                'Enter your middle name',
+                { maxLength: 100 }
               )}
 
               {renderField(
                 'Surname',
                 surname,
                 setSurname,
-                'Enter your surname'
+                'Enter your surname',
+                { maxLength: 100 }
               )}
 
               <View style={styles.field}>
@@ -827,6 +1042,7 @@ const body: Record<string, string> =
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  maxLength={128}
                 />
 
                 <Text
@@ -849,6 +1065,7 @@ const body: Record<string, string> =
                 {
                   secureTextEntry: !showPassword,
                   autoCapitalize: 'none',
+                  maxLength: 128,
                 }
               )}
 
@@ -863,6 +1080,20 @@ const body: Record<string, string> =
                 loading={loading}
               />
             </>
+          )}
+
+          {/* BACK BUTTON */}
+
+          {step !== 'phone' && (
+            <Text
+              style={[
+                styles.link,
+                loading && styles.disabledLink,
+              ]}
+              onPress={goBack}
+            >
+              ← Go back
+            </Text>
           )}
 
           <Text style={styles.securityNote}>
@@ -1020,6 +1251,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     paddingVertical: 5,
+  },
+  disabledLink: {
+    opacity: 0.4,
   },
   securityNote: {
     textAlign: 'center',
