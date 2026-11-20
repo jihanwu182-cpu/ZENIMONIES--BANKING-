@@ -1192,45 +1192,46 @@ export default function SettingsScreen({
   // ==========================================================
 
   const renderInput = (
-    label: string,
-    value: string,
-    onChangeText: (value: string) => void,
-    options?: {
-      secure?: boolean;
-      numeric?: boolean;
-      placeholder?: string;
-      multiline?: boolean;
-      maxLength?: number;
-    },
-  ) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
+  label: string,
+  value: string,
+  onChangeText: (value: string) => void,
+  options?: {
+    secure?: boolean;
+    numeric?: boolean;
+    placeholder?: string;
+    multiline?: boolean;
+    maxLength?: number;
+  },
+) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}</Text>
 
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        style={[
-          styles.input,
-          options?.multiline && styles.multilineInput,
-        ]}
-        placeholder={options?.placeholder || label}
-        placeholderTextColor={colors.textMuted}
-        secureTextEntry={Boolean(options?.secure)}
-        keyboardType={
-          options?.numeric ? 'number-pad' : 'default'
-        }
-        maxLength={
-          options?.maxLength ??
-          (options?.numeric ? 6 : undefined)
-        }
-        multiline={Boolean(options?.multiline)}
-        textAlignVertical={
-          options?.multiline ? 'top' : 'center'
-        }
-        autoCapitalize="none"
-      />
-    </View>
-  );
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      style={[
+        styles.input,
+        options?.multiline && styles.multilineInput,
+      ]}
+      placeholder={options?.placeholder || label}
+      placeholderTextColor={colors.textMuted}
+      secureTextEntry={Boolean(options?.secure)}
+      keyboardType={
+        options?.numeric ? 'number-pad' : 'default'
+      }
+      maxLength={options?.maxLength}
+      autoComplete="off"
+      textContentType="none"
+      importantForAutofill="no"
+      multiline={Boolean(options?.multiline)}
+      textAlignVertical={
+        options?.multiline ? 'top' : 'center'
+      }
+      autoCapitalize="none"
+      autoCorrect={false}
+    />
+  </View>
+);
 
   const renderButton = (
     title: string,
