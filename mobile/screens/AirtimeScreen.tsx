@@ -933,9 +933,9 @@ const [pinError, setPinError] = useState('');
           }
         >
           <View style={styles.pinModal}>
-            <View style={styles.modalHandle} />
+            <View style={styles.pinModalHandle} />
 
-            <Text style={styles.pinTitle}>
+            <Text style={styles.pinTitle>>
               Confirm Airtime Purchase
             </Text>
 
@@ -1385,14 +1385,23 @@ const createStyles = (
       backgroundColor: colors.surface,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      paddingHorizontal: 23,
-      paddingTop: 12,
-      paddingBottom: 30,
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 12,
+    },
+
+    pinModalHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+      alignSelf: 'center',
+      marginBottom: 8,
     },
 
     pinTitle: {
       color: colors.text,
-      fontSize: 19,
+      fontSize: 18,
       fontWeight: '900',
       textAlign: 'center',
     },
@@ -1401,13 +1410,13 @@ const createStyles = (
       color: colors.textSecondary,
       fontSize: 11,
       textAlign: 'center',
-      marginTop: 7,
+      marginTop: 4,
     },
 
     pinSummary: {
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: 17,
+      marginTop: 11,
       fontSize: 12,
       fontWeight: '700',
     },
@@ -1415,13 +1424,13 @@ const createStyles = (
     pinAmount: {
       color: colors.text,
       textAlign: 'center',
-      marginTop: 5,
-      fontSize: 25,
+      marginTop: 3,
+      fontSize: 23,
       fontWeight: '900',
     },
 
     pinInput: {
-      height: 53,
+      height: 48,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 12,
@@ -1429,7 +1438,7 @@ const createStyles = (
       textAlign: 'center',
       fontSize: 20,
       letterSpacing: 8,
-      marginTop: 20,
+      marginTop: 12,
       backgroundColor: colors.background,
     },
 
@@ -1442,20 +1451,21 @@ const createStyles = (
       fontSize: 12,
       fontWeight: '700',
       textAlign: 'center',
-      marginTop: 10,
+      marginTop: 6,
     },
 
     confirmButton: {
-      minHeight: 53,
+      minHeight: 49,
       borderRadius: 12,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 17,
+      marginTop: 12,
     },
 
     cancelButton: {
-      padding: 13,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
       alignItems: 'center',
     },
 
