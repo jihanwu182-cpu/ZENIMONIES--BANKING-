@@ -1,4 +1,4 @@
-const bcrypt = require('bcryptjs');
+ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
@@ -268,6 +268,14 @@ const createPhoneOtp = async (
 // CUSTOMER REGISTRATION
 // ============================================================
 const register = async (req, res) => {
+   // LEGACY REGISTRATION DISABLED
+  // All new customers must use staged phone + email verification.
+
+  return res.status(410).json({
+    success: false,
+    code: 'LEGACY_REGISTRATION_DISABLED',
+    message: 'Please use the updated registration process.',
+  });
   let client;
   let transactionOpen = false;
 
