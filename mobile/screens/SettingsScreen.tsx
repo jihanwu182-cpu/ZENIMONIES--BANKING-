@@ -1,5 +1,3 @@
-
-
 import React, {
   useCallback,
   useEffect,
@@ -2147,8 +2145,8 @@ function createStyles(colors: any) {
 
     header: {
       minHeight: 76,
-      paddingHorizontal: 18,
-      paddingVertical: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
@@ -2198,65 +2196,67 @@ function createStyles(colors: any) {
     },
 
     scrollContent: {
-      paddingHorizontal: 16,
-      paddingTop: 0,
-      paddingBottom: 35,
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 28,
+      alignItems: 'stretch',
     },
 
     // HERO
 
     hero: {
-      minHeight: 190,
+      width: '100%',
+      alignSelf: 'stretch',
+      minHeight: 0,
       backgroundColor: colors.primary,
-      borderRadius: 0,
-      borderBottomLeftRadius: 34,
-      borderBottomRightRadius: 34,
-      paddingHorizontal: 22,
-      paddingVertical: 23,
+      borderRadius: 20,
+      paddingHorizontal: 18,
+      paddingVertical: 18,
       justifyContent: 'center',
-      marginBottom: 27,
+      marginBottom: 20,
     },
 
     heroBrand: {
       color: '#D9F3E5',
-      fontSize: 13,
+      fontSize: 11,
       fontWeight: '700',
       letterSpacing: 1,
-      marginBottom: 16,
+      marginBottom: 8,
     },
 
     heroTitle: {
       color: '#FFFFFF',
-      fontSize: 29,
+      fontSize: 24,
       fontWeight: '900',
-      marginBottom: 12,
+      marginBottom: 8,
     },
 
     heroDescription: {
       color: '#E6F6ED',
-      fontSize: 14,
-      lineHeight: 22,
+      fontSize: 12,
+      lineHeight: 17,
       fontWeight: '500',
     },
 
     // SECTION GROUPS
 
     sectionWrapper: {
-      marginBottom: 25,
+      marginBottom: 18,
     },
 
     sectionHeading: {
       color: colors.textSecondary,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '900',
-      letterSpacing: 2,
-      marginBottom: 13,
-      marginLeft: 5,
+      letterSpacing: 1.5,
+      marginBottom: 9,
+      marginLeft: 4,
     },
 
     sectionCard: {
+      width: '100%',
       backgroundColor: colors.surface,
-      borderRadius: 25,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.border,
       overflow: 'hidden',
@@ -2265,9 +2265,9 @@ function createStyles(colors: any) {
     // SETTING ROWS
 
     settingRow: {
-      minHeight: 105,
-      paddingHorizontal: 16,
-      paddingVertical: 16,
+      minHeight: 78,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
       flexDirection: 'row',
       alignItems: 'center',
     },
@@ -2278,13 +2278,13 @@ function createStyles(colors: any) {
     },
 
     settingIcon: {
-      width: 58,
-      height: 58,
-      borderRadius: 19,
+      width: 44,
+      height: 44,
+      borderRadius: 14,
       backgroundColor: colors.backgroundSoft,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 15,
+      marginRight: 10,
       flexShrink: 0,
     },
 
@@ -2315,9 +2315,9 @@ function createStyles(colors: any) {
 
     settingTitle: {
       color: colors.text,
-      fontSize: 17,
+      fontSize: 15,
       fontWeight: '900',
-      marginBottom: 6,
+      marginBottom: 4,
     },
 
     dangerTitle: {
@@ -2326,8 +2326,8 @@ function createStyles(colors: any) {
 
     settingDescription: {
       color: colors.textSecondary,
-      fontSize: 13,
-      lineHeight: 19,
+      fontSize: 12,
+      lineHeight: 17,
       fontWeight: '500',
     },
 
@@ -2341,18 +2341,20 @@ function createStyles(colors: any) {
     // PANEL
 
     panel: {
+      width: '100%',
+      alignSelf: 'stretch',
       backgroundColor: colors.surface,
-      borderRadius: 22,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.border,
-      marginTop: 5,
-      marginBottom: 22,
+      marginTop: 4,
+      marginBottom: 18,
       overflow: 'hidden',
     },
 
     panelHeader: {
-      minHeight: 64,
-      paddingHorizontal: 17,
+      minHeight: 54,
+      paddingHorizontal: 13,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -2384,16 +2386,16 @@ function createStyles(colors: any) {
     },
 
     panelContent: {
-      padding: 17,
+      padding: 13,
     },
 
     // TEXT
 
     bodyText: {
       color: colors.textSecondary,
-      fontSize: 13,
-      lineHeight: 21,
-      marginBottom: 14,
+      fontSize: 12,
+      lineHeight: 19,
+      marginBottom: 11,
     },
 
     subheading: {
@@ -2407,10 +2409,10 @@ function createStyles(colors: any) {
 
     statusCard: {
       backgroundColor: colors.backgroundSoft,
-      borderRadius: 13,
-      paddingHorizontal: 13,
-      paddingVertical: 5,
-      marginBottom: 16,
+      borderRadius: 11,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginBottom: 12,
     },
 
     statusRow: {
@@ -2455,7 +2457,8 @@ function createStyles(colors: any) {
     },
 
     input: {
-      minHeight: 49,
+      width: '100%',
+      minHeight: 46,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 11,
@@ -2466,13 +2469,14 @@ function createStyles(colors: any) {
     },
 
     multilineInput: {
-      minHeight: 120,
-      paddingTop: 13,
+      minHeight: 100,
+      paddingTop: 11,
     },
 
     // BUTTONS
 
     primaryButton: {
+      width: '100%',
       minHeight: 50,
       backgroundColor: colors.primary,
       borderRadius: 12,
@@ -2514,9 +2518,9 @@ function createStyles(colors: any) {
 
     infoBox: {
       backgroundColor: colors.backgroundSoft,
-      borderRadius: 12,
-      padding: 14,
-      marginVertical: 9,
+      borderRadius: 10,
+      padding: 11,
+      marginVertical: 7,
     },
 
     divider: {
