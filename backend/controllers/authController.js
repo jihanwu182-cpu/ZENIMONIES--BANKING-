@@ -2044,20 +2044,9 @@ try {
 
 
     return res.status(500).json({
-
-      success: false,
-
-      message:
-        'LOGIN_DATABASE_OR_SERVER_ERROR',
-
-      error_code:
-        error?.code ||
-        'UNKNOWN_ERROR',
-
-      error_detail:
-        error?.message ||
-        'Unknown server error',
-    });
+  success: false,
+  message: 'Unable to log in right now. Please try again later.',
+});
   }
 };
 
