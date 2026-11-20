@@ -159,24 +159,23 @@ router.post(
   register
 );
 
-// Login
 router.post(
   '/login',
+  loginLimit,
   login
 );
 
-// Forgot password
 router.post(
   '/forgot-password',
+  forgotPasswordLimit,
   forgotPassword
 );
 
-// Reset password
 router.post(
   '/reset-password',
+  resetPasswordLimit,
   resetPassword
 );
-
 // ============================================================
 // PROTECTED AUTH ROUTES
 // ============================================================
