@@ -1368,99 +1368,40 @@ export default function SettingsScreen({
             ) : (
               <View style={styles.statusCard}>
                 {renderStatus(
-                  'Transaction PIN',
-                  transactionPinStatus?.exists
-                    ? 'Set up'
-                    : 'Not set up',
-                  Boolean(transactionPinStatus?.exists),
-                )}
+          {transactionPinStatus?.exists
+            ? renderTransactionPinInput(
+      'Current Transaction PIN',
+      transactionPinForm.current,
+      value =>
+        setTransactionPinForm(previous => ({
+          ...previous,
+          current: value,
+        })),
+    )
+  : null}
 
-                {renderStatus(
-                  'Security status',
-                  transactionPinStatus?.locked
-                    ? 'Temporarily locked'
-                    : 'Active',
-                  !transactionPinStatus?.locked,
-                )}
+{renderTransactionPinInput(
+  transactionPinStatus?.exists
+    ? 'New Transaction PIN'
+    : 'Create Transaction PIN',
+  transactionPinForm.newPin,
+  value =>
+    setTransactionPinForm(previous => ({
+      ...previous,
+      newPin: value,
+    })),
+)}
 
-                {renderStatus(
-                  'Failed attempts',
-                  String(
-                    transactionPinStatus?.failedAttempts ?? 0,
-                  ),
-                )}
-
-                {transactionPinStatus?.lockedUntil
-                  ? renderStatus(
-                      'Locked until',
-                      formatDate(
-                        transactionPinStatus.lockedUntil,
-                      ),
-                    )
-                  : null}
-              </View>
-            )}
-
-            {transactionPinStatus?.exists
-              ? renderInput(
-                  'Current Transaction PIN',
-                  transactionPinForm.current,
-                  value =>
-                    setTransactionPinForm(previous => ({
-                      ...previous,
-                      current: value.replace(/\D/g, '').slice(0, 4),
-                    })),
-                  {
-                    secure: true,
-                    numeric: true,
-                    maxLength: 4,
-                  },
-                )
-              : null}
-
-            {renderInput(
-              transactionPinStatus?.exists
-                ? 'New Transaction PIN'
-                : 'Create Transaction PIN',
-              transactionPinForm.newPin,
-              value =>
-                setTransactionPinForm(previous => ({
-                  ...previous,
-                  newPin: value.replace(/\D/g, '').slice(0, 4),
-                })),
-              {
-                secure: true,
-                numeric: true,
-                maxLength: 4,
-              },
-            )}
-
-            {renderInput(
-              'Confirm Transaction PIN',
-              transactionPinForm.confirm,
-              value =>
-                setTransactionPinForm(previous => ({
-                  ...previous,
-                  confirm: value.replace(/\D/g, '').slice(0, 4),
-                })),
-              {
-                secure: true,
-                numeric: true,
-                maxLength: 4,
-              },
-            )}
-
-            {renderButton(
-              transactionPinStatus?.exists
-                ? 'Change Transaction PIN'
-                : 'Set Up Transaction PIN',
-              submitTransactionPin,
-              savingTransactionPin,
-              Boolean(transactionPinStatus?.locked),
-            )}
-          </>
-        );
-
+{renderTransactionPinInput(
+  'Confirm Transaction PIN',
+  transactionPinForm.confirm,
+  value =>
+    setTransactionPinForm(previous => ({
+      ...previous,
+      confirm: value,
+    })),
+)}
+      
       case 'login-settings':
         return (
           <>
