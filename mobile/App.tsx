@@ -480,6 +480,9 @@ const getApiErrorMessage = (
 export default function App() {
   const [screen, setScreen] =
     useState<Screen>('welcome');
+  
+const [profileReturnScreen, setProfileReturnScreen] =
+  useState<'home' | 'settings'>('home');
 
   const [session, setSession] =
     useState<AuthSession | null>(null);
@@ -1897,8 +1900,8 @@ export default function App() {
           user={session.user}
           account={account}
           onBack={() =>
-            setScreen('home')
-          }
+           setScreen(profileReturnScreen)
+         }
         />
       </SafeAreaView>
     );
@@ -1918,11 +1921,15 @@ export default function App() {
       >
         <StatusBar barStyle="dark-content" />
 
-        <SettingsScreen
-          token={session.token}
-          onBack={() =>
-            setScreen('home')
-          }
+       <SettingsScreen
+         token={session.token}
+         onBack={() => setScreen('home')}
+         onLogout={handleLogout}
+         onOpenProfile={() => {
+         setProfileReturnScreen('settings');
+         setScreen('profile');
+        }}
+       />
           onLogout={handleLogout}
         />
       </SafeAreaView>
