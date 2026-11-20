@@ -429,7 +429,7 @@ export default function SettingsScreen({
   token,
 }: SettingsScreenProps) {
   const { colors, preference, setPreference } = useTheme();
-  const settingsScrollRef = useRef<ScrollView>(null);
+  const settingsScrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   const [activePanel, setActivePanel] =
     useState<PanelKey | null>(null);
