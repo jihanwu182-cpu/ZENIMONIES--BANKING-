@@ -1816,15 +1816,21 @@ if (!passwordMatches) {
     message:
       'Invalid email/phone or password',
   });
-}
-    
-
-
+} 
     console.log(
       'LOGIN: password verified'
     );
+  // ========================================================
+// ENFORCE PHONE VERIFICATION
+// ========================================================
 
-
+if (user.phone_verified !== true) {
+  return res.status(403).json({
+    success: false,
+    code: 'PHONE_VERIFICATION_REQUIRED',
+    message: 'Please verify your phone number before logging in.',
+  });
+}
     // ========================================================
     // CREATE SERVER-SIDE AUTH SESSION
     // ========================================================
