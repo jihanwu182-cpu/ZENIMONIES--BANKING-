@@ -2154,60 +2154,65 @@ const forgotPassword = async (
           'If an account exists for this email address, you will receive a password reset link shortly.',
       });
     }
+// ========================================================
+// START TRANSACTION
+// ========================================================
 
+await client.query('BEGIN');
 
-    // ========================================================
-    // RESET REQUEST COOLDOWN
-    // ========================================================
+// ========================================================
+// LOCK USER ROW TO PREVENT CONCURRENT RESET REQUESTS
+// ========================================================
 
-    const recentReset =
-      await client.query(
-        `
-        SELECT
-          created_at
-        FROM security_tokens
-        WHERE user_id = $1
-          AND token_type = 'password_reset'
-        ORDER BY created_at DESC
-        LIMIT 1
-        `,
-        [user.id]
-      );
+await client.query(
+  `
+  SELECT id
+  FROM users
+  WHERE id = $1
+  FOR UPDATE
+  `,
+  [user.id]
+);
 
+// ========================================================
+// RESET REQUEST COOLDOWN
+// ========================================================
 
-    if (
-      recentReset.rows.length > 0
-    ) {
+const recentReset = await client.query(
+  `
+  SELECT
+    created_at
+  FROM security_tokens
+  WHERE user_id = $1
+    AND token_type = 'password_reset'
+  ORDER BY created_at DESC
+  LIMIT 1
+  `,
+  [user.id]
+);
 
-      const createdAt =
-        new Date(
-          recentReset.rows[0].created_at
-        );
+if (recentReset.rows.length > 0) {
+  const createdAt = new Date(
+    recentReset.rows[0].created_at
+  );
 
+  const secondsSinceCreation = Math.floor(
+    (Date.now() - createdAt.getTime()) / 1000
+  );
 
-      const secondsSinceCreation =
-        Math.floor(
-          (
-            Date.now() -
-            createdAt.getTime()
-          ) / 1000
-        );
+  if (
+    secondsSinceCreation <
+    PASSWORD_RESET_COOLDOWN_SECONDS
+  ) {
+    await client.query('ROLLBACK');
 
-
-      if (
-        secondsSinceCreation <
-        PASSWORD_RESET_COOLDOWN_SECONDS
-      ) {
-
-        return res.status(200).json({
-          success: true,
-          message:
-            'If an account exists for this email address, you will receive a password reset link shortly.',
-        });
-      }
-    }
-
-
+    return res.status(200).json({
+      success: true,
+      message:
+        'If an account exists for this email address, you will receive a password reset link shortly.',
+    });
+  }
+}
     // ========================================================
     // GENERATE SECURE RESET TOKEN
     // ========================================================
@@ -2229,17 +2234,6 @@ const forgotPassword = async (
         60 *
         1000
       );
-
-
-    // ========================================================
-    // START TRANSACTION
-    // ========================================================
-
-    await client.query(
-      'BEGIN'
-    );
-
-
     // ========================================================
     // INVALIDATE PREVIOUS RESET TOKENS
     // ========================================================
