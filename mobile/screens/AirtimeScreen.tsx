@@ -637,7 +637,7 @@ const [pinError, setPinError] = useState('');
                 key={value}
                 onPress={() => {
                   setAmount(String(value));
-                  setCustomAmount('');
+                  setCustomAmount(String(value));
                   setResult(null);
                 }}
                 style={[
@@ -975,8 +975,6 @@ const [pinError, setPinError] = useState('');
               }}
               secureTextEntry
               keyboardType="number-pad"
-              placeholder="4-digit Transaction PIN"
-              placeholderTextColor={colors.textSecondary}
               style={[
                 styles.pinInput,
                 !!pinError && styles.pinInputError,
