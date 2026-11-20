@@ -8,6 +8,7 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -1152,10 +1153,23 @@ export default function SettingsScreen({
     setActivePanel(null);
   };
 
-  const confirmLogout = () => {
+    const confirmLogout = () => {
+    const message =
+      'Are you sure you want to log out of your Zenimonies account?';
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(message);
+
+      if (confirmed) {
+        onLogout();
+      }
+
+      return;
+    }
+
     Alert.alert(
       'Log Out',
-      'Are you sure you want to log out of your Zenimonies account?',
+      message,
       [
         {
           text: 'Cancel',
@@ -1167,6 +1181,9 @@ export default function SettingsScreen({
           onPress: onLogout,
         },
       ],
+      {
+        cancelable: true,
+      },
     );
   };
 
