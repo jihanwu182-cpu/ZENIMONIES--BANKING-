@@ -1,8 +1,10 @@
 
+
 import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -429,6 +431,7 @@ export default function SettingsScreen({
   token,
 }: SettingsScreenProps) {
   const { colors, preference, setPreference } = useTheme();
+  const settingsScrollRef = useRef<ScrollView>(null);
 
   const [activePanel, setActivePanel] =
     useState<PanelKey | null>(null);
@@ -1060,17 +1063,37 @@ export default function SettingsScreen({
       );
     } catch (error: any) {
       const response = error?.response || {};
+      const code = error?.code || response?.code;
 
       if (
-        response?.code === 'PIN_LOCKED' ||
-        error?.code === 'PIN_LOCKED'
+        code === 'TRANSACTION_PIN_LOCKED' ||
+        code === 'PIN_LOCKED'
       ) {
+        await loadTransactionPinStatus();
         Alert.alert(
           'Transaction PIN Locked',
           'Your Transaction PIN is temporarily locked. Please try again after the lock period.',
         );
-
+      } else if (
+        code === 'INCORRECT_TRANSACTION_PIN' ||
+        code === 'INVALID_CURRENT_TRANSACTION_PIN'
+      ) {
+        const remaining =
+          response?.remainingAttempts ??
+          response?.remaining_attempts;
         await loadTransactionPinStatus();
+        Alert.alert(
+          'Incorrect Transaction PIN',
+          remaining !== undefined
+            ? `Your current PIN is incorrect. Remaining attempts: ${remaining}.`
+            : getErrorMessage(error),
+        );
+      } else if (code === 'TRANSACTION_PIN_NOT_SET') {
+        await loadTransactionPinStatus();
+        Alert.alert(
+          'Transaction PIN Not Set',
+          'Please set up your Transaction PIN before continuing.',
+        );
       } else {
         Alert.alert(
           'Transaction PIN Error',
@@ -1961,6 +1984,7 @@ export default function SettingsScreen({
       </View>
 
       <ScrollView
+        ref={settingsScrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -2062,7 +2086,16 @@ export default function SettingsScreen({
         {/* SELECTED SETTINGS PANEL */}
 
         {activePanel ? (
-          <View style={styles.panel}>
+          <View
+            style={styles.panel}
+            onLayout={event => {
+              const panelY = event.nativeEvent.layout.y;
+              settingsScrollRef.current?.scrollTo({
+                y: Math.max(0, panelY - 12),
+                animated: true,
+              });
+            }}
+          >
             <View style={styles.panelHeader}>
               <Text style={styles.panelTitle}>
                 {getPanelTitle()}
