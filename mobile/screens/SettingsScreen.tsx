@@ -1233,6 +1233,34 @@ export default function SettingsScreen({
   </View>
 );
 
+  const renderTransactionPinInput = (
+  label: string,
+  value: string,
+  onChangeText: (value: string) => void,
+) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}</Text>
+
+    <TextInput
+      value={value}
+      onChangeText={(text) => {
+        const digits = text.replace(/\D/g, '').slice(0, 4);
+        onChangeText(digits);
+      }}
+      style={styles.input}
+      placeholder={label}
+      placeholderTextColor={colors.textMuted}
+      secureTextEntry
+      keyboardType="number-pad"
+      maxLength={4}
+      autoComplete="off"
+      importantForAutofill="no"
+      autoCorrect={false}
+      autoCapitalize="none"
+      editable={!savingTransactionPin}
+    />
+  </View>
+);
   const renderButton = (
     title: string,
     onPress: () => void,
