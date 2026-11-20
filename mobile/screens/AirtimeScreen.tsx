@@ -63,16 +63,17 @@ const NETWORKS: NetworkItem[] = [
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
-// Keep the customer's entered national number as-is (with or without the leading 0).
-// If +234 is pasted, remove that country prefix because it is displayed separately.
+// Keep the customer's entered national number as-is
+// (with or without the leading 0).
+// If +234 is pasted, remove that country prefix.
 const normalizePhone = (value: string) => {
   let digits = value.replace(/\D/g, '');
   if (digits.startsWith('234')) digits = digits.slice(3);
   return digits.slice(0, 11);
 };
 
-// Prefix detection uses a temporary 0-prefixed form for 10-digit input,
-// without changing the number stored or sent to the backend.
+// Prefix detection uses a temporary 0-prefixed form
+// for 10-digit input.
 const phoneForDetection = (phone: string) =>
   phone.length === 10 ? `0${phone}` : phone;
 
@@ -119,7 +120,9 @@ const detectNetwork = (phone: string): Network | null => {
   };
 
   if (phone.length < 4) return null;
+
   const detectionPhone = phoneForDetection(phone);
+
   return prefixes[detectionPhone.substring(0, 4)] || null;
 };
 
@@ -145,8 +148,10 @@ export default function AirtimeScreen({
   const [amount, setAmount] = useState('');
   const [customAmount, setCustomAmount] = useState('');
 
+  // Transaction PIN
   const [pin, setPin] = useState('');
   const [pinVisible, setPinVisible] = useState(false);
+  const [pinError, setPinError] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [requerying, setRequerying] = useState(false);
@@ -167,7 +172,8 @@ export default function AirtimeScreen({
 
   const selectedAmount = Number(amount || customAmount);
 
-  const validPhone = /^(?:0[789][01]\d{8}|[789][01]\d{8})$/.test(phone);
+  const validPhone =
+    /^(?:0[789][01]\d{8}|[789][01]\d{8})$/.test(phone);
 
   const selectedNetwork = NETWORKS.find(
     item => item.value === network
@@ -243,21 +249,27 @@ export default function AirtimeScreen({
       return;
     }
 
+    // Reset PIN and error whenever confirmation opens.
+    setPin('');
+    setPinError('');
     setPinVisible(true);
   };
 
+  // ====================================================
+  // CONFIRM AIRTIME PURCHASE
+  // 4-DIGIT TRANSACTION PIN
+  // ====================================================
+
   const confirmPurchase = async () => {
-    if (!/^\d{4,6}$/.test(pin)) {
-      Alert.alert(
-        'Invalid PIN',
-        'Enter your transaction PIN.'
-      );
+    if (!/^\d{4}$/.test(pin)) {
+      setPinError('Enter your 4-digit transaction PIN.');
       return;
     }
 
     if (!network) return;
 
     setLoading(true);
+    setPinError('');
 
     try {
       const response = await fetch(`${API_BASE}/airtime`, {
@@ -277,15 +289,55 @@ export default function AirtimeScreen({
 
       const data = await response.json();
 
-      setPin('');
-      setPinVisible(false);
-
       const transaction = data.transaction || {};
 
       const reference =
         transaction.reference ||
         data.reference ||
         '';
+
+      // ====================================================
+      // INCORRECT TRANSACTION PIN
+      // ====================================================
+
+      const responseMessage = String(
+        data.message || data.error || ''
+      );
+
+      const pinFailure =
+        /incorrect.*pin|invalid.*pin|wrong.*pin|pin.*incorrect|pin.*invalid|transaction pin/i.test(
+          responseMessage
+        );
+
+      if (
+        pinFailure &&
+        !(
+          transaction.status === 'completed' ||
+          data.success === true
+        )
+      ) {
+        // Clear the PIN after a failed attempt.
+        setPin('');
+
+        // Show error and keep modal open.
+        setPinError(
+          'Incorrect transaction PIN. Please try again.'
+        );
+
+        return;
+      }
+
+      // ====================================================
+      // CLEAR PIN AFTER RESPONSE
+      // ====================================================
+
+      setPin('');
+      setPinError('');
+      setPinVisible(false);
+
+      // ====================================================
+      // SUCCESS
+      // ====================================================
 
       if (
         response.status === 200 &&
@@ -303,6 +355,10 @@ export default function AirtimeScreen({
         onComplete?.();
         return;
       }
+
+      // ====================================================
+      // PENDING / RECONCILIATION
+      // ====================================================
 
       if (
         response.status === 202 ||
@@ -323,6 +379,10 @@ export default function AirtimeScreen({
         return;
       }
 
+      // ====================================================
+      // FAILED / REFUNDED
+      // ====================================================
+
       if (
         transaction.status === 'failed' ||
         transaction.status === 'refunded' ||
@@ -340,12 +400,21 @@ export default function AirtimeScreen({
         return;
       }
 
+      // ====================================================
+      // OTHER HTTP ERRORS
+      // ====================================================
+
       if (!response.ok) {
         throw new Error(
           data.message ||
             'Unable to process Airtime purchase.'
         );
       }
+
+      // ====================================================
+      // UNKNOWN STATUS
+      // PROTECT AGAINST DUPLICATE PURCHASES
+      // ====================================================
 
       setResult({
         status: 'pending',
@@ -366,6 +435,10 @@ export default function AirtimeScreen({
       setLoading(false);
     }
   };
+
+  // ====================================================
+  // REQUERY TRANSACTION
+  // ====================================================
 
   const handleRequery = async () => {
     if (!pendingReference || !token) return;
@@ -447,12 +520,19 @@ export default function AirtimeScreen({
     }
   };
 
+  // ====================================================
+  // RESET FORM
+  // ====================================================
+
   const resetForm = () => {
     setPhone('');
     setNetwork(null);
     setManualNetwork(false);
     setAmount('');
     setCustomAmount('');
+    setPin('');
+    setPinError('');
+    setPinVisible(false);
     setResult(null);
     setPendingReference('');
   };
@@ -522,6 +602,7 @@ export default function AirtimeScreen({
                   style={styles.inlineNetworkLogo}
                   resizeMode="contain"
                 />
+
                 <Text style={styles.inlineNetworkName}>
                   {selectedNetwork.label}
                 </Text>
@@ -531,6 +612,7 @@ export default function AirtimeScreen({
                 Network
               </Text>
             )}
+
             <MaterialCommunityIcons
               name="chevron-down"
               size={18}
@@ -538,7 +620,6 @@ export default function AirtimeScreen({
             />
           </TouchableOpacity>
         </View>
-
 
         {/* AMOUNT */}
 
@@ -561,15 +642,13 @@ export default function AirtimeScreen({
                 }}
                 style={[
                   styles.amountItem,
-                  isSelected &&
-                    styles.amountSelected,
+                  isSelected && styles.amountSelected,
                 ]}
               >
                 <Text
                   style={[
                     styles.amountText,
-                    isSelected &&
-                      styles.amountTextSelected,
+                    isSelected && styles.amountTextSelected,
                   ]}
                 >
                   ₦{value.toLocaleString('en-NG')}
@@ -841,6 +920,7 @@ export default function AirtimeScreen({
           if (!loading) {
             setPinVisible(false);
             setPin('');
+            setPinError('');
           }
         }}
       >
@@ -881,29 +961,42 @@ export default function AirtimeScreen({
               })}
             </Text>
 
+            {/* 4-DIGIT TRANSACTION PIN */}
+
             <TextInput
               value={pin}
-              onChangeText={value =>
+              onChangeText={value => {
                 setPin(
                   value
                     .replace(/\D/g, '')
-                    .slice(0, 6)
-                )
-              }
+                    .slice(0, 4)
+                );
+                setPinError('');
+              }}
               secureTextEntry
               keyboardType="number-pad"
-              placeholder="Transaction PIN"
+              placeholder="4-digit Transaction PIN"
               placeholderTextColor={colors.textSecondary}
-              style={styles.pinInput}
-              maxLength={6}
+              style={[
+                styles.pinInput,
+                !!pinError && styles.pinInputError,
+              ]}
+              maxLength={4}
               autoFocus
             />
+
+            {/* PIN ERROR MESSAGE */}
+
+            {!!pinError && (
+              <Text style={styles.pinError}>
+                {pinError}
+              </Text>
+            )}
 
             <TouchableOpacity
               style={[
                 styles.confirmButton,
-                loading &&
-                  styles.disabledButton,
+                loading && styles.disabledButton,
               ]}
               onPress={confirmPurchase}
               disabled={loading}
@@ -923,6 +1016,7 @@ export default function AirtimeScreen({
 
                 setPinVisible(false);
                 setPin('');
+                setPinError('');
               }}
               disabled={loading}
               style={styles.cancelButton}
@@ -1339,6 +1433,18 @@ const createStyles = (
       letterSpacing: 8,
       marginTop: 20,
       backgroundColor: colors.background,
+    },
+
+    pinInputError: {
+      borderColor: '#D64545',
+    },
+
+    pinError: {
+      color: '#D64545',
+      fontSize: 12,
+      fontWeight: '700',
+      textAlign: 'center',
+      marginTop: 10,
     },
 
     confirmButton: {
