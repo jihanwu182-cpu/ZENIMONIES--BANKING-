@@ -149,10 +149,10 @@ export default function AirtimeScreen({
   const [customAmount, setCustomAmount] = useState('');
 
   // Transaction PIN
-  const [pin, setPin] = useState('');
-  const [pinVisible, setPinVisible] = useState(false);
-  const [pinError, setPinError] = useState('');
-
+ const [pin, setPin] = useState('');
+const [pinVisible, setPinVisible] = useState(false);
+const [pinError, setPinError] = useState(''); 
+  
   const [loading, setLoading] = useState(false);
   const [requerying, setRequerying] = useState(false);
 
