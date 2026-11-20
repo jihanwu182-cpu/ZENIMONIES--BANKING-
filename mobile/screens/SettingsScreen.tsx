@@ -30,6 +30,7 @@ const API_BASE =
 type SettingsScreenProps = {
   onBack: () => void;
   onLogout: () => void;
+  onOpenProfile: () => void;
   token: string;
 };
 
@@ -1106,71 +1107,45 @@ export default function SettingsScreen({
   // ==========================================================
   // OPEN PANELS
   // ==========================================================
+const openPanel = (panel: PanelKey) => {
+  if (panel === 'profile') {
+    onOpenProfile();
+    return;
+  }
 
-  const openPanel = (panel: PanelKey) => {
-    setActivePanel(panel);
+  setActivePanel(panel);
 
-    if (panel === 'transaction-pin') {
-      loadTransactionPinStatus();
-    }
+  settingsScrollRef.current?.scrollTo({
+    y: 0,
+    animated: false,
+  });
 
-    if (panel === 'login-settings') {
-      loadPasscodeStatus();
-    }
+  if (panel === 'transaction-pin') {
+    loadTransactionPinStatus();
+  }
 
-    if (panel === 'security-center') {
-      loadPasscodeStatus();
-      loadTransactionPinStatus();
-    }
+  if (panel === 'login-settings') {
+    loadPasscodeStatus();
+  }
 
-    if (panel === 'savings') {
-      loadSavingsSettings();
-    }
+  if (panel === 'security-center') {
+    loadPasscodeStatus();
+    loadTransactionPinStatus();
+  }
 
-    if (panel === 'sms') {
-      loadSmsPreferences();
-    }
+  if (panel === 'savings') {
+    loadSavingsSettings();
+  }
 
-    if (panel === 'feedback') {
-      loadSupportCategories();
-    }
+  if (panel === 'sms') {
+    loadSmsPreferences();
+  }
 
-    if (panel === 'profile') {
-      Alert.alert(
-        'My Profile',
-        'Your personal information is managed from the Profile section of the app.',
-      );
-    }
-
-    if (panel === 'close-account') {
-      Alert.alert(
-        'Close Account',
-        'For account closure assistance, please contact Zenimonies Customer Care so your request can be reviewed securely.',
-      );
-    }
-  };
-
-  const closePanel = () => {
-    setActivePanel(null);
-  };
-
-  const confirmLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of your Zenimonies account?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: onLogout,
-        },
-      ],
-    );
-  };
+  if (panel === 'feedback') {
+    loadSupportCategories();
+  }
+};
+  
 
   // ==========================================================
   // REUSABLE COMPONENTS
@@ -2081,19 +2056,9 @@ export default function SettingsScreen({
           </View>
         ))}
 
-        {/* SELECTED SETTINGS PANEL */}
-
         {activePanel ? (
-          <View
-            style={styles.panel}
-            onLayout={event => {
-              const panelY = event.nativeEvent.layout.y;
-              settingsScrollRef.current?.scrollTo({
-                y: Math.max(0, panelY - 12),
-                animated: true,
-              });
-            }}
-          >
+          /* FOCUSED SETTINGS PANEL */
+          <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <Text style={styles.panelTitle}>
                 {getPanelTitle()}
@@ -2102,6 +2067,7 @@ export default function SettingsScreen({
               <TouchableOpacity
                 onPress={closePanel}
                 style={styles.closeButton}
+                activeOpacity={0.7}
               >
                 <Text style={styles.closeButtonText}>
                   ✕
@@ -2113,23 +2079,114 @@ export default function SettingsScreen({
               {renderPanelContent()}
             </View>
           </View>
-        ) : null}
+        ) : (
+          /* MAIN SETTINGS MENU */
+          <>
+            {/* GREEN ACCOUNT SETTINGS BANNER */}
 
-        {/* FOOTER */}
-         <View style={styles.footer}>
-       <Text style={styles.footerText}>
-       Zenimonies • Secure Digital Banking
-      </Text>
+            <View style={styles.hero}>
+              <Text style={styles.heroBrand}>
+                ZENIMONIES
+              </Text>
 
-      <Text style={styles.footerVersion}>
-       Version 8.21.0
-       </Text>
-       </View>
+              <Text style={styles.heroTitle}>
+                Account Settings
+              </Text>
+
+              <Text style={styles.heroDescription}>
+                Manage your profile, payments, login security,
+                savings and account preferences.
+              </Text>
+            </View>
+
+            {/* SETTINGS GROUPS */}
+
+            {SECTION_ITEMS.map(section => (
+              <View
+                key={section.key}
+                style={styles.sectionWrapper}
+              >
+                <Text style={styles.sectionHeading}>
+                  {section.title}
+                </Text>
+
+                <View style={styles.sectionCard}>
+                  {section.items.map((item, index) => (
+                    <TouchableOpacity
+                      key={`${section.key}-${item.title}`}
+                      style={[
+                        styles.settingRow,
+                        index < section.items.length - 1 &&
+                          styles.settingRowBorder,
+                      ]}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        if (item.action === 'logout') {
+                          confirmLogout();
+                          return;
+                        }
+
+                        if (item.panel) {
+                          openPanel(item.panel);
+                        }
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.settingIcon,
+                          item.danger && styles.dangerIcon,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.settingIconText,
+                            item.danger && styles.dangerIconText,
+                            item.icon === 'SMS' &&
+                              styles.smsIconText,
+                          ]}
+                        >
+                          {item.icon}
+                        </Text>
+                      </View>
+
+                      <View style={styles.settingText}>
+                        <Text
+                          style={[
+                            styles.settingTitle,
+                            item.danger && styles.dangerTitle,
+                          ]}
+                        >
+                          {item.title}
+                        </Text>
+
+                        <Text style={styles.settingDescription}>
+                          {item.description}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.rowChevron}>
+                        ›
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+
+            {/* FOOTER */}
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Zenimonies • Secure Digital Banking
+              </Text>
+
+              <Text style={styles.footerVersion}>
+                Version 8.21.0
+              </Text>
+            </View>
+          </>
+        )}
       </ScrollView>
-    </View>
-  );
-}
-
 // ============================================================
 // STYLES
 // ============================================================
