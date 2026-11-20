@@ -1726,9 +1726,10 @@ const [profileReturnScreen, setProfileReturnScreen] =
     }
 
     if (tab === 'Profile') {
-      setScreen('profile');
-      return;
-    }
+       setProfileReturnScreen('home');
+       setScreen('profile');
+       return;
+     }
 
     if (
       tab === 'History' ||
