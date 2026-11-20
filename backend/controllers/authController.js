@@ -1820,20 +1820,7 @@ if (!passwordMatches) {
     console.log(
       'LOGIN: password verified'
     );
-   console.log('LOGIN: phone_verified value:', user.phone_verified);
-console.log('LOGIN: phone_verified type:', typeof user.phone_verified);
-console.log('LOGIN: checking phone verification');
-  // ========================================================
-// ENFORCE PHONE VERIFICATION
-// ========================================================
-
-if (user.phone_verified !== true) {
-  return res.status(403).json({
-    success: false,
-    code: 'PHONE_VERIFICATION_REQUIRED',
-    message: 'Please verify your phone number before logging in.',
-  });
-}
+ 
     // ========================================================
     // CREATE SERVER-SIDE AUTH SESSION
     // ========================================================
