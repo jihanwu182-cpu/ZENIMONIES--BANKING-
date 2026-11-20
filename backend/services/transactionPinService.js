@@ -150,11 +150,47 @@ const getLockStatus = (record) => {
     lockedUntil,
   };
 };
+// ============================================================
+// RESET EXPIRED TRANSACTION PIN LOCK
+// ============================================================
 
+const resetExpiredPinLock = async (client, record) => {
+  if (!record?.locked_until) {
+    return record;
+  }
+
+  const lockedUntil = new Date(record.locked_until);
+
+  if (
+    !Number.isNaN(lockedUntil.getTime()) &&
+    Date.now() >= lockedUntil.getTime()
+  ) {
+    await client.query(
+      `
+        UPDATE transaction_pins
+        SET
+          failed_attempts = 0,
+          locked_until = NULL,
+          last_failed_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `,
+      [record.id]
+    );
+
+    return {
+      ...record,
+      failed_attempts: 0,
+      locked_until: null,
+      last_failed_at: null,
+    };
+  }
+
+  return record;
+};
 // ============================================================
 // CREATE TRANSACTION PIN
 // ============================================================
-
 const createTransactionPin = async ({
   userId,
   pin,
@@ -162,50 +198,23 @@ const createTransactionPin = async ({
   userAgent,
 }) => {
   if (!userId) {
-    throw new Error(
-      'User ID is required.'
-    );
+    throw new Error('User ID is required.');
   }
 
-  const normalizedPin =
-    normalizeTransactionPin(pin);
+  const normalizedPin = normalizeTransactionPin(pin);
 
-  if (
-    !isValidTransactionPin(
-      normalizedPin
-    )
-  ) {
+  if (!isValidTransactionPin(normalizedPin)) {
     const error = new Error(
       'Transaction PIN must contain exactly 4 digits.'
     );
-
-    error.code =
-      'INVALID_TRANSACTION_PIN';
-
+    error.code = 'INVALID_TRANSACTION_PIN';
     throw error;
   }
 
-  const existingRecord =
-    await getTransactionPinRecord(
-      userId
-    );
-
-  if (existingRecord) {
-    const error = new Error(
-      'A Transaction PIN already exists.'
-    );
-
-    error.code =
-      'TRANSACTION_PIN_ALREADY_EXISTS';
-
-    throw error;
-  }
-
-  const pinHash =
-    await bcrypt.hash(
-      normalizedPin,
-      BCRYPT_ROUNDS
-    );
+  const pinHash = await bcrypt.hash(
+    normalizedPin,
+    BCRYPT_ROUNDS
+  );
 
   const result = await pool.query(
     `
@@ -225,6 +234,7 @@ const createTransactionPin = async ({
         NULL,
         NULL
       )
+      ON CONFLICT (user_id) DO NOTHING
       RETURNING
         id,
         user_id,
@@ -239,24 +249,26 @@ const createTransactionPin = async ({
     ]
   );
 
+  if (!result.rows.length) {
+    const error = new Error(
+      'A Transaction PIN already exists.'
+    );
+    error.code = 'TRANSACTION_PIN_ALREADY_EXISTS';
+    throw error;
+  }
+
   await writeAuditLog({
     userId,
-    action:
-      'transaction_pin_created',
-    description:
-      'A 4-digit Transaction PIN was created.',
+    action: 'transaction_pin_created',
+    description: 'A 4-digit Transaction PIN was created.',
     ipAddress,
     userAgent,
   });
 
   return {
     success: true,
-
-    transactionPinId:
-      result.rows[0].id,
-
+    transactionPinId: result.rows[0].id,
     failedAttempts: 0,
-
     lockedUntil: null,
   };
 };
@@ -264,7 +276,6 @@ const createTransactionPin = async ({
 // ============================================================
 // CHANGE TRANSACTION PIN
 // ============================================================
-
 const changeTransactionPin = async ({
   userId,
   currentPin,
@@ -273,145 +284,103 @@ const changeTransactionPin = async ({
   userAgent,
 }) => {
   if (!userId) {
-    throw new Error(
-      'User ID is required.'
-    );
+    throw new Error('User ID is required.');
   }
 
   const normalizedCurrentPin =
-    normalizeTransactionPin(
-      currentPin
-    );
+    normalizeTransactionPin(currentPin);
 
   const normalizedNewPin =
-    normalizeTransactionPin(
-      newPin
-    );
+    normalizeTransactionPin(newPin);
 
-  if (
-    !isValidTransactionPin(
-      normalizedCurrentPin
-    )
-  ) {
+  if (!isValidTransactionPin(normalizedCurrentPin)) {
     const error = new Error(
       'Current Transaction PIN must contain exactly 4 digits.'
     );
-
-    error.code =
-      'INVALID_CURRENT_TRANSACTION_PIN';
-
+    error.code = 'INVALID_CURRENT_TRANSACTION_PIN';
     throw error;
   }
 
-  if (
-    !isValidTransactionPin(
-      normalizedNewPin
-    )
-  ) {
+  if (!isValidTransactionPin(normalizedNewPin)) {
     const error = new Error(
       'New Transaction PIN must contain exactly 4 digits.'
     );
-
-    error.code =
-      'INVALID_NEW_TRANSACTION_PIN';
-
+    error.code = 'INVALID_NEW_TRANSACTION_PIN';
     throw error;
   }
 
-  if (
-    normalizedCurrentPin ===
-    normalizedNewPin
-  ) {
+  if (normalizedCurrentPin === normalizedNewPin) {
     const error = new Error(
       'Your new Transaction PIN must be different from the current PIN.'
     );
-
-    error.code =
-      'SAME_TRANSACTION_PIN';
-
+    error.code = 'SAME_TRANSACTION_PIN';
     throw error;
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
+  let transactionCommitted = false;
 
   try {
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
-    const result =
-      await client.query(
-        `
-          SELECT
-            id,
-            user_id,
-            pin_hash,
-            failed_attempts,
-            locked_until
-          FROM transaction_pins
-          WHERE user_id = $1
-          FOR UPDATE
-        `,
-        [userId]
-      );
+    const result = await client.query(
+      `
+        SELECT
+          id,
+          user_id,
+          pin_hash,
+          failed_attempts,
+          locked_until
+        FROM transaction_pins
+        WHERE user_id = $1
+        FOR UPDATE
+      `,
+      [userId]
+    );
 
     if (!result.rows.length) {
       const error = new Error(
         'Transaction PIN has not been created yet.'
       );
-
-      error.code =
-        'TRANSACTION_PIN_NOT_SET';
-
+      error.code = 'TRANSACTION_PIN_NOT_SET';
       throw error;
     }
 
-    const record =
-      result.rows[0];
+    let record = result.rows[0];
 
-    const lockStatus =
-      getLockStatus(record);
+    record = await resetExpiredPinLock(
+      client,
+      record
+    );
+
+    const lockStatus = getLockStatus(record);
 
     if (lockStatus.locked) {
       const error = new Error(
         'Transaction PIN is temporarily locked.'
       );
-
-      error.code =
-        'TRANSACTION_PIN_LOCKED';
-
+      error.code = 'TRANSACTION_PIN_LOCKED';
       error.lockedUntil =
         lockStatus.lockedUntil.toISOString();
-
       throw error;
     }
 
-    const currentMatches =
-      await bcrypt.compare(
-        normalizedCurrentPin,
-        record.pin_hash
-      );
+    const currentMatches = await bcrypt.compare(
+      normalizedCurrentPin,
+      record.pin_hash
+    );
 
     if (!currentMatches) {
       const failedAttempts =
-        Number(
-          record.failed_attempts || 0
-        ) + 1;
+        Number(record.failed_attempts || 0) + 1;
 
       let lockedUntil = null;
 
-      if (
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS
-      ) {
-        lockedUntil =
-          new Date(
-            Date.now() +
-              LOCK_DURATION_MINUTES *
-                60 *
-                1000
-          );
+      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        lockedUntil = new Date(
+          Date.now() +
+            LOCK_DURATION_MINUTES * 60 * 1000
+        );
       }
 
       await client.query(
@@ -431,17 +400,14 @@ const changeTransactionPin = async ({
         ]
       );
 
-      await client.query(
-        'COMMIT'
-      );
+      await client.query('COMMIT');
+      transactionCommitted = true;
 
       await writeAuditLog({
         userId,
-        action:
-          'transaction_pin_change_failed',
+        action: 'transaction_pin_change_failed',
         description:
-          failedAttempts >=
-          MAX_FAILED_ATTEMPTS
+          failedAttempts >= MAX_FAILED_ATTEMPTS
             ? 'Transaction PIN change failed and the PIN was temporarily locked.'
             : 'Transaction PIN change failed because the current PIN was incorrect.',
         ipAddress,
@@ -449,44 +415,34 @@ const changeTransactionPin = async ({
       });
 
       const error = new Error(
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS
+        failedAttempts >= MAX_FAILED_ATTEMPTS
           ? 'Transaction PIN is temporarily locked.'
           : 'Current Transaction PIN is incorrect.'
       );
 
       error.code =
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS
+        failedAttempts >= MAX_FAILED_ATTEMPTS
           ? 'TRANSACTION_PIN_LOCKED'
           : 'INCORRECT_TRANSACTION_PIN';
 
-      error.failedAttempts =
-        failedAttempts;
-
-      error.maxFailedAttempts =
-        MAX_FAILED_ATTEMPTS;
-
-      error.remainingAttempts =
-        Math.max(
-          MAX_FAILED_ATTEMPTS -
-            failedAttempts,
-          0
-        );
+      error.failedAttempts = failedAttempts;
+      error.maxFailedAttempts = MAX_FAILED_ATTEMPTS;
+      error.remainingAttempts = Math.max(
+        MAX_FAILED_ATTEMPTS - failedAttempts,
+        0
+      );
 
       if (lockedUntil) {
-        error.lockedUntil =
-          lockedUntil.toISOString();
+        error.lockedUntil = lockedUntil.toISOString();
       }
 
       throw error;
     }
 
-    const newPinHash =
-      await bcrypt.hash(
-        normalizedNewPin,
-        BCRYPT_ROUNDS
-      );
+    const newPinHash = await bcrypt.hash(
+      normalizedNewPin,
+      BCRYPT_ROUNDS
+    );
 
     await client.query(
       `
@@ -506,14 +462,12 @@ const changeTransactionPin = async ({
       ]
     );
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
+    transactionCommitted = true;
 
     await writeAuditLog({
       userId,
-      action:
-        'transaction_pin_changed',
+      action: 'transaction_pin_changed',
       description:
         'The 4-digit Transaction PIN was changed successfully.',
       ipAddress,
@@ -526,15 +480,15 @@ const changeTransactionPin = async ({
       lockedUntil: null,
     };
   } catch (error) {
-    try {
-      await client.query(
-        'ROLLBACK'
-      );
-    } catch (rollbackError) {
-      console.error(
-        'Transaction PIN rollback error:',
-        rollbackError.message
-      );
+    if (!transactionCommitted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Transaction PIN rollback error:',
+          rollbackError.message
+        );
+      }
     }
 
     throw error;
@@ -542,7 +496,7 @@ const changeTransactionPin = async ({
     client.release();
   }
 };
-
+    
 // ============================================================
 // VERIFY TRANSACTION PIN
 // ============================================================
@@ -550,7 +504,6 @@ const changeTransactionPin = async ({
 // This will later be used by transfers, payments,
 // bills, airtime, data, and other money-moving operations.
 // ============================================================
-
 const verifyTransactionPin = async ({
   userId,
   pin,
@@ -558,125 +511,96 @@ const verifyTransactionPin = async ({
   userAgent,
 }) => {
   if (!userId) {
-    throw new Error(
-      'User ID is required.'
-    );
+    throw new Error('User ID is required.');
   }
 
-  const normalizedPin =
-    normalizeTransactionPin(pin);
+  const normalizedPin = normalizeTransactionPin(pin);
 
-  if (
-    !isValidTransactionPin(
-      normalizedPin
-    )
-  ) {
+  if (!isValidTransactionPin(normalizedPin)) {
     const error = new Error(
       'Transaction PIN must contain exactly 4 digits.'
     );
-
-    error.code =
-      'INVALID_TRANSACTION_PIN';
-
+    error.code = 'INVALID_TRANSACTION_PIN';
     throw error;
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
+  let transactionActive = false;
 
   try {
-    await client.query(
-      'BEGIN'
+    await client.query('BEGIN');
+    transactionActive = true;
+
+    const result = await client.query(
+      `
+        SELECT
+          id,
+          user_id,
+          pin_hash,
+          failed_attempts,
+          locked_until
+        FROM transaction_pins
+        WHERE user_id = $1
+        FOR UPDATE
+      `,
+      [userId]
     );
 
-    const result =
-      await client.query(
-        `
-          SELECT
-            id,
-            user_id,
-            pin_hash,
-            failed_attempts,
-            locked_until
-          FROM transaction_pins
-          WHERE user_id = $1
-          FOR UPDATE
-        `,
-        [userId]
-      );
-
     if (!result.rows.length) {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
+      transactionActive = false;
 
       const error = new Error(
         'Transaction PIN has not been created.'
       );
-
-      error.code =
-        'TRANSACTION_PIN_NOT_SET';
-
+      error.code = 'TRANSACTION_PIN_NOT_SET';
       throw error;
     }
 
-    const record =
-      result.rows[0];
+    let record = result.rows[0];
 
-    const lockStatus =
-      getLockStatus(record);
+    record = await resetExpiredPinLock(
+      client,
+      record
+    );
+
+    const lockStatus = getLockStatus(record);
 
     if (lockStatus.locked) {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
+      transactionActive = false;
 
       const error = new Error(
         'Transaction PIN is temporarily locked.'
       );
 
-      error.code =
-        'TRANSACTION_PIN_LOCKED';
-
-      error.failedAttempts =
-        Number(
-          record.failed_attempts || 0
-        );
-
-      error.maxFailedAttempts =
-        MAX_FAILED_ATTEMPTS;
-
+      error.code = 'TRANSACTION_PIN_LOCKED';
+      error.failedAttempts = Number(
+        record.failed_attempts || 0
+      );
+      error.maxFailedAttempts = MAX_FAILED_ATTEMPTS;
       error.lockedUntil =
         lockStatus.lockedUntil.toISOString();
 
       throw error;
     }
 
-    const matches =
-      await bcrypt.compare(
-        normalizedPin,
-        record.pin_hash
-      );
+    const matches = await bcrypt.compare(
+      normalizedPin,
+      record.pin_hash
+    );
 
     if (!matches) {
       const failedAttempts =
-        Number(
-          record.failed_attempts || 0
-        ) + 1;
+        Number(record.failed_attempts || 0) + 1;
 
       let lockedUntil = null;
 
-      if (
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS
-      ) {
-        lockedUntil =
-          new Date(
-            Date.now() +
-              LOCK_DURATION_MINUTES *
-                60 *
-                1000
-          );
+      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        lockedUntil = new Date(
+          Date.now() +
+            LOCK_DURATION_MINUTES * 60 * 1000
+        );
       }
 
       await client.query(
@@ -696,17 +620,14 @@ const verifyTransactionPin = async ({
         ]
       );
 
-      await client.query(
-        'COMMIT'
-      );
+      await client.query('COMMIT');
+      transactionActive = false;
 
       await writeAuditLog({
         userId,
-        action:
-          'transaction_pin_failed',
+        action: 'transaction_pin_failed',
         description:
-          failedAttempts >=
-          MAX_FAILED_ATTEMPTS
+          failedAttempts >= MAX_FAILED_ATTEMPTS
             ? 'Incorrect Transaction PIN entered. PIN temporarily locked.'
             : 'Incorrect Transaction PIN entered.',
         ipAddress,
@@ -714,38 +635,27 @@ const verifyTransactionPin = async ({
       });
 
       const error = new Error(
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS
+        failedAttempts >= MAX_FAILED_ATTEMPTS
           ? 'Transaction PIN is temporarily locked.'
           : 'Incorrect Transaction PIN.'
       );
 
       error.code =
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS
+        failedAttempts >= MAX_FAILED_ATTEMPTS
           ? 'TRANSACTION_PIN_LOCKED'
           : 'INCORRECT_TRANSACTION_PIN';
 
-      error.failedAttempts =
-        failedAttempts;
-
-      error.remainingAttempts =
-        Math.max(
-          MAX_FAILED_ATTEMPTS -
-            failedAttempts,
-          0
-        );
-
-      error.maxFailedAttempts =
-        MAX_FAILED_ATTEMPTS;
-
+      error.failedAttempts = failedAttempts;
+      error.remainingAttempts = Math.max(
+        MAX_FAILED_ATTEMPTS - failedAttempts,
+        0
+      );
+      error.maxFailedAttempts = MAX_FAILED_ATTEMPTS;
       error.fallbackRequired =
-        failedAttempts >=
-        MAX_FAILED_ATTEMPTS;
+        failedAttempts >= MAX_FAILED_ATTEMPTS;
 
       if (lockedUntil) {
-        error.lockedUntil =
-          lockedUntil.toISOString();
+        error.lockedUntil = lockedUntil.toISOString();
       }
 
       throw error;
@@ -765,14 +675,12 @@ const verifyTransactionPin = async ({
       [record.id]
     );
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
+    transactionActive = false;
 
     await writeAuditLog({
       userId,
-      action:
-        'transaction_pin_verified',
+      action: 'transaction_pin_verified',
       description:
         'The 4-digit Transaction PIN was verified successfully.',
       ipAddress,
@@ -783,32 +691,21 @@ const verifyTransactionPin = async ({
       success: true,
       verified: true,
       failedAttempts: 0,
-      remainingAttempts:
-        MAX_FAILED_ATTEMPTS,
-      maxFailedAttempts:
-        MAX_FAILED_ATTEMPTS,
+      remainingAttempts: MAX_FAILED_ATTEMPTS,
+      maxFailedAttempts: MAX_FAILED_ATTEMPTS,
       fallbackRequired: false,
       lockedUntil: null,
     };
   } catch (error) {
-    if (
-      error?.code ===
-        'INCORRECT_TRANSACTION_PIN' ||
-      error?.code ===
-        'TRANSACTION_PIN_LOCKED'
-    ) {
-      throw error;
-    }
-
-    try {
-      await client.query(
-        'ROLLBACK'
-      );
-    } catch (rollbackError) {
-      console.error(
-        'Transaction PIN verification rollback error:',
-        rollbackError.message
-      );
+    if (transactionActive) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Transaction PIN verification rollback error:',
+          rollbackError.message
+        );
+      }
     }
 
     throw error;
