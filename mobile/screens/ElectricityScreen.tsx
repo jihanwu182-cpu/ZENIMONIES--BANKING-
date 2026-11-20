@@ -1,4 +1,3 @@
-
 import React, {useState} from 'react';
 import {
   ActivityIndicator,
@@ -78,7 +77,7 @@ const PROVIDERS: ElectricityProvider[] = [
   {id: 'YEDC', name: 'Yola Electricity', shortName: 'YEDC'},
 ];
 
-const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
+const QUICK_AMOUNTS = [100, 200, 300, 500, 1000, 2000];
 const MIN_AMOUNT = 500;
 const MAX_AMOUNT = 1000000;
 
@@ -146,20 +145,12 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   const isMeterValid = meterNumber.trim().length >= 6;
   const isPinValid = /^\d{4}$/.test(transactionPin);
 
-  const resetPayment = () => {
-    setAmount('');
-    setTransactionPin('');
-    setPaymentResult(null);
-    setStatus('verified');
-  };
-
   const handleProviderSelect = (selectedProvider: string) => {
     setProvider(selectedProvider);
     setShowProviders(false);
     setCustomer(null);
     setPaymentResult(null);
     setStatus('idle');
-    setAmount('');
     setTransactionPin('');
   };
 
@@ -170,11 +161,25 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     setCustomer(null);
     setPaymentResult(null);
     setStatus('idle');
-    setAmount('');
     setTransactionPin('');
   };
 
-  const handleValidateMeter = async () => {
+  const handleMeterNumberChange = (value: string) => {
+    setMeterNumber(value.replace(/\D/g, ''));
+    setCustomer(null);
+    setPaymentResult(null);
+    setTransactionPin('');
+    setStatus('idle');
+  };
+
+  const handleAmountChange = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    setAmount(digits);
+    setPaymentResult(null);
+    setTransactionPin('');
+  };
+
+  const handleContinue = async () => {
     if (!provider) {
       Alert.alert(
         'Select electricity provider',
@@ -184,7 +189,20 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
 
     if (!isMeterValid) {
-      Alert.alert('Invalid meter number', 'Please enter a valid meter number.');
+      Alert.alert(
+        'Invalid meter number',
+        'Please enter a valid meter number.',
+      );
+      return;
+    }
+
+    if (!isAmountValid) {
+      Alert.alert(
+        'Invalid amount',
+        `Enter an amount between ${formatCurrency(
+          MIN_AMOUNT,
+        )} and ${formatCurrency(MAX_AMOUNT)}.`,
+      );
       return;
     }
 
@@ -197,6 +215,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     setStatus('validating');
     setCustomer(null);
     setPaymentResult(null);
+    setTransactionPin('');
 
     try {
       const result = await onValidate(
@@ -210,7 +229,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
       Alert.alert(
         'Meter verified',
-        'Customer details have been successfully verified.',
+        'Customer details have been successfully verified. Enter your transaction PIN to continue.',
       );
     } catch (error: any) {
       setStatus('failed');
@@ -227,6 +246,8 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   };
 
   const executePayment = async () => {
+    if (!onPay || !customer) return;
+
     setLoading(true);
     setStatus('paying');
     setPaymentResult(null);
@@ -235,7 +256,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     setTransactionPin('');
 
     try {
-      const result = await onPay!(
+      const result = await onPay(
         provider,
         meterNumber.trim(),
         meterType,
@@ -286,11 +307,11 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
   };
 
-  const handlePay = async () => {
+  const handlePay = () => {
     if (!customer) {
       Alert.alert(
         'Verify meter first',
-        'Please verify your meter number before continuing.',
+        'Please continue and verify your meter number first.',
       );
       return;
     }
@@ -362,33 +383,27 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
         {/* PROVIDER DROPDOWN */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Electricity Provider</Text>
+          <Text style={styles.sectionTitle}>Select Service Provider</Text>
 
           <TouchableOpacity
             style={styles.providerDropdown}
             onPress={() => setShowProviders(prev => !prev)}
-            disabled={loading}
+            disabled={loading || !!customer}
             activeOpacity={0.8}
           >
-            <View style={styles.providerDropdownLeft}>
-              <View style={styles.providerIcon}>
-                <Text style={styles.providerIconText}>⚡</Text>
-              </View>
-
-              <View style={styles.providerDropdownText}>
-                <Text
-                  style={[
-                    styles.providerDropdownName,
-                    !selectedProvider && styles.placeholderText,
-                  ]}
-                >
-                  {selectedProvider?.name || 'Select electricity provider'}
-                </Text>
-
-                <Text style={styles.providerDropdownSub}>
-                  {selectedProvider?.shortName || 'Choose your distribution company'}
-                </Text>
-              </View>
+            <View style={styles.providerDropdownText}>
+              <Text
+                style={[
+                  styles.providerDropdownName,
+                  !selectedProvider && styles.placeholderText,
+                ]}
+              >
+                {selectedProvider?.name || 'Choose electricity provider'}
+              </Text>
+              <Text style={styles.providerDropdownSub}>
+                {selectedProvider?.shortName ||
+                  'Select your distribution company'}
+              </Text>
             </View>
 
             <Text style={styles.dropdownArrow}>
@@ -411,10 +426,6 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                     onPress={() => handleProviderSelect(item.id)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.providerOptionIcon}>
-                      <Text style={styles.providerIconText}>⚡</Text>
-                    </View>
-
                     <View style={styles.providerOptionDetails}>
                       <Text
                         style={[
@@ -455,7 +466,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                 meterType === 'prepaid' && styles.meterTypeButtonSelected,
               ]}
               onPress={() => handleMeterTypeChange('prepaid')}
-              disabled={loading}
+              disabled={loading || !!customer}
               activeOpacity={0.8}
             >
               <Text
@@ -474,7 +485,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                 meterType === 'postpaid' && styles.meterTypeButtonSelected,
               ]}
               onPress={() => handleMeterTypeChange('postpaid')}
-              disabled={loading}
+              disabled={loading || !!customer}
               activeOpacity={0.8}
             >
               <Text
@@ -499,35 +510,88 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             placeholderTextColor={MUTED}
             keyboardType="numeric"
             value={meterNumber}
-            onChangeText={value => {
-              setMeterNumber(value.replace(/\D/g, ''));
-              setCustomer(null);
-              setPaymentResult(null);
-              setStatus('idle');
-            }}
-            editable={!loading}
+            onChangeText={handleMeterNumberChange}
+            editable={!loading && !customer}
             maxLength={20}
           />
-
-          <TouchableOpacity
-            style={[
-              styles.verifyButton,
-              (!provider || !isMeterValid || loading) && styles.disabledButton,
-            ]}
-            onPress={handleValidateMeter}
-            disabled={!provider || !isMeterValid || loading}
-            activeOpacity={0.8}
-          >
-            {status === 'validating' ? (
-              <ActivityIndicator color={WHITE} />
-            ) : (
-              <Text style={styles.verifyButtonText}>Verify Meter</Text>
-            )}
-          </TouchableOpacity>
         </View>
 
+        {/* QUICK AMOUNT */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Amount</Text>
+
+          <View style={styles.quickAmounts}>
+            {QUICK_AMOUNTS.map(value => (
+              <TouchableOpacity
+                key={value}
+                style={[
+                  styles.quickAmountButton,
+                  amount === String(value) && styles.quickAmountButtonSelected,
+                ]}
+                onPress={() => handleAmountChange(String(value))}
+                disabled={loading || !!customer}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.quickAmountText,
+                    amount === String(value) && styles.quickAmountTextSelected,
+                  ]}
+                >
+                  {formatCurrency(value)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* PREFERRED AMOUNT */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferred Amount</Text>
+
+          <View style={styles.amountInputContainer}>
+            <Text style={styles.currencySymbol}>₦</Text>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="Enter amount"
+              placeholderTextColor={MUTED}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={handleAmountChange}
+              editable={!loading && !customer}
+            />
+          </View>
+
+          <Text style={styles.amountHint}>
+            Minimum: {formatCurrency(MIN_AMOUNT)}
+          </Text>
+        </View>
+
+        {/* CONTINUE */}
+        {!customer && status !== 'success' && status !== 'pending' && (
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!provider ||
+                !isMeterValid ||
+                !isAmountValid ||
+                loading) &&
+                styles.disabledButton,
+            ]}
+            onPress={handleContinue}
+            disabled={!provider || !isMeterValid || !isAmountValid || loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.continueButtonText}>Continue</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* VERIFIED CUSTOMER */}
-        {customer && (
+        {customer && status !== 'success' && status !== 'pending' && (
           <View style={styles.customerCard}>
             <View style={styles.customerHeader}>
               <View style={styles.customerCheck}>
@@ -564,55 +628,10 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               <Text style={styles.customerLabel}>Provider</Text>
               <Text style={styles.customerValue}>{selectedProvider?.name}</Text>
             </View>
-          </View>
-        )}
 
-        {/* AMOUNT */}
-        {customer && status !== 'success' && status !== 'pending' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Amount</Text>
-
-            <View style={styles.amountInputContainer}>
-              <Text style={styles.currencySymbol}>₦</Text>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="0.00"
-                placeholderTextColor={MUTED}
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={value => {
-                  setAmount(value.replace(/\D/g, ''));
-                  setPaymentResult(null);
-                }}
-                editable={!loading}
-              />
-            </View>
-
-            <Text style={styles.amountHint}>
-              Minimum: {formatCurrency(MIN_AMOUNT)}
-            </Text>
-
-            <View style={styles.quickAmounts}>
-              {QUICK_AMOUNTS.map(value => (
-                <TouchableOpacity
-                  key={value}
-                  style={[
-                    styles.quickAmountButton,
-                    amount === String(value) && styles.quickAmountButtonSelected,
-                  ]}
-                  onPress={() => setAmount(String(value))}
-                  disabled={loading}
-                >
-                  <Text
-                    style={[
-                      styles.quickAmountText,
-                      amount === String(value) && styles.quickAmountTextSelected,
-                    ]}
-                  >
-                    {formatCurrency(value)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.customerRow}>
+              <Text style={styles.customerLabel}>Amount</Text>
+              <Text style={styles.customerValue}>{formatCurrency(numericAmount)}</Text>
             </View>
           </View>
         )}
@@ -647,17 +666,17 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
           <TouchableOpacity
             style={[
               styles.payButton,
-              (!isAmountValid || !isPinValid || loading) && styles.disabledButton,
+              (!isPinValid || loading) && styles.disabledButton,
             ]}
             onPress={handlePay}
-            disabled={!isAmountValid || !isPinValid || loading}
+            disabled={!isPinValid || loading}
             activeOpacity={0.8}
           >
             {loading ? (
               <ActivityIndicator color={WHITE} />
             ) : (
               <Text style={styles.payButtonText}>
-                Pay {isAmountValid ? formatCurrency(numericAmount) : ''}
+                Pay {formatCurrency(numericAmount)}
               </Text>
             )}
           </TouchableOpacity>
@@ -719,6 +738,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             <TouchableOpacity
               style={styles.newPaymentButton}
               onPress={handleNewPayment}
+              activeOpacity={0.8}
             >
               <Text style={styles.newPaymentButtonText}>Make Another Payment</Text>
             </TouchableOpacity>
@@ -755,6 +775,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             <TouchableOpacity
               style={styles.newPaymentButton}
               onPress={handleNewPayment}
+              activeOpacity={0.8}
             >
               <Text style={styles.newPaymentButtonText}>Return</Text>
             </TouchableOpacity>
@@ -801,9 +822,9 @@ const styles = StyleSheet.create({
   },
 
   headerIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
@@ -813,7 +834,7 @@ const styles = StyleSheet.create({
   },
 
   headerIconText: {
-    fontSize: 25,
+    fontSize: 24,
   },
 
   headerTextContainer: {
@@ -833,7 +854,7 @@ const styles = StyleSheet.create({
   },
 
   section: {
-    marginBottom: 24,
+    marginBottom: 22,
   },
 
   sectionTitle: {
@@ -843,40 +864,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // Provider dropdown
+  // PROVIDER DROPDOWN
   providerDropdown: {
-    minHeight: 72,
+    minHeight: 64,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-
-  providerDropdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-
-  providerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: BACKGROUND,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-
-  providerIconText: {
-    fontSize: 18,
   },
 
   providerDropdownText: {
@@ -885,7 +884,7 @@ const styles = StyleSheet.create({
 
   providerDropdownName: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: BLACK,
   },
 
@@ -911,16 +910,16 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 14,
+    borderRadius: 12,
     marginTop: 8,
     overflow: 'hidden',
   },
 
   providerOption: {
-    minHeight: 66,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
@@ -928,16 +927,6 @@ const styles = StyleSheet.create({
 
   providerOptionSelected: {
     backgroundColor: BACKGROUND,
-  },
-
-  providerOptionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: BACKGROUND,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
   },
 
   providerOptionDetails: {
@@ -981,7 +970,7 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
   },
 
-  // Prepaid / Postpaid
+  // METER TYPE
   meterTypeContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -989,9 +978,9 @@ const styles = StyleSheet.create({
 
   meterTypeButton: {
     flex: 1,
-    minHeight: 58,
+    minHeight: 56,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: WHITE,
@@ -1001,7 +990,7 @@ const styles = StyleSheet.create({
 
   meterTypeButtonSelected: {
     borderColor: GREEN,
-    borderWidth: 2,
+    borderWidth: 1.5,
     backgroundColor: WHITE,
   },
 
@@ -1015,7 +1004,7 @@ const styles = StyleSheet.create({
     color: GREEN,
   },
 
-  // Meter number
+  // METER NUMBER
   input: {
     height: 54,
     borderWidth: 1,
@@ -1027,18 +1016,88 @@ const styles = StyleSheet.create({
     color: BLACK,
   },
 
-  verifyButton: {
-    height: 50,
-    backgroundColor: GREEN,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
+  // QUICK AMOUNTS - 3 COLUMNS
+  quickAmounts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
   },
 
-  verifyButtonText: {
+  quickAmountButton: {
+    width: '31%',
+    minHeight: 48,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: WHITE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  quickAmountButtonSelected: {
+    borderColor: GREEN,
+    borderWidth: 1.5,
+    backgroundColor: WHITE,
+  },
+
+  quickAmountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BLACK,
+  },
+
+  quickAmountTextSelected: {
+    color: GREEN,
+  },
+
+  // PREFERRED AMOUNT
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    height: 58,
+    paddingHorizontal: 16,
+  },
+
+  currencySymbol: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: GREEN,
+    marginRight: 8,
+  },
+
+  amountInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '700',
+    color: BLACK,
+  },
+
+  amountHint: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 8,
+  },
+
+  // CONTINUE
+  continueButton: {
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    marginBottom: 20,
+  },
+
+  continueButtonText: {
     color: WHITE,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
 
@@ -1046,7 +1105,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 
-  // Customer verification
+  // CUSTOMER VERIFICATION
   customerCard: {
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -1107,73 +1166,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  // Amount
-  amountInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 14,
-    height: 62,
-    paddingHorizontal: 16,
-  },
-
-  currencySymbol: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: GREEN,
-    marginRight: 8,
-  },
-
-  amountInput: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '800',
-    color: BLACK,
-  },
-
-  amountHint: {
-    fontSize: 11,
-    color: MUTED,
-    marginTop: 8,
-  },
-
-  quickAmounts: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 14,
-  },
-
-  quickAmountButton: {
-    flex: 1,
-    minWidth: '22%',
-    paddingVertical: 11,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
-    alignItems: 'center',
-  },
-
-  quickAmountButtonSelected: {
-    borderColor: GREEN,
-    borderWidth: 1.5,
-    backgroundColor: WHITE,
-  },
-
-  quickAmountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: BLACK,
-  },
-
-  quickAmountTextSelected: {
-    color: GREEN,
-  },
-
-  // PIN
+  // TRANSACTION PIN
   pinInput: {
     height: 54,
     borderWidth: 1,
@@ -1195,10 +1188,10 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  // Payment button
+  // PAYMENT BUTTON
   payButton: {
     height: 56,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1211,7 +1204,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // Successful payment
+  // SUCCESS
   resultCard: {
     backgroundColor: WHITE,
     borderRadius: 18,
@@ -1331,7 +1324,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // Pending payment
+  // PENDING PAYMENT
   pendingCard: {
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -1391,7 +1384,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Failed verification
+  // FAILED VERIFICATION
   failedNotice: {
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -1414,7 +1407,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Footer
+  // SECURITY FOOTER
   securityFooter: {
     flexDirection: 'row',
     alignItems: 'center',
