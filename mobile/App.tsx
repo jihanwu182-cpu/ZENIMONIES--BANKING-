@@ -1907,33 +1907,30 @@ const [profileReturnScreen, setProfileReturnScreen] =
       </SafeAreaView>
     );
   }
+// ====================================================
+// CUSTOMER SETTINGS
+// ====================================================
 
-  // ====================================================
-  // CUSTOMER SETTINGS
-  // ====================================================
+if (
+  screen === 'settings' &&
+  session
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
 
-  if (
-    screen === 'settings' &&
-    session
-  ) {
-    return (
-      <SafeAreaView
-        style={styles.container}
-      >
-        <StatusBar barStyle="dark-content" />
-
-       <SettingsScreen
-         token={session.token}
-         onBack={() => setScreen('home')}
-         onLogout={handleLogout}
-         onOpenProfile={() => {
-         setProfileReturnScreen('settings');
-         setScreen('profile');
+      <SettingsScreen
+        token={session.token}
+        onBack={() => setScreen('home')}
+        onLogout={handleLogout}
+        onOpenProfile={() => {
+          setProfileReturnScreen('settings');
+          setScreen('profile');
         }}
-        />
-      </SafeAreaView>
-    );
-  }
+      />
+    </SafeAreaView>
+  );
+}
 
   // ====================================================
   // TRANSACTION HISTORY
