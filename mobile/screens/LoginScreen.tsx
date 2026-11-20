@@ -157,13 +157,13 @@ export default function LoginScreen({
       }
 
       if (onLoginSuccess) {
-        onLoginSuccess(data);
-      } else {
-        Alert.alert(
-          'Login successful',
-          'Your credentials have been verified.'
-        );
-      }
+      await onLoginSuccess(data);
+    } else {
+      Alert.alert(
+       'Login successful',
+       'Your credentials have been verified.'
+     );
+  }
     } catch (error: any) {
       Alert.alert(
         'Sign in failed',
