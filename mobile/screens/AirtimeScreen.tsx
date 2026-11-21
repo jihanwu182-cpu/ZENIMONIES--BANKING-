@@ -149,7 +149,6 @@ export default function AirtimeScreen({
   const [pinVisible, setPinVisible] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [requerying, setRequerying] = useState(false);
 
   const [pendingReference, setPendingReference] =
     useState('');
@@ -236,13 +235,7 @@ export default function AirtimeScreen({
       return;
     }
 
-    if (pendingReference) {
-      Alert.alert(
-        'Transaction pending',
-        'Please check the status of your previous transaction before making another purchase.'
-      );
-      return;
-    }
+    if (pendingReference) return;
 
     setPinVisible(true);
   };
@@ -259,6 +252,7 @@ export default function AirtimeScreen({
     if (!network) return;
 
     setLoading(true);
+    let needsReconciliation = false;
 
     try {
       const response = await fetch(`${API_BASE}/airtime`, {
@@ -312,16 +306,10 @@ export default function AirtimeScreen({
         data.status === 'pending' ||
         data.status === 'reconciliation_required'
       ) {
+        // Keep the customer in the full-screen processing state and reconcile automatically.
+        needsReconciliation = true;
         setPendingReference(reference);
-
-        setResult({
-          status: 'pending',
-          reference,
-          message:
-            data.message ||
-            'Your Airtime purchase is being processed. Please do not purchase again.',
-        });
-
+        setLoading(true);
         return;
       }
 
@@ -349,15 +337,10 @@ export default function AirtimeScreen({
         );
       }
 
-      setResult({
-        status: 'pending',
-        reference,
-        message:
-          data.message ||
-          'Your transaction requires confirmation. Please do not retry.',
-      });
-
+      // Unconfirmed responses must not be presented as success or expose a pending UI.
+      needsReconciliation = true;
       setPendingReference(reference);
+      setLoading(true);
     } catch (error: any) {
       Alert.alert(
         'Purchase status unavailable',
@@ -365,90 +348,79 @@ export default function AirtimeScreen({
           'We could not confirm the transaction. Check your transaction history before trying again.'
       );
     } finally {
-      setLoading(false);
+      if (!needsReconciliation) setLoading(false);
     }
   };
 
-  const handleRequery = async () => {
-    if (!pendingReference || !token) return;
+  React.useEffect(() => {
+    if (!pendingReference || !loading || !token) return;
 
-    setRequerying(true);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    try {
-      const response = await fetch(
-        `${API_BASE}/airtime/requery/${encodeURIComponent(
-          pendingReference
-        )}`,
-        {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      const status = String(
-        data.status ||
-          data.transaction?.status ||
-          data.transaction?.provider_status ||
-          ''
-      ).toLowerCase();
-
-      if (status === 'completed') {
-        setSuccessDate(new Date());
-        setResult({
-          status: 'completed',
-          reference: pendingReference,
-          message:
-            data.message ||
-            'Airtime purchase completed successfully.',
-        });
-
-        setPendingReference('');
-        onComplete?.();
-      } else if (
-        status === 'failed' ||
-        status === 'refunded'
-      ) {
-        setResult({
-          status: 'failed',
-          reference: pendingReference,
-          message:
-            data.message ||
-            'The Airtime purchase failed. Check your wallet balance.',
-        });
-
-        setPendingReference('');
-        onComplete?.();
-      } else {
-        setResult({
-          status: 'pending',
-          reference: pendingReference,
-          message:
-            data.message ||
-            'The transaction is still awaiting confirmation.',
-        });
-      }
-
-      if (!response.ok && response.status !== 202) {
-        Alert.alert(
-          'Reconciliation',
-          data.message ||
-            'We could not retrieve the transaction status.'
+    const reconcile = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/airtime/requery/${encodeURIComponent(pendingReference)}`,
+          {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
+        const data = await response.json();
+        const status = String(
+          data.status ||
+            data.transaction?.status ||
+            data.transaction?.provider_status ||
+            ''
+        ).toLowerCase();
+
+        if (cancelled) return;
+
+        if (status === 'completed') {
+          setSuccessDate(new Date());
+          setResult({
+            status: 'completed',
+            reference: pendingReference,
+            message: data.message || 'Airtime purchase completed successfully.',
+          });
+          setPendingReference('');
+          setLoading(false);
+          onComplete?.();
+          return;
+        }
+
+        if (status === 'failed' || status === 'refunded') {
+          setResult({
+            status: 'failed',
+            reference: pendingReference,
+            message: data.message || 'The Airtime purchase failed. Check your wallet balance.',
+          });
+          setPendingReference('');
+          setLoading(false);
+          onComplete?.();
+          return;
+        }
+      } catch {
+        // Network interruptions do not release the purchase lock or return to the form.
       }
-    } catch {
-      Alert.alert(
-        'Connection unavailable',
-        'Unable to check this transaction right now.'
-      );
-    } finally {
-      setRequerying(false);
-    }
-  };
+
+      if (!cancelled) {
+        timer = setTimeout(reconcile, 5000);
+      }
+    };
+
+
+    timer = setTimeout(reconcile, 2500);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pendingReference, loading, token, onComplete]);
+
 
   const resetForm = () => {
     setPhone('');
@@ -478,7 +450,7 @@ export default function AirtimeScreen({
             <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Date & Time</Text><Text style={styles.successDetailValue}>{(successDate || new Date()).toLocaleString('en-NG')}</Text></View>
           </View>
         </View>
-        <TouchableOpacity style={styles.successDoneButton} onPress={resetForm}>
+        <TouchableOpacity style={styles.successDoneButton} onPress={onBack}>
           <Text style={styles.successDoneText}>Done</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -635,84 +607,16 @@ export default function AirtimeScreen({
           />
         </View>
 
-        {/* TRANSACTION RESULT */}
-
-        {result && (
-          <View
-            style={[
-              styles.resultBox,
-              result.status === 'completed'
-                ? styles.successBox
-                : result.status === 'failed'
-                ? styles.failedBox
-                : styles.pendingBox,
-            ]}
-          >
-            <MaterialCommunityIcons
-              name={
-                result.status === 'completed'
-                  ? 'check-circle'
-                  : result.status === 'failed'
-                  ? 'alert-circle'
-                  : 'clock-outline'
-              }
-              size={27}
-              color={
-                result.status === 'completed'
-                  ? colors.success
-                  : result.status === 'failed'
-                  ? '#D64545'
-                  : '#C58A19'
-              }
-            />
-
-            <Text style={styles.resultTitle}>
-              {result.status === 'completed'
-                ? 'Purchase successful'
-                : result.status === 'failed'
-                ? 'Purchase failed'
-                : 'Purchase pending'}
-            </Text>
-
-            <Text style={styles.resultMessage}>
-              {result.message}
-            </Text>
-
-            {!!result.reference && (
-              <Text style={styles.reference}>
-                Reference: {result.reference}
-              </Text>
-            )}
-
-            {result.status === 'pending' &&
-              !!pendingReference && (
-                <TouchableOpacity
-                  style={styles.requeryButton}
-                  onPress={handleRequery}
-                  disabled={requerying}
-                >
-                  {requerying ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.requeryText}>
-                      Check transaction status
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-
-            {result.status !== 'pending' && (
-              <TouchableOpacity
-                style={styles.newPurchaseButton}
-                onPress={resetForm}
-              >
-                <Text style={styles.newPurchaseText}>
-                  Make another purchase
-                </Text>
-              </TouchableOpacity>
-            )}
+        {/* TRANSACTION RESULT — only definitive failure is shown in the purchase form */}
+        {result?.status === 'failed' && (
+          <View style={[styles.resultBox, styles.failedBox]}>
+            <MaterialCommunityIcons name="alert-circle" size={27} color="#D64545" />
+            <Text style={styles.resultTitle}>Purchase failed</Text>
+            <Text style={styles.resultMessage}>{result.message}</Text>
+            {!!result.reference && <Text style={styles.reference}>Reference: {result.reference}</Text>}
           </View>
         )}
+
 
         {/* CONTINUE */}
 
@@ -738,9 +642,7 @@ export default function AirtimeScreen({
           }
         >
           <Text style={styles.continueText}>
-            {pendingReference
-              ? 'Transaction pending'
-              : 'Continue'}
+            Continue
           </Text>
 
           <MaterialCommunityIcons
@@ -1099,12 +1001,6 @@ const createStyles = (
         : '#FCEEEE',
     },
 
-    pendingBox: {
-      backgroundColor: isDark
-        ? '#3C3321'
-        : '#FFF7E6',
-    },
-
     resultTitle: {
       color: colors.text,
       fontSize: 15,
@@ -1124,31 +1020,6 @@ const createStyles = (
       color: colors.textSecondary,
       fontSize: 9,
       marginTop: 8,
-    },
-
-    requeryButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 10,
-      paddingHorizontal: 17,
-      paddingVertical: 11,
-      marginTop: 13,
-    },
-
-    requeryText: {
-      color: '#FFFFFF',
-      fontWeight: '800',
-      fontSize: 11,
-    },
-
-    newPurchaseButton: {
-      marginTop: 13,
-      padding: 10,
-    },
-
-    newPurchaseText: {
-      color: colors.primary,
-      fontWeight: '800',
-      fontSize: 12,
     },
 
     modalOverlay: {
