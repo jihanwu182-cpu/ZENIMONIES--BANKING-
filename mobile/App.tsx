@@ -1682,11 +1682,10 @@ const [transferDraft, setTransferDraft] =
   const handleDashboardAction = (
     action: string
   ) => {
-      if (action === 'transfer') {
+      if (action === 'internal-transfer') {
         setScreen('internal-transfer');
         return;
-     }
-    
+      }
     if (action === 'airtime') {
       setScreen('airtime');
       return;
