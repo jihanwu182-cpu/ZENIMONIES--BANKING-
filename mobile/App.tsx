@@ -2062,10 +2062,30 @@ if (
 
       <InternalTransferScreen
         onVerifyRecipient={async (phone) => {
-          throw new Error(
-            'Recipient verification is not connected yet.'
-          );
-        }}
+  const response = await axios.get(
+    `${API_BASE}/internal-transfers/user`,
+    {
+      params: { phone },
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+      },
+    }
+  );
+
+  const user = response.data?.user;
+
+  if (!response.data?.success || !user) {
+    throw new Error(
+      response.data?.message ||
+        'Unable to verify recipient.'
+    );
+  }
+
+  return {
+    name: user.full_name,
+    phone: user.phone,
+  };
+}}
         onContinue={(payload) => {
           setTransferDraft(payload);
           setScreen('transfer-review');
