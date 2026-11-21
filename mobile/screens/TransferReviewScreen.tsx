@@ -169,17 +169,16 @@ export default function TransferReviewScreen({
 
           {/* Hidden input: prevents the browser focus rectangle */}
           <TextInput
-            ref={pinInputRef}
-            value={pin}
-            onChangeText={handlePinChange}
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={4}
-            editable={!loading}
-            autoComplete="off"
-            textContentType="none"
-            style={styles.hiddenPinInput}
-          />
+          value={pin}
+          onChangeText={handlePinChange}
+          keyboardType="number-pad"
+          secureTextEntry
+          maxLength={4}
+          editable={!loading}
+          autoComplete="off"
+          textContentType="none"
+          style={styles.hiddenPinInput}
+       />
 
           {/* ONLY the four PIN boxes; no outer box */}
           <TouchableOpacity
@@ -428,17 +427,16 @@ const styles = StyleSheet.create({
   /* Invisible input is moved off-screen.
      It cannot create the blue rectangular outline. */
   hiddenPinInput: {
-    position: 'absolute',
-    left: -1000,
-    top: 0,
-    width: 1,
-    height: 1,
-    opacity: 0,
-    padding: 0,
-    margin: 0,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
+  position: 'absolute',
+  width: '100%',
+  height: 60,
+  opacity: 0.01,
+  zIndex: 2,
+  borderWidth: 0,
+  backgroundColor: 'transparent',
+  padding: 0,
+  margin: 0,
+},
 
   /* Four individual boxes ONLY */
   pinBoxesRow: {
