@@ -38,6 +38,9 @@ import DataScreen from './screens/DataScreen';
 import ElectricityScreen from './screens/ElectricityScreen';
 import TVScreen from './screens/TVScreen';
 import BillsScreen from './screens/BillsScreen';
+import InternalTransferScreen from './screens/InternalTransferScreen';
+import TransferReviewScreen from './screens/TransferReviewScreen';
+import TransferSuccessScreen from './screens/TransferSuccessScreen';
 
 import {
   registerPushNotifications,
@@ -60,7 +63,6 @@ const TRANSACTIONS_URL =
 
 const AUTH_TOKEN_KEY =
   'zenimonies_auth_token';
-
 type Screen =
   | 'welcome'
   | 'login'
@@ -75,7 +77,11 @@ type Screen =
   | 'data'
   | 'bills'
   | 'electricity'
-  | 'tv';
+  | 'tv'
+  | 'internal-transfer'
+  | 'transfer-review'
+  | 'transfer-success';
+
 
 type Account = {
   id?: string;
