@@ -71,20 +71,17 @@ export default function TransferPinScreen({
         <Text style={styles.backText}>‹</Text>
       </TouchableOpacity>
 
-      {/* Main content */}
+      {/* Compact PIN content */}
       <View style={styles.content}>
-        <View style={styles.iconCircle}>
-          <Text style={styles.lockIcon}>●</Text>
-      </View>
-
         <Text style={styles.title}>Transaction PIN</Text>
+
         <Text style={styles.subtitle}>
           Enter your 4-digit PIN to authorize this transfer.
         </Text>
 
-        {/* Transfer summary */}
+        {/* Compact transfer summary */}
         <View style={styles.summary}>
-          <Text style={styles.amountLabel}>Transfer amount</Text>
+          <Text style={styles.amountLabel}>TRANSFER AMOUNT</Text>
           <Text style={styles.amount}>{formatAmount(amount)}</Text>
 
           <View style={styles.summaryDivider} />
@@ -94,14 +91,15 @@ export default function TransferPinScreen({
           <Text style={styles.recipientPhone}>{recipientPhone}</Text>
         </View>
 
-        {/* PIN entry */}
+        {/* PIN entry moved higher */}
         <Text style={styles.pinLabel}>Enter transaction PIN</Text>
 
         <View style={styles.pinContainer}>
           <TextInput
             value={pin}
             onChangeText={(value) =>
-              setPin(value.replace(/\D/g, '').slice(0, 4))
+              setPin(value.replace(/\D/g, '').slice(0, 4)
+              )
             }
             keyboardType="number-pad"
             secureTextEntry
@@ -121,8 +119,10 @@ export default function TransferPinScreen({
                 style={[
                   styles.pinBox,
                   index < pin.length && styles.pinBoxFilled,
-                  index === pin.length && pin.length < 4 && styles.pinBoxActive,
-              ]}
+                  index === pin.length &&
+                    pin.length < 4 &&
+                    styles.pinBoxActive,
+                ]}
               >
                 <Text style={styles.pinDot}>
                   {index < pin.length ? '●' : ''}
@@ -132,7 +132,7 @@ export default function TransferPinScreen({
           </View>
         </View>
 
-        {/* Confirmation button only after 4 digits */}
+        {/* Confirmation button appears after all digits are entered */}
         {pin.length === 4 && (
           <TouchableOpacity
             onPress={handleConfirm}
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: WHITE,
     paddingHorizontal: 24,
-    paddingTop: 18,
+    paddingTop: 12,
   },
 
   backButton: {
@@ -191,71 +191,55 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 26,
-  },
-
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: WHITE,
-    borderWidth: 2,
-    borderColor: GREEN,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-
-  lockIcon: {
-    color: GREEN,
-    fontSize: 25,
-    fontWeight: '900',
+    paddingTop: 12,
   },
 
   title: {
     color: BLACK,
-    fontSize: 25,
+    fontSize: 23,
     fontWeight: '800',
     textAlign: 'center',
   },
 
   subtitle: {
     color: MUTED,
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 21,
-    marginTop: 8,
-    marginBottom: 26,
+    lineHeight: 19,
+    marginTop: 5,
+    marginBottom: 14,
   },
 
   summary: {
     width: '100%',
     backgroundColor: WHITE,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 18,
+    padding: 14,
     alignItems: 'center',
-    marginBottom: 26,
+    marginBottom: 16,
   },
 
   amountLabel: {
     color: MUTED,
-    fontSize: 13,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
 
   amount: {
     color: GREEN,
-    fontSize: 29,
+    fontSize: 26,
     fontWeight: '900',
-    marginTop: 5,
+    marginTop: 3,
   },
 
   summaryDivider: {
     width: '100%',
     height: 1,
     backgroundColor: BORDER,
-    marginVertical: 16,
+    marginVertical: 11,
   },
 
   recipientLabel: {
@@ -265,23 +249,23 @@ const styles = StyleSheet.create({
 
   recipientName: {
     color: BLACK,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    marginTop: 5,
+    marginTop: 3,
     textAlign: 'center',
   },
 
   recipientPhone: {
     color: MUTED,
-    fontSize: 13,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 2,
   },
 
   pinLabel: {
     color: BLACK,
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 10,
   },
 
   pinContainer: {
@@ -289,7 +273,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* Input is invisible; no extra input rectangle */
   pinInput: {
     position: 'absolute',
     width: 1,
@@ -301,21 +284,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  /* Four boxes only */
   pinBoxes: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
 
   pinBox: {
-    width: 56,
-    height: 60,
+    width: 54,
+    height: 56,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 13,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -331,18 +313,18 @@ const styles = StyleSheet.create({
 
   pinDot: {
     color: GREEN,
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '900',
   },
 
   confirmButton: {
     width: '100%',
-    height: 54,
-    borderRadius: 15,
+    height: 52,
+    borderRadius: 14,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 26,
+    marginTop: 16,
   },
 
   loadingButton: {
@@ -366,7 +348,7 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 11,
     textAlign: 'center',
-    lineHeight: 17,
-    marginTop: 20,
+    lineHeight: 16,
+    marginTop: 12,
   },
 });
