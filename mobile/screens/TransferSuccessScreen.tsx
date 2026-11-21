@@ -1,22 +1,13 @@
+
 import React from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
-  Pressable,
-  Share,
-  StatusBar,
-  SafeAreaView,
   ScrollView,
+  Share,
 } from 'react-native';
-
-const GREEN = '#78A900';
-const DARK_GREEN = '#527900';
-const BLACK = '#172018';
-const MUTED = '#858B83';
-const BACKGROUND = '#F6F8F3';
-const WHITE = '#FFFFFF';
-const BORDER = '#E9EDE5';
 
 export type TransferSuccessScreenProps = {
   amount: number | string;
@@ -27,19 +18,11 @@ export type TransferSuccessScreenProps = {
   onDone: () => void;
 };
 
-const moneyText = (amount: number | string) => {
-  const numeric =
-    typeof amount === 'number'
-      ? amount
-      : Number(String(amount).replace(/[^\d.-]/g, ''));
-
-  if (!Number.isFinite(numeric)) return String(amount);
-
-  return `₦${numeric.toLocaleString('en-NG', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-};
+const GREEN = '#07803D';
+const BLACK = '#172018';
+const MUTED = '#858B83';
+const WHITE = '#FFFFFF';
+const BORDER = '#E1E5E1';
 
 export default function TransferSuccessScreen({
   amount,
@@ -49,411 +32,409 @@ export default function TransferSuccessScreen({
   transactionDate,
   onDone,
 }: TransferSuccessScreenProps) {
-  const institution =
-    transferType === 'internal'
-      ? 'ZENIMONIES'
-      : receivingInstitution || 'Receiving Bank';
+  const formatAmount = (value: number | string) =>
+    `₦${Number(value).toLocaleString('en-NG', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
-  const dateLabel =
-    transactionDate ||
-    new Date().toLocaleString('en-NG', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
+  const formatDate = (value?: string) => {
+    if (!value) return 'Transaction completed';
+
+    const date = new Date(value);
+
+    if (isNaN(date.getTime())) return value;
+
+    return date.toLocaleString('en-NG', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
+  };
 
   const handleShare = async () => {
-    const receipt = [
-      'ZENIMONIES — Transfer Successful',
-      `Amount: ${moneyText(amount)}`,
-      `Receiving institution: ${institution}`,
-      `Date: ${dateLabel}`,
-      transactionReference
-        ? `Reference: ${transactionReference}`
-        : undefined,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
     try {
-      await Share.share({ message: receipt });
-    } catch (error) {
-      // Share failure must not affect the completed transfer.
+      await Share.share({
+        message: [
+          'ZENIMONIES Transfer Receipt',
+          '',
+          `Status: Successful`,
+          `Amount: ${formatAmount(amount)}`,
+          `Recipient/Institution: ${receivingInstitution}`,
+          `Date: ${formatDate(transactionDate)}`,
+          transactionReference
+            ? `Reference: ${transactionReference}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      });
+    } catch {
+      // Sharing cancelled or unavailable.
     }
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-     <StatusBar barStyle="dark-content" />
+  const isInternal = transferType === 'internal';
 
+  return (
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Help */}
         <View style={styles.topRow}>
-          <Text style={styles.brand}>ZENIMONIES</Text>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {}}
-            style={styles.helpButton}
-          >
-            <Text style={styles.helpText}>Need Help?</Text>
-          </Pressable>
+          <View />
+          <Text style={styles.helpText}>Need Help?</Text>
         </View>
 
-        {/* Success section */}
-        <View style={styles.hero}>
-          <View style={styles.sparkleTop}>
-            <Text style={styles.sparkle}>✦</Text>
+        {/* Success icon */}
+        <View style={styles.successSection}>
+          <View style={styles.successOuter}>
+            <View style={styles.successInner}>
+              <Text style={styles.checkmark}>✓</Text>
+            </View>
           </View>
 
-          <View style={styles.successCircle}>
-            <Text style={styles.check}>✓</Text>
-          </View>
-
-          <View style={styles.sparkleSide}>
-            <Text style={styles.sparkle}>✦</Text>
-          </View>
-
-          <Text style={styles.heading}>Transfer Successful</Text>
+          <Text style={styles.title}>Transfer Successful</Text>
 
           <Text style={styles.subtitle}>
-            Your transfer has been completed successfully.
+            {isInternal
+              ? 'Your transfer has been completed successfully.'
+              : 'Beneficiary should get the money within 5 mins, depending on their bank.'}
           </Text>
         </View>
 
-        {/* Transaction Card */}
+        {/* Receipt */}
         <View style={styles.receiptCard}>
-          <Text style={styles.amountLabel}>Amount sent</Text>
-
-          <Text style={styles.amount}>
-            {moneyText(amount)}
+          <Text style={styles.receiptAmount}>
+            {formatAmount(amount)}
           </Text>
 
-          <Text style={styles.institutionLabel}>
-            Receiving institution
+          <Text style={styles.recipientName}>
+            {receivingInstitution}
           </Text>
 
-          <Text style={styles.institution}>
-            {institution}
-          </Text>
-
-          <Text style={styles.date}>
-            {dateLabel}
-          </Text>
-
-          {transactionReference ? (
-            <Text style={styles.reference}>
-              Ref: {transactionReference}
-            </Text>
-          ) : null}
-
-          {/* Transfer timeline */}
-          <View style={styles.timeline}>
-            <TimelineItem
-              title="Transfer initiated"
-              last={false}
-            />
-
-            <TimelineItem
-              title="Transfer processed"
-              last={false}
-            />
-
-            <TimelineItem
-              title={`Received by ${institution}`}
-              last
-            />
+          <View style={styles.brandRow}>
+            <View style={styles.brandIcon}>
+              <Text style={styles.brandLetter}>Z</Text>
+            </View>
+            <Text style={styles.brandName}>ZENIMONIES</Text>
           </View>
+
+          <Text style={styles.dateText}>
+            {formatDate(transactionDate)}
+          </Text>
+
+          {/* Transfer progress */}
+          <View style={styles.progressSection}>
+            <View style={styles.progressLine} />
+
+            {[
+              'Transfer\ninitiated',
+              'Transfer\nprocessed',
+              isInternal
+                ? 'Received by\nZENIMONIES'
+                : 'Sent to\nbeneficiary',
+            ].map((label, index) => (
+              <View key={index} style={styles.progressItem}>
+                <View style={styles.progressDot}>
+                  <Text style={styles.progressCheck}>✓</Text>
+                </View>
+
+                <Text style={styles.progressLabel}>
+                  {label}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Reference */}
+          {!!transactionReference && (
+            <View style={styles.referenceSection}>
+              <Text style={styles.referenceLabel}>
+                Transaction Reference
+              </Text>
+              <Text style={styles.referenceValue}>
+                {transactionReference}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleShare}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.shareIcon}>↗</Text>
+            <Text style={styles.shareText}>Share Receipt</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.doneButton}
+            onPress={onDone}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Bottom actions */}
-      <View style={styles.bottomButtons}>
-        <Pressable
-          style={styles.shareButton}
-          onPress={handleShare}
-          accessibilityRole="button"
-        >
-          <Text style={styles.shareIcon}>↗</Text>
-          <Text style={styles.shareText}>Share Receipt</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.doneButton}
-          onPress={onDone}
-          accessibilityRole="button"
-        >
-          <Text style={styles.doneText}>Done</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-// Timeline component
-function TimelineItem({
-  title,
-  last,
-}: {
-  title: string;
-  last: boolean;
-}) {
-  return (
-    <View style={styles.timelineItem}>
-      <View style={styles.timelineMarkerColumn}>
-        <View style={styles.timelineDot}>
-          <Text style={styles.timelineCheck}>✓</Text>
-        </View>
-
-        {!last && <View style={styles.timelineLine} />}
-      </View>
-
-      <Text style={styles.timelineTitle}>
-        {title}
-      </Text>
     </View>
   );
 }
 
-// Styles
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor: WHITE,
   },
 
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 22,
+    paddingTop: 12,
     paddingBottom: 24,
+    justifyContent: 'space-between',
   },
 
   topRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 8,
-  },
-
-  brand: {
-    color: DARK_GREEN,
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 1.4,
-  },
-
-  helpButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    alignItems: 'center',
+    minHeight: 35,
   },
 
   helpText: {
-    color: BLACK,
-    fontSize: 13,
-    fontWeight: '600',
+    color: GREEN,
+    fontSize: 14,
+    fontWeight: '700',
   },
 
-  hero: {
+  successSection: {
     alignItems: 'center',
-    paddingTop: 28,
+    paddingTop: 24,
     paddingBottom: 22,
-    position: 'relative',
   },
 
-  successCircle: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
+  successOuter: {
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    borderWidth: 10,
+    borderColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+
+  successInner: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: GREEN,
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    elevation: 4,
   },
 
-  check: {
+  checkmark: {
     color: WHITE,
     fontSize: 52,
-    fontWeight: '600',
-    lineHeight: 60,
+    fontWeight: '900',
+    marginTop: -4,
   },
 
-  sparkleTop: {
-    position: 'absolute',
-    top: 17,
-    left: '28%',
-  },
-
-  sparkleSide: {
-    position: 'absolute',
-    top: 62,
-    right: '22%',
-  },
-
-  sparkle: {
-    color: '#D6A51C',
-    fontSize: 20,
-  },
-
-  heading: {
+  title: {
     color: BLACK,
-    fontSize: 23,
-    fontWeight: '800',
-    marginTop: 20,
+    fontSize: 29,
+    fontWeight: '900',
     textAlign: 'center',
   },
 
   subtitle: {
     color: MUTED,
-    fontSize: 13,
-    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 23,
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 19,
+    marginTop: 14,
+    paddingHorizontal: 12,
   },
 
   receiptCard: {
     backgroundColor: WHITE,
+    borderWidth: 1.5,
+    borderColor: GREEN,
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 22,
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 22,
     alignItems: 'center',
+    width: '100%',
   },
 
-  amountLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  amount: {
-    color: DARK_GREEN,
-    fontSize: 32,
+  receiptAmount: {
+    color: GREEN,
+    fontSize: 36,
     fontWeight: '900',
-    marginTop: 5,
-    marginBottom: 16,
-  },
-
-  institutionLabel: {
-    color: MUTED,
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  institution: {
-    color: BLACK,
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-
-  date: {
-    color: MUTED,
-    fontSize: 12,
-    marginTop: 10,
-  },
-
-  reference: {
-    color: MUTED,
-    fontSize: 11,
-    marginTop: 6,
     textAlign: 'center',
   },
 
-  timeline: {
-    width: '100%',
-    marginTop: 24,
-    paddingTop: 18,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
+  recipientName: {
+    color: BLACK,
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 12,
   },
 
-  timelineItem: {
+  brandRow: {
     flexDirection: 'row',
-    minHeight: 36,
-    alignItems: 'flex-start',
-  },
-
-  timelineMarkerColumn: {
-    width: 22,
     alignItems: 'center',
-    marginRight: 10,
+    justifyContent: 'center',
+    marginTop: 14,
   },
 
-  timelineDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  brandIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
   },
 
-  timelineCheck: {
+  brandLetter: {
     color: WHITE,
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
   },
 
-  timelineLine: {
-    width: 2,
-    height: 16,
-    backgroundColor: GREEN,
-    marginTop: 2,
+  brandName: {
+    color: GREEN,
+    fontSize: 15,
+    fontWeight: '900',
   },
 
-  timelineTitle: {
-    color: BLACK,
+  dateText: {
+    color: MUTED,
     fontSize: 13,
-    fontWeight: '600',
-    paddingTop: 2,
+    fontWeight: '700',
+    marginTop: 12,
+    textAlign: 'center',
   },
 
-  bottomButtons: {
+  progressSection: {
+    width: '100%',
     flexDirection: 'row',
-    paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 10,
+    justifyContent: 'space-between',
+    position: 'relative',
+    marginTop: 28,
+  },
+
+  progressLine: {
+    position: 'absolute',
+    top: 14,
+    left: '12%',
+    right: '12%',
+    height: 5,
+    backgroundColor: GREEN,
+  },
+
+  progressItem: {
+    width: '31%',
+    alignItems: 'center',
+  },
+
+  progressDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: GREEN,
+    borderWidth: 2,
+    borderColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+
+  progressCheck: {
+    color: WHITE,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+
+  progressLabel: {
+    color: BLACK,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+
+  referenceSection: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    marginTop: 20,
+    paddingTop: 14,
+  },
+
+  referenceLabel: {
+    color: MUTED,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+
+  referenceValue: {
+    color: BLACK,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  buttonRow: {
+    flexDirection: 'row',
     gap: 12,
-    backgroundColor: BACKGROUND,
+    marginTop: 24,
   },
 
   shareButton: {
     flex: 1,
-    minHeight: 52,
-    borderRadius: 14,
+    height: 58,
+    borderRadius: 15,
     borderWidth: 1.5,
     borderColor: GREEN,
-    flexDirection: 'row',
+    backgroundColor: WHITE,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: WHITE,
+    flexDirection: 'row',
   },
 
   shareIcon: {
-    color: DARK_GREEN,
-    fontSize: 18,
-    fontWeight: '700',
+    color: GREEN,
+    fontSize: 24,
+    fontWeight: '900',
+    marginRight: 8,
   },
 
   shareText: {
-    color: DARK_GREEN,
+    color: GREEN,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '900',
   },
 
   doneButton: {
     flex: 1,
-    minHeight: 52,
-    borderRadius: 14,
+    height: 58,
+    borderRadius: 15,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -461,7 +442,7 @@ const styles = StyleSheet.create({
 
   doneText: {
     color: WHITE,
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
   },
 });
