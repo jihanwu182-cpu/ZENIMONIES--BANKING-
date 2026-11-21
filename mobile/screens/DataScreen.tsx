@@ -1708,37 +1708,24 @@ const theme = {
               />
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                {
-                  backgroundColor: theme.green,
-                  opacity:
-                    transactionPin.length === 4 &&
-                    !purchasing
-                      ? 1
-                      : 0.5,
-                },
-              ]}
-              disabled={
-                transactionPin.length !== 4 ||
-                purchasing
-              }
-              onPress={handlePurchase}
-            >
-              {purchasing ? (
-                <ActivityIndicator
-                  color={theme.white}
-                />
-              ) : (
-                <Text
-                  style={styles.confirmButtonText}
-                >
-                  Confirm & Buy Data
-                </Text>
-              )}
-            </TouchableOpacity>
-
+            {transactionPin.length === 4 && !purchasing && (
+              <TouchableOpacity
+                style={[
+                  styles.confirmButton,
+                  { backgroundColor: theme.green },
+                ]}
+                disabled={purchasing}
+                onPress={handlePurchase}
+              >
+                {purchasing ? (
+                  <ActivityIndicator color={theme.white} />
+                ) : (
+                  <Text style={styles.confirmButtonText}>
+                    Confirm & Buy Data
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => {
@@ -1878,7 +1865,16 @@ const theme = {
               </>
             )}
 
-            {transactionResult && (
+            {transactionResult && getTransactionStatus() === 'success' ? (
+              <View style={styles.successSummary}>
+                <Text style={[styles.successAmount, { color: theme.green }]}>
+                  {formatAmount(Number(transactionResult.amount) || 0)}
+                </Text>
+                <Text style={[styles.successPhone, { color: theme.text }]}>
+                  {transactionResult.phone}
+                </Text>
+              </View>
+            ) : transactionResult ? (
               <View
                 style={[
                   styles.resultDetails,
@@ -1973,11 +1969,12 @@ const theme = {
                   </Text>
                 </View>
               </View>
-            )}
+            ) : null}
 
             <TouchableOpacity
               style={[
                 styles.resultButton,
+                getTransactionStatus() === 'success' && styles.resultButtonSuccess,
                 { backgroundColor: theme.green },
               ]}
               onPress={closeResultModal}
@@ -2539,13 +2536,13 @@ const styles = StyleSheet.create({
   pinBoxesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: 8,
   },
   pinBox: {
-    width: 62,
-    height: 64,
+    width: 40,
+    height: 40,
     borderWidth: 1.5,
-    borderRadius: 13,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2556,9 +2553,12 @@ const styles = StyleSheet.create({
   hiddenPinInput: {
     position: 'absolute',
     width: '100%',
-    height: 64,
-    opacity: 0.02,
+    height: 40,
+    opacity: 0,
     color: 'transparent',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    outlineWidth: 0,
   },
   processingScreen: {
     flex: 1,
@@ -2689,6 +2689,19 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
+  successSummary: {
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 5,
+  },
+  successAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  successPhone: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   resultButton: {
     width: '100%',
     height: 52,
@@ -2696,6 +2709,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
+  },
+  resultButtonSuccess: {
+    width: 76,
+    height: 34,
+    alignSelf: 'flex-end',
+    borderRadius: 8,
+    marginTop: 12,
   },
 
   resultButtonText: {
