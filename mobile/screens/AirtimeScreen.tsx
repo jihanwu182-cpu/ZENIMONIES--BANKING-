@@ -438,17 +438,11 @@ export default function AirtimeScreen({
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.successContent}>
           <View style={styles.successIconCircle}>
-            <MaterialCommunityIcons name="check-circle" size={76} color={colors.primary} />
+            <MaterialCommunityIcons name="check-circle" size={44} color={colors.primary} />
           </View>
-          <Text style={styles.successScreenTitle}>Purchase Successful</Text>
-          <Text style={styles.successScreenSubtitle}>Your airtime has been sent successfully.</Text>
-          <View style={styles.successDetails}>
-            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Network</Text><Text style={styles.successDetailValue}>{network ? networkLabel(network) : ''}</Text></View>
-            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Phone Number</Text><Text style={styles.successDetailValue}>{phone}</Text></View>
-            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Amount Paid</Text><Text style={[styles.successDetailValue, styles.successAmount]}>₦{selectedAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text></View>
-            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Reference</Text><Text style={styles.successDetailValue}>{result.reference || '—'}</Text></View>
-            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Date & Time</Text><Text style={styles.successDetailValue}>{(successDate || new Date()).toLocaleString('en-NG')}</Text></View>
-          </View>
+          <Text style={styles.successScreenTitle}>Purchase successful</Text>
+          <Text style={[styles.successAmount, styles.successAmountDisplay]}>₦{selectedAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+          <Text style={styles.successPhone}>{phone}</Text>
         </View>
         <TouchableOpacity style={styles.successDoneButton} onPress={onBack}>
           <Text style={styles.successDoneText}>Done</Text>
@@ -797,8 +791,8 @@ export default function AirtimeScreen({
       </Modal>
 
       {/* LOADING INDICATOR ONLY */}
-      <Modal visible={loading} transparent animationType="fade" onRequestClose={() => {}}>
-        <View style={styles.loadingOnlyOverlay}><ActivityIndicator size="large" color={colors.primary} /></View>
+      <Modal visible={loading} transparent={false} animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.processingFullScreen}><ActivityIndicator size="large" color={colors.primary} /></View>
       </Modal>
     </SafeAreaView>
   );
@@ -1206,19 +1200,16 @@ const createStyles = (
     confirmButtonCompact: { width: '68%', height: 44, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 44 },
     confirmButtonCompactText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
     pinCancelAction: { alignItems: 'center', paddingVertical: 14, marginTop: 6 },
-    loadingOnlyOverlay: { flex: 1, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+    processingFullScreen: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
     successScreen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 22 },
     successContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    successIconCircle: { marginBottom: 20 },
-    successScreenTitle: { color: colors.text, fontSize: 25, fontWeight: '900', textAlign: 'center' },
-    successScreenSubtitle: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 8 },
-    successDetails: { width: '100%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 15, paddingVertical: 6, marginTop: 26 },
-    successDetailRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
-    successDetailLabel: { color: colors.textSecondary, fontSize: 12, flexShrink: 1 },
-    successDetailValue: { color: colors.text, fontSize: 12, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
-    successAmount: { color: colors.primary, fontSize: 14 },
-    successDoneButton: { height: 48, width: '100%', borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-    successDoneText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+    successIconCircle: { marginBottom: 12 },
+    successScreenTitle: { color: colors.text, fontSize: 18, fontWeight: '800', textAlign: 'center' },
+    successAmount: { color: colors.primary, fontSize: 20, fontWeight: '800' },
+    successAmountDisplay: { marginTop: 10 },
+    successPhone: { color: colors.text, fontSize: 15, fontWeight: '700', textAlign: 'center', marginTop: 8 },
+    successDoneButton: { height: 40, width: 88, alignSelf: 'flex-end', borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+    successDoneText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
 
     cancelText: {
       color: colors.textSecondary,
