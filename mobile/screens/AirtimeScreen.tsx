@@ -1385,52 +1385,52 @@ const createStyles = (
       backgroundColor: colors.surface,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      paddingHorizontal: 20,
-      paddingTop: 8,
-      paddingBottom: 12,
+      paddingHorizontal: 16,
+      paddingTop: 6,
+      paddingBottom: 6,
     },
 
     pinModalHandle: {
-      width: 42,
+      width: 38,
       height: 4,
       borderRadius: 3,
       backgroundColor: colors.border,
       alignSelf: 'center',
-      marginBottom: 8,
+      marginBottom: 5,
     },
 
     pinTitle: {
       color: colors.text,
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '900',
       textAlign: 'center',
     },
 
     pinDescription: {
       color: colors.textSecondary,
-      fontSize: 11,
+      fontSize: 10,
       textAlign: 'center',
-      marginTop: 4,
+      marginTop: 3,
     },
 
     pinSummary: {
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: 11,
-      fontSize: 12,
+      marginTop: 7,
+      fontSize: 11,
       fontWeight: '700',
     },
 
     pinAmount: {
       color: colors.text,
       textAlign: 'center',
-      marginTop: 3,
-      fontSize: 23,
+      marginTop: 1,
+      fontSize: 21,
       fontWeight: '900',
     },
 
     pinInput: {
-      height: 48,
+      height: 42,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 12,
@@ -1438,7 +1438,7 @@ const createStyles = (
       textAlign: 'center',
       fontSize: 20,
       letterSpacing: 8,
-      marginTop: 12,
+      marginTop: 8,
       backgroundColor: colors.background,
     },
 
@@ -1455,16 +1455,16 @@ const createStyles = (
     },
 
     confirmButton: {
-      minHeight: 49,
+      minHeight: 44,
       borderRadius: 12,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 12,
+      marginTop: 8,
     },
 
     cancelButton: {
-      paddingVertical: 8,
+      paddingVertical: 5,
       paddingHorizontal: 12,
       alignItems: 'center',
     },
