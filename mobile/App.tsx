@@ -41,6 +41,7 @@ import BillsScreen from './screens/BillsScreen';
 import InternalTransferScreen from './screens/InternalTransferScreen';
 import TransferReviewScreen from './screens/TransferReviewScreen';
 import TransferSuccessScreen from './screens/TransferSuccessScreen';
+import TransferPinScreen from './screens/TransferPinScreen';
 
 import {
   registerPushNotifications,
@@ -80,8 +81,8 @@ type Screen =
   | 'tv'
   | 'internal-transfer'
   | 'transfer-review'
+  | 'transfer-pin'
   | 'transfer-success';
-
 
 type Account = {
   id?: string;
@@ -2121,6 +2122,57 @@ if (
           setTransferDraft(null);
           setTransferReceipt(null);
           setScreen('home');
+        }}
+      />
+    </SafeAreaView>
+  );
+} 
+  if (
+  screen === 'transfer-pin' &&
+  session &&
+  transferDraft
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <TransferPinScreen
+        amount={transferDraft.amount}
+        recipientName={transferDraft.recipient.name}
+        recipientPhone={transferDraft.recipient.phone}
+        onBack={() => setScreen('transfer-review')}
+        onConfirm={async (pin) => {
+          const result = await authenticatedPost(
+            `${API_BASE}/internal-transfers`,
+            session.token,
+            {
+              recipient_phone:
+                transferDraft.recipient.phone,
+              amount: transferDraft.amount,
+              narration: transferDraft.narration,
+              transaction_pin: pin,
+            }
+          );
+
+          const transfer = result.data?.transfer;
+
+          if (
+            result.data?.success !== true ||
+            transfer?.status !== 'completed'
+          ) {
+            throw new Error(
+              result.data?.message ||
+                'Transfer could not be confirmed.'
+            );
+          }
+
+          setTransferReceipt({
+            amount: Number(transfer.amount),
+            reference: transfer.reference || '',
+            transactionDate: transfer.created_at || '',
+          });
+
+          setScreen('transfer-success');
         }}
       />
     </SafeAreaView>
