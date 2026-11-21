@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -521,6 +521,72 @@ const [pinError, setPinError] = useState('');
   };
 
   // ====================================================
+  // SILENT STATUS VERIFICATION
+  // Pending purchases are rechecked automatically without
+  // showing a processing card or status button to customers.
+  // ====================================================
+
+  useEffect(() => {
+    if (!pendingReference || !token) return;
+
+    let active = true;
+
+    const verifyStatus = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/airtime/requery/${encodeURIComponent(pendingReference)}`,
+          {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        const data = await response.json();
+        if (!active) return;
+
+        const status = String(
+          data.status ||
+            data.transaction?.status ||
+            data.transaction?.provider_status ||
+            ''
+        ).toLowerCase();
+
+        if (status === 'completed') {
+          setResult({
+            status: 'completed',
+            reference: pendingReference,
+            message: data.message || 'Airtime purchase completed successfully.',
+          });
+          setPendingReference('');
+          onComplete?.();
+        } else if (status === 'failed' || status === 'refunded') {
+          setResult({
+            status: 'failed',
+            reference: pendingReference,
+            message: data.message || 'The Airtime purchase failed. Check your wallet balance.',
+          });
+          setPendingReference('');
+          onComplete?.();
+        }
+      } catch {
+        // Keep checking quietly; do not expose a processing screen.
+      }
+    };
+
+    const interval = setInterval(verifyStatus, 5000);
+    void verifyStatus();
+
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [pendingReference, token, onComplete]);
+
+
+  // ====================================================
   // RESET FORM
   // ====================================================
 
@@ -687,7 +753,7 @@ const [pinError, setPinError] = useState('');
 
         {/* TRANSACTION RESULT */}
 
-        {result && (
+        {result && result.status !== 'pending' && (
           <View
             style={[
               styles.resultBox,
@@ -718,7 +784,7 @@ const [pinError, setPinError] = useState('');
 
             <Text style={styles.resultTitle}>
               {result.status === 'completed'
-                ? 'Purchase successful'
+                ? 'Purchase Successful'
                 : result.status === 'failed'
                 ? 'Purchase failed'
                 : 'Processing purchase'}
@@ -751,13 +817,33 @@ const [pinError, setPinError] = useState('');
                 </TouchableOpacity>
               )}
 
-            {result.status !== 'pending' && (
+            {result.status === 'completed' && (
+              <TouchableOpacity
+                style={styles.newPurchaseButton}
+                onPress={() =>
+                  Alert.alert(
+                    'Airtime Receipt',
+                    `Purchase Successful\n\nNetwork: ${networkLabel(network as Network)}\nPhone: ${phone}\nAmount: ₦${selectedAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\nReference: ${result.reference || 'Unavailable'}`,
+                    [
+                      { text: 'Close', style: 'cancel' },
+                      { text: 'Make Another Purchase', onPress: resetForm },
+                    ]
+                  )
+                }
+              >
+                <Text style={styles.newPurchaseText}>
+                  View Receipt
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {result.status === 'failed' && (
               <TouchableOpacity
                 style={styles.newPurchaseButton}
                 onPress={resetForm}
               >
                 <Text style={styles.newPurchaseText}>
-                  Make another purchase
+                  Try Again
                 </Text>
               </TouchableOpacity>
             )}
@@ -788,9 +874,7 @@ const [pinError, setPinError] = useState('');
           }
         >
           <Text style={styles.continueText}>
-            {pendingReference
-              ? 'Processing…'
-              : 'Continue'}
+            Continue
           </Text>
 
           <MaterialCommunityIcons
