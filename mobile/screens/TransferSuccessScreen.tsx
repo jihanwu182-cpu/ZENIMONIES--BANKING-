@@ -83,10 +83,7 @@ export default function TransferSuccessScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={BACKGROUND}
-      />
+     <StatusBar barStyle="dark-content" />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
