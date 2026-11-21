@@ -45,7 +45,7 @@ export default function TransferReviewScreen({
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const pinInputRef = useRef<TextInput | null>(null);
+  const pinInputRef = useRef<any>(null);
 
   const fee = 0;
   const totalDebit = amount + fee;
