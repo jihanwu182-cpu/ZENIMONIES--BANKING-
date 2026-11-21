@@ -2178,7 +2178,7 @@ if (
     </SafeAreaView>
   );
 }
-  // ====================================================
+ // ====================================================
 // INTERNAL TRANSFER REVIEW
 // ====================================================
 
@@ -2192,47 +2192,11 @@ if (
       <StatusBar barStyle="dark-content" />
 
       <TransferReviewScreen
-  recipient={transferDraft.recipient}
-  amount={transferDraft.amount}
-  narration={transferDraft.narration}
-  onContinue={() => setScreen('transfer-pin')}
-  onBack={() => setScreen('internal-transfer')}
-/>
-  const result = await authenticatedPost(
-    `${API_BASE}/internal-transfers`,
-    session.token,
-    {
-      recipient_phone:
-        transferDraft.recipient.phone,
-      amount: transferDraft.amount,
-      narration: transferDraft.narration,
-      transaction_pin: pin,
-    }
-  );
-
-  const transfer = result.data?.transfer;
-
-  if (
-    result.data?.success !== true ||
-    transfer?.status !== 'completed'
-  ) {
-    throw new Error(
-      result.data?.message ||
-        'Transfer could not be confirmed.'
-    );
-  }
-
-  setTransferReceipt({
-    amount: Number(transfer.amount),
-    reference: transfer.reference || '',
-    transactionDate: transfer.created_at || '',
-  });
-
-  setScreen('transfer-success');
-}}
-        onBack={() =>
-          setScreen('internal-transfer')
-        }
+        recipient={transferDraft.recipient}
+        amount={transferDraft.amount}
+        narration={transferDraft.narration}
+        onContinue={() => setScreen('transfer-pin')}
+        onBack={() => setScreen('internal-transfer')}
       />
     </SafeAreaView>
   );
