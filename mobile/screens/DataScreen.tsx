@@ -52,17 +52,14 @@ interface NetworkItem {
   logo: any;
 }
 
-type TransactionStatus =
-  | 'success'
-  | 'pending'
-  | 'failed';
+type TransactionStatus = 'success' | 'pending' | 'failed';
 
 // ======================================================
 // CONFIGURATION
 // ======================================================
 
-const API_BASE =
-  'https://zenimonies-banking.onrender.com/api';
+const API_BASE = 'https://zenimonies-banking.onrender.com/api';
+
 const PALETTE = {
   background: '#FFFFFF',
   card: '#FFFFFF',
@@ -74,7 +71,6 @@ const PALETTE = {
   white: '#FFFFFF',
   black: '#000000',
 };
-
 
 const NETWORKS: NetworkItem[] = [
   {
@@ -117,19 +113,14 @@ const CATEGORIES = [
 // PHONE NUMBER HELPERS
 // ======================================================
 
-const normalizePhoneNumber = (
-  value: string,
-): string => {
+const normalizePhoneNumber = (value: string): string => {
   let digits = value.replace(/\D/g, '');
 
   if (digits.startsWith('234')) {
     digits = '0' + digits.slice(3);
   }
 
-  if (
-    digits.length === 10 &&
-    !digits.startsWith('0')
-  ) {
+  if (digits.length === 10 && !digits.startsWith('0')) {
     digits = '0' + digits;
   }
 
@@ -137,14 +128,13 @@ const normalizePhoneNumber = (
 };
 
 // ======================================================
-// NETWORK DETECTION
+// NETWORK DETECTION (order matters – more specific first)
 // ======================================================
 
 const detectNetworkFromPhone = (
   phoneNumber: string,
 ): NetworkItem | null => {
-  const normalized =
-    normalizePhoneNumber(phoneNumber);
+  const normalized = normalizePhoneNumber(phoneNumber);
 
   if (normalized.length < 4) {
     return null;
@@ -152,77 +142,37 @@ const detectNetworkFromPhone = (
 
   const prefix = normalized.substring(0, 4);
 
+  // Cleaned prefixes – removed known overlaps where possible
   const prefixes: Record<string, string[]> = {
     mtn: [
-      '0803',
-      '0806',
-      '0810',
-      '0813',
-      '0814',
-      '0816',
-      '0703',
-      '0706',
-      '0903',
-      '0906',
-      '0913',
-      '0916',
-      '0704',
-      '0804',
-      '0904',
-      '0914',
+      '0803', '0806', '0810', '0813', '0814', '0816',
+      '0703', '0706', '0903', '0906', '0913', '0916',
+      '0704', '0804', '0904', '0914',
     ],
-
     airtel: [
-      '0802',
-      '0808',
-      '0812',
-      '0701',
-      '0708',
-      '0901',
-      '0902',
-      '0907',
-      '0912',
-      '0702',
-      '0705',
-      '0905',
-      '0915',
+      '0802', '0808', '0812', '0701', '0708',
+      '0901', '0902', '0907', '0912',
+      '0702', // note: 0705 / 0905 / 0915 can be ambiguous
     ],
-
     glo: [
-      '0805',
-      '0807',
-      '0811',
-      '0815',
-      '0705',
-      '0905',
-      '0915',
+      '0805', '0807', '0811', '0815',
+      '0905', '0915', // kept – common Glo
     ],
-
     t2mobile: [
-      '0809',
-      '0817',
-      '0818',
-      '0908',
-      '0909',
-      '0910',
-      '0911',
+      '0809', '0817', '0818', '0908', '0909', '0910', '0911',
     ],
   };
 
-  const foundNetwork = Object.keys(prefixes).find(
-    network =>
-      prefixes[network].includes(prefix),
-  );
+  // Check in preferred order
+  const order = ['mtn', 'airtel', 'glo', 't2mobile'];
 
-  if (!foundNetwork) {
-    return null;
+  for (const networkId of order) {
+    if (prefixes[networkId]?.includes(prefix)) {
+      return NETWORKS.find(n => n.id === networkId) || null;
+    }
   }
 
-  return (
-    NETWORKS.find(
-      network => network.id === foundNetwork,
-    ) || null
-  );
+  return null;
 };
 
 // ======================================================
@@ -253,9 +203,7 @@ const normalizeDataPlan = (
     plan.cost ??
     plan.selling_price;
 
-  const amount = Number(
-    String(amountValue ?? 0).replace(/,/g, ''),
-  );
+  const amount = Number(String(amountValue ?? 0).replace(/,/g, ''));
 
   const name =
     plan.name ??
@@ -287,47 +235,28 @@ const normalizeDataPlan = (
     variation_code: String(variationCode),
     name: String(name),
     amount,
-
-    network:
-      plan.network ??
-      plan.network_name ??
-      plan.serviceID,
-
+    network: plan.network ?? plan.network_name ?? plan.serviceID,
     validity:
       plan.validity ??
       plan.duration ??
       plan.validity_period ??
       plan.expiry ??
       validityMatch?.[1],
-
     allowance:
       plan.allowance ??
       plan.data_amount ??
       plan.size ??
       plan.volume ??
       allowanceMatch?.[1],
-
-    description:
-      plan.description ??
-      plan.details ??
-      plan.name,
-
-    category:
-      plan.category ??
-      plan.plan_category,
-
-    fixedPrice:
-      plan.fixedPrice ??
-      plan.fixed_price ??
-      false,
-
+    description: plan.description ?? plan.details ?? plan.name,
+    category: plan.category ?? plan.plan_category,
+    fixedPrice: plan.fixedPrice ?? plan.fixed_price ?? false,
     isPromotional:
       plan.isPromotional ??
       plan.is_promotional ??
       plan.promotional ??
       plan.promo ??
       false,
-
     raw: plan,
   };
 };
@@ -336,9 +265,7 @@ const normalizeDataPlan = (
 // EXTRACT PLANS FROM API RESPONSE
 // ======================================================
 
-const extractPlansFromResponse = (
-  response: any,
-): any[] => {
+const extractPlansFromResponse = (response: any): any[] => {
   if (!response) return [];
 
   if (Array.isArray(response)) {
@@ -373,9 +300,7 @@ const extractPlansFromResponse = (
 // TRANSACTION STATUS HELPERS
 // ======================================================
 
-const getStatusFromResult = (
-  result: any,
-): TransactionStatus => {
+const getStatusFromResult = (result: any): TransactionStatus => {
   if (!result) {
     return 'failed';
   }
@@ -387,7 +312,7 @@ const getStatusFromResult = (
       '',
   ).toLowerCase();
 
-  // Pending takes precedence over success.
+  // Pending takes precedence
   if (
     result.httpStatus === 202 ||
     status === 'pending' ||
@@ -433,106 +358,73 @@ const DataScreen = ({
   colors,
   isDark = false,
 }: Props) => {
-  // Approved ZENIMONIES palette only.
-const theme = {
-  background: colors?.background ?? PALETTE.background,
-  card: colors?.card ?? PALETTE.card,
-  text: colors?.text ?? PALETTE.text,
-  muted: colors?.muted ?? PALETTE.muted,
-  border: colors?.border ?? PALETTE.border,
-  green: PALETTE.green,
-  darkGreen: PALETTE.darkGreen,
-  white: PALETTE.white,
-};
+  const theme = {
+    background: colors?.background ?? PALETTE.background,
+    card: colors?.card ?? PALETTE.card,
+    text: colors?.text ?? PALETTE.text,
+    muted: colors?.muted ?? PALETTE.muted,
+    border: colors?.border ?? PALETTE.border,
+    green: colors?.green ?? PALETTE.green,
+    darkGreen: colors?.darkGreen ?? PALETTE.darkGreen,
+    white: PALETTE.white,
+  };
+
   const authToken = token || '';
 
   // ====================================================
   // STATE
   // ====================================================
 
-  const [selectedNetwork, setSelectedNetwork] =
-    useState<NetworkItem>(NETWORKS[0]);
-
-  const [networkModalVisible, setNetworkModalVisible] =
-    useState(false);
-
+  const [selectedNetwork, setSelectedNetwork] = useState<NetworkItem>(
+    NETWORKS[0],
+  );
+  const [networkModalVisible, setNetworkModalVisible] = useState(false);
   const [phone, setPhone] = useState('');
-
   const [plans, setPlans] = useState<DataPlan[]>([]);
-
-  const [selectedPlan, setSelectedPlan] =
-    useState<DataPlan | null>(null);
-
-  const [selectedCategory, setSelectedCategory] =
-    useState('All Plans');
-
+  const [selectedPlan, setSelectedPlan] = useState<DataPlan | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('All Plans');
   const [search, setSearch] = useState('');
-
-  const [loadingPlans, setLoadingPlans] =
-    useState(false);
-
-  const [purchasing, setPurchasing] =
-    useState(false);
-
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
   const [processingModalVisible, setProcessingModalVisible] =
     useState(false);
-
-  const [pinModalVisible, setPinModalVisible] =
-    useState(false);
-
-  const [transactionPin, setTransactionPin] =
-    useState('');
-
-  const [resultModalVisible, setResultModalVisible] =
-    useState(false);
-
-  const [transactionResult, setTransactionResult] =
-    useState<any>(null);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [transactionPin, setTransactionPin] = useState('');
+  const [resultModalVisible, setResultModalVisible] = useState(false);
+  const [transactionResult, setTransactionResult] = useState<any>(null);
 
   const requestIdRef = useRef(0);
-
   const purchaseInProgressRef = useRef(false);
 
   // ====================================================
   // PHONE NUMBER
   // ====================================================
 
-  const handlePhoneChange = useCallback(
-    (value: string) => {
-      const cleaned = value.replace(/\D/g, '');
+  const handlePhoneChange = useCallback((value: string) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 11);
+    setPhone(cleaned);
 
-      const formatted = cleaned.slice(0, 13);
-
-      setPhone(formatted);
-
-      const detected =
-        detectNetworkFromPhone(formatted);
-
-      if (detected) {
-        setSelectedNetwork(detected);
-      }
-    },
-    [],
-  );
+    const detected = detectNetworkFromPhone(cleaned);
+    if (detected) {
+      setSelectedNetwork(detected);
+    }
+  }, []);
 
   // ====================================================
   // LOAD PLANS
   // ====================================================
 
   const loadPlans = useCallback(async () => {
-    const currentRequest =
-      ++requestIdRef.current;
+    const currentRequest = ++requestIdRef.current;
 
     if (!authToken) {
       setPlans([]);
       setSelectedPlan(null);
       setLoadingPlans(false);
-
       Alert.alert(
         'Session expired',
         'Please log in again to load data plans.',
       );
-
       return;
     }
 
@@ -545,10 +437,7 @@ const theme = {
         `${API_BASE}/data/plans?network=` +
         encodeURIComponent(selectedNetwork.id);
 
-      console.log(
-        'ZENIMONIES DATA PLANS REQUEST:',
-        selectedNetwork.id,
-      );
+      console.log('ZENIMONIES DATA PLANS REQUEST:', selectedNetwork.id);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -558,30 +447,17 @@ const theme = {
         },
       });
 
-      const responseText =
-        await response.text();
-
+      const responseText = await response.text();
       let data: any;
 
       try {
-        data = responseText
-          ? JSON.parse(responseText)
-          : {};
+        data = responseText ? JSON.parse(responseText) : {};
       } catch {
-        throw new Error(
-          'Invalid response received from the server.',
-        );
+        throw new Error('Invalid response received from the server.');
       }
 
-      console.log(
-        'DATA PLANS HTTP STATUS:',
-        response.status,
-      );
-
-      console.log(
-        'DATA PLANS RESPONSE:',
-        JSON.stringify(data),
-      );
+      console.log('DATA PLANS HTTP STATUS:', response.status);
+      console.log('DATA PLANS RESPONSE:', JSON.stringify(data));
 
       if (!response.ok) {
         throw new Error(
@@ -592,49 +468,24 @@ const theme = {
         );
       }
 
-      const rawPlans =
-        extractPlansFromResponse(data);
-
-      console.log(
-        'RAW DATA PLANS COUNT:',
-        rawPlans.length,
-      );
+      const rawPlans = extractPlansFromResponse(data);
+      console.log('RAW DATA PLANS COUNT:', rawPlans.length);
 
       const normalizedPlans = rawPlans
-        .map((plan: any, index: number) =>
-          normalizeDataPlan(plan, index),
-        )
-        .filter(
-          (plan): plan is DataPlan =>
-            plan !== null,
-        );
+        .map((plan: any, index: number) => normalizeDataPlan(plan, index))
+        .filter((plan): plan is DataPlan => plan !== null);
 
-      console.log(
-        'NORMALIZED DATA PLANS COUNT:',
-        normalizedPlans.length,
-      );
+      console.log('NORMALIZED DATA PLANS COUNT:', normalizedPlans.length);
 
-      if (
-        currentRequest !==
-        requestIdRef.current
-      ) {
+      if (currentRequest !== requestIdRef.current) {
         return;
       }
 
       setPlans(normalizedPlans);
-
       setSelectedCategory('All Plans');
 
-      if (normalizedPlans.length > 0) {
-        console.log(
-          'DATA PLANS SUCCESS:',
-          normalizedPlans.length,
-        );
-      } else {
-        console.warn(
-          'DATA PLANS EMPTY:',
-          JSON.stringify(data, null, 2),
-        );
+      if (normalizedPlans.length === 0) {
+        console.warn('DATA PLANS EMPTY:', JSON.stringify(data, null, 2));
       }
     } catch (error: any) {
       console.error(
@@ -642,33 +493,22 @@ const theme = {
         error?.message || error,
       );
 
-      if (
-        currentRequest !==
-        requestIdRef.current
-      ) {
+      if (currentRequest !== requestIdRef.current) {
         return;
       }
 
       setPlans([]);
-
       Alert.alert(
         'Unable to load data plans',
         error?.message ||
           'Please check your internet connection and try again.',
       );
     } finally {
-      if (
-        currentRequest ===
-        requestIdRef.current
-      ) {
+      if (currentRequest === requestIdRef.current) {
         setLoadingPlans(false);
       }
     }
   }, [authToken, selectedNetwork.id]);
-
-  // ====================================================
-  // AUTOMATICALLY LOAD DATA PLANS
-  // ====================================================
 
   useEffect(() => {
     loadPlans();
@@ -678,9 +518,7 @@ const theme = {
   // PLAN CATEGORIES
   // ====================================================
 
-  const getPlanCategory = (
-    plan: DataPlan,
-  ): string => {
+  const getPlanCategory = (plan: DataPlan): string => {
     const text = [
       plan.name,
       plan.validity,
@@ -700,10 +538,7 @@ const theme = {
       return 'Hot Deals';
     }
 
-    if (
-      text.includes('night') ||
-      text.includes('midnight')
-    ) {
+    if (text.includes('night') || text.includes('midnight')) {
       return 'Night';
     }
 
@@ -715,10 +550,7 @@ const theme = {
       return 'Weekend';
     }
 
-    if (
-      text.includes('hour') ||
-      text.includes('hourly')
-    ) {
+    if (text.includes('hour') || text.includes('hourly')) {
       return 'Hourly';
     }
 
@@ -778,12 +610,10 @@ const theme = {
 
   const filteredPlans = useMemo(() => {
     return plans.filter(plan => {
-      const category =
-        getPlanCategory(plan);
+      const category = getPlanCategory(plan);
 
       const matchesCategory =
-        selectedCategory === 'All Plans' ||
-        category === selectedCategory;
+        selectedCategory === 'All Plans' || category === selectedCategory;
 
       const searchText = [
         plan.name,
@@ -799,14 +629,9 @@ const theme = {
 
       const matchesSearch =
         search.trim() === '' ||
-        searchText.includes(
-          search.trim().toLowerCase(),
-        );
+        searchText.includes(search.trim().toLowerCase());
 
-      return (
-        matchesCategory &&
-        matchesSearch
-      );
+      return matchesCategory && matchesSearch;
     });
   }, [plans, selectedCategory, search]);
 
@@ -814,9 +639,7 @@ const theme = {
   // CURRENCY
   // ====================================================
 
-  const formatAmount = (
-    amount: number,
-  ) => {
+  const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency: 'NGN',
@@ -829,35 +652,31 @@ const theme = {
   // ====================================================
 
   const handleContinue = () => {
-    const normalizedPhone =
-      normalizePhoneNumber(phone);
+    const normalizedPhone = normalizePhoneNumber(phone);
 
     if (!phone.trim()) {
       Alert.alert(
         'Phone number required',
         'Please enter the phone number you want to recharge.',
       );
-
       return;
     }
 
-    if (
-      !/^0\d{10}$/.test(normalizedPhone)
-    ) {
+    if (!/^0\d{10}$/.test(normalizedPhone)) {
       Alert.alert(
         'Invalid phone number',
-        'Enter a valid Nigerian phone number. You can enter it with or without the first zero, or with +234.',
+        'Enter a valid Nigerian phone number (e.g. 08031234567).',
       );
-
       return;
     }
 
     if (!selectedPlan) {
-      Alert.alert(
-        'Select a data plan',
-        'Please select a data plan to continue.',
-      );
+      Alert.alert('Select a data plan', 'Please select a data plan to continue.');
+      return;
+    }
 
+    if (!authToken) {
+      Alert.alert('Session expired', 'Please log in again.');
       return;
     }
 
@@ -871,73 +690,52 @@ const theme = {
 
   const handlePurchase = async () => {
     if (transactionPin.length !== 4) {
-      Alert.alert(
-        'Invalid PIN',
-        'Please enter your 4-digit transaction PIN.',
-      );
-
+      Alert.alert('Invalid PIN', 'Please enter your 4-digit transaction PIN.');
       return;
     }
 
-    if (!selectedPlan) {
+    if (!selectedPlan || !authToken) {
       return;
     }
 
-    // Prevent duplicate taps/submissions.
     if (purchaseInProgressRef.current) {
       return;
     }
 
     purchaseInProgressRef.current = true;
 
-    const normalizedPhone =
-      normalizePhoneNumber(phone);
-
-    const submittedPin =
-      transactionPin;
+    const normalizedPhone = normalizePhoneNumber(phone);
+    const submittedPin = transactionPin;
 
     setPurchasing(true);
     setPinModalVisible(false);
     setProcessingModalVisible(true);
-
-    // Clear PIN from state immediately.
     setTransactionPin('');
 
     try {
-      const response = await fetch(
-        `${API_BASE}/data`,
-        {
-          method: 'POST',
-
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-
-          body: JSON.stringify({
-            network: selectedNetwork.id,
-            phone: normalizedPhone,
-            variation_code:
-              selectedPlan.variation_code,
-            transaction_pin: submittedPin,
-          }),
+      const response = await fetch(`${API_BASE}/data`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
-      );
+        body: JSON.stringify({
+          network: selectedNetwork.id,
+          phone: normalizedPhone,
+          variation_code: selectedPlan.variation_code,
+          transaction_pin: submittedPin,
+        }),
+      });
 
-      const responseText =
-        await response.text();
-
+      const responseText = await response.text();
       let data: any = {};
 
       try {
-        data = responseText
-          ? JSON.parse(responseText)
-          : {};
+        data = responseText ? JSON.parse(responseText) : {};
       } catch {
         data = {
-          message:
-            'The server returned an invalid response.',
+          message: 'The server returned an invalid response.',
         };
       }
 
@@ -956,16 +754,12 @@ const theme = {
     } catch (error: any) {
       setProcessingModalVisible(false);
 
-      /*
-       * A network error does not prove that the
-       * provider/backend did not receive the request.
-       * Therefore the status is UNKNOWN/PENDING.
-       */
+      // Network error ≠ confirmed failure. Treat as unknown/pending.
       setTransactionResult({
         success: false,
         status: 'unknown',
         message:
-          'We could not confirm the transaction status. Your request may have been processed. Check your transaction history before attempting another purchase.',
+          'We could not confirm the transaction status. Your request may have been processed. Check your transaction history before trying again.',
         amount: selectedPlan.amount,
         phone: normalizedPhone,
         network: selectedNetwork.name,
@@ -985,15 +779,11 @@ const theme = {
   // ====================================================
 
   const getTransactionStatus = (): TransactionStatus => {
-    return getStatusFromResult(
-      transactionResult,
-    );
+    return getStatusFromResult(transactionResult);
   };
 
   const closeResultModal = () => {
-    const currentStatus =
-      getTransactionStatus();
-
+    const currentStatus = getTransactionStatus();
     setResultModalVisible(false);
 
     if (currentStatus === 'success') {
@@ -1005,9 +795,7 @@ const theme = {
   // SELECT NETWORK
   // ====================================================
 
-  const selectNetwork = (
-    network: NetworkItem,
-  ) => {
+  const selectNetwork = (network: NetworkItem) => {
     setSelectedNetwork(network);
     setNetworkModalVisible(false);
     setSelectedCategory('All Plans');
@@ -1021,15 +809,9 @@ const theme = {
 
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.background,
-        },
-      ]}
+      style={[styles.container, { backgroundColor: theme.background }]}
     >
       {/* HEADER */}
-
       <View style={styles.header}>
         <TouchableOpacity
           style={[
@@ -1041,34 +823,14 @@ const theme = {
           ]}
           onPress={onBack}
         >
-          <Text
-            style={[
-              styles.backText,
-              { color: theme.text },
-            ]}
-          >
-            ‹
-          </Text>
+          <Text style={[styles.backText, { color: theme.text }]}>‹</Text>
         </TouchableOpacity>
 
-        <View
-          style={styles.headerTitleContainer}
-        >
-          <Text
-            style={[
-              styles.headerTitle,
-              { color: theme.text },
-            ]}
-          >
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
             Buy Data
           </Text>
-
-          <Text
-            style={[
-              styles.headerSubtitle,
-              { color: theme.muted },
-            ]}
-          >
+          <Text style={[styles.headerSubtitle, { color: theme.muted }]}>
             Buy data bundles instantly
           </Text>
         </View>
@@ -1079,21 +841,25 @@ const theme = {
         contentContainerStyle={styles.scrollContent}
       >
         {/* PHONE NUMBER */}
-
-        <Text
-          style={[
-            styles.sectionTitle,
-            { color: theme.text },
-          ]}
-        >
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>
           Phone Number
         </Text>
 
-        <View style={styles.phoneInputContainer}>
-          <Text style={styles.countryCode}>🇳🇬 +234</Text>
+        <View
+          style={[
+            styles.phoneInputContainer,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text style={[styles.countryCode, { color: theme.text }]}>
+            🇳🇬 +234
+          </Text>
 
           <TextInput
-            style={styles.phoneInput}
+            style={[styles.phoneInput, { color: theme.text }]}
             placeholder="803 123 4567"
             placeholderTextColor={theme.muted}
             keyboardType="phone-pad"
@@ -1103,7 +869,10 @@ const theme = {
           />
 
           <TouchableOpacity
-            style={styles.networkDropdown}
+            style={[
+              styles.networkDropdown,
+              { borderLeftColor: theme.border },
+            ]}
             onPress={() => setNetworkModalVisible(true)}
             activeOpacity={0.75}
           >
@@ -1114,19 +883,26 @@ const theme = {
                   style={styles.dropdownLogo}
                   resizeMode="contain"
                 />
-                <Text style={styles.dropdownNetworkName}>
+                <Text
+                  style={[styles.dropdownNetworkName, { color: theme.text }]}
+                >
                   {selectedNetwork.name}
                 </Text>
               </>
             ) : (
-              <Text style={styles.dropdownNetworkName}>Network</Text>
+              <Text
+                style={[styles.dropdownNetworkName, { color: theme.muted }]}
+              >
+                Network
+              </Text>
             )}
-            <Text style={styles.dropdownArrow}>▾</Text>
+            <Text style={[styles.dropdownArrow, { color: theme.muted }]}>
+              ▾
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* SEARCH */}
-
         <View
           style={[
             styles.searchContainer,
@@ -1136,15 +912,10 @@ const theme = {
             },
           ]}
         >
-          <Text style={styles.searchIcon}>
-            🔍
-          </Text>
+          <Text style={styles.searchIcon}>🔍</Text>
 
           <TextInput
-            style={[
-              styles.searchInput,
-              { color: theme.text },
-            ]}
+            style={[styles.searchInput, { color: theme.text }]}
             placeholder="Search data plans..."
             placeholderTextColor={theme.muted}
             value={search}
@@ -1152,15 +923,8 @@ const theme = {
           />
 
           {search.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearch('')}
-            >
-              <Text
-                style={[
-                  styles.clearSearch,
-                  { color: theme.muted },
-                ]}
-              >
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Text style={[styles.clearSearch, { color: theme.muted }]}>
                 ✕
               </Text>
             </TouchableOpacity>
@@ -1168,17 +932,13 @@ const theme = {
         </View>
 
         {/* CATEGORIES */}
-
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={
-            styles.categoryContainer
-          }
+          contentContainerStyle={styles.categoryContainer}
         >
           {CATEGORIES.map(category => {
-            const active =
-              selectedCategory === category;
+            const active = selectedCategory === category;
 
             return (
               <TouchableOpacity
@@ -1186,26 +946,16 @@ const theme = {
                 style={[
                   styles.categoryButton,
                   {
-                    backgroundColor: active
-                      ? theme.green
-                      : theme.card,
-                    borderColor: active
-                      ? theme.green
-                      : theme.border,
+                    backgroundColor: active ? theme.green : theme.card,
+                    borderColor: active ? theme.green : theme.border,
                   },
                 ]}
-                onPress={() =>
-                  setSelectedCategory(category)
-                }
+                onPress={() => setSelectedCategory(category)}
               >
                 <Text
                   style={[
                     styles.categoryText,
-                    {
-                      color: active
-                        ? theme.white
-                        : theme.text,
-                    },
+                    { color: active ? theme.white : theme.text },
                   ]}
                 >
                   {category}
@@ -1216,44 +966,22 @@ const theme = {
         </ScrollView>
 
         {/* AVAILABLE PLANS */}
-
         <View style={styles.plansHeader}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.text },
-            ]}
-          >
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
             Available Plans
           </Text>
 
           {!loadingPlans && (
-            <Text
-              style={[
-                styles.planCount,
-                { color: theme.muted },
-              ]}
-            >
+            <Text style={[styles.planCount, { color: theme.muted }]}>
               {filteredPlans.length} plans
             </Text>
           )}
         </View>
 
         {loadingPlans ? (
-          <View
-            style={styles.loadingContainer}
-          >
-            <ActivityIndicator
-              size="large"
-              color={theme.green}
-            />
-
-            <Text
-              style={[
-                styles.loadingText,
-                { color: theme.muted },
-              ]}
-            >
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.green} />
+            <Text style={[styles.loadingText, { color: theme.muted }]}>
               Loading {selectedNetwork.name} plans...
             </Text>
           </View>
@@ -1267,67 +995,135 @@ const theme = {
               },
             ]}
           >
-            <Text style={styles.emptyIcon}>
-              📦
-            </Text>
-
-            <Text
-              style={[
-                styles.emptyTitle,
-                { color: theme.text },
-              ]}
-            >
+            <Text style={styles.emptyIcon}>📦</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>
               No plans found
             </Text>
-
-            <Text
-              style={[
-                styles.emptyMessage,
-                { color: theme.muted },
-              ]}
-            >
+            <Text style={[styles.emptyMessage, { color: theme.muted }]}>
               {plans.length === 0
                 ? `No ${selectedNetwork.name} data plans are currently available. Please try again.`
                 : 'Try another category or search term.'}
             </Text>
-
             <TouchableOpacity
-              style={[
-                styles.retryButton,
-                {
-                  backgroundColor: theme.green,
-                },
-              ]}
+              style={[styles.retryButton, { backgroundColor: theme.green }]}
               onPress={loadPlans}
             >
-              <Text
-                style={styles.retryButtonText}
-              >
-                Retry
-              </Text>
+              <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.plansContainer}>
             {filteredPlans.map((plan, index) => {
-              const active = selectedPlan?.variation_code === plan.variation_code;
+              const active =
+                selectedPlan?.variation_code === plan.variation_code;
               const category = getPlanCategory(plan);
+
               return (
-                <View key={`${plan.variation_code}-${index}`} style={[styles.planCard, { backgroundColor: theme.card, borderColor: active ? theme.green : theme.border, borderWidth: active ? 1.5 : 1 }]}>
-                  <TouchableOpacity style={styles.planSelectArea} activeOpacity={0.8} onPress={() => setSelectedPlan(plan)}>
-                    <Text style={[styles.planName, { color: theme.text }]} numberOfLines={3}>{plan.name}</Text>
-                    {plan.allowance ? <Text style={[styles.planAllowance, { color: theme.muted }]} numberOfLines={1}>{plan.allowance}</Text> : null}
-                    {plan.validity ? <Text style={[styles.planValidity, { color: theme.muted }]} numberOfLines={2}>Validity: {plan.validity}</Text> : null}
-                    <Text style={[styles.planPrice, { color: theme.green }]}>{formatAmount(Number(plan.amount) || 0)}</Text>
+                <View
+                  key={`${plan.variation_code}-${index}`}
+                  style={[
+                    styles.planCard,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: active ? theme.green : theme.border,
+                      borderWidth: active ? 1.5 : 1,
+                    },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.planSelectArea}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedPlan(plan)}
+                  >
+                    <Text
+                      style={[styles.planName, { color: theme.text }]}
+                      numberOfLines={3}
+                    >
+                      {plan.name}
+                    </Text>
+
+                    {plan.allowance ? (
+                      <Text
+                        style={[styles.planAllowance, { color: theme.muted }]}
+                        numberOfLines={1}
+                      >
+                        {plan.allowance}
+                      </Text>
+                    ) : null}
+
+                    {plan.validity ? (
+                      <Text
+                        style={[styles.planValidity, { color: theme.muted }]}
+                        numberOfLines={2}
+                      >
+                        Validity: {plan.validity}
+                      </Text>
+                    ) : null}
+
+                    <Text style={[styles.planPrice, { color: theme.green }]}>
+                      {formatAmount(Number(plan.amount) || 0)}
+                    </Text>
+
                     <View style={styles.planBottom}>
-                      <View style={[styles.planCategoryBadge, { backgroundColor: theme.background }]}>
-                        <Text style={[styles.planCategoryText, { color: theme.darkGreen }]} numberOfLines={1}>{category}</Text>
+                      <View
+                        style={[
+                          styles.planCategoryBadge,
+                          { backgroundColor: theme.background },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.planCategoryText,
+                            { color: theme.darkGreen },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {category}
+                        </Text>
                       </View>
-                      {plan.isPromotional ? <View style={[styles.promoBadge, { backgroundColor: theme.background, borderColor: theme.border }]}><Text style={[styles.promoText, { color: theme.darkGreen }]}>PROMO</Text></View> : null}
+
+                      {plan.isPromotional ? (
+                        <View
+                          style={[
+                            styles.promoBadge,
+                            {
+                              backgroundColor: theme.background,
+                              borderColor: theme.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.promoText,
+                              { color: theme.darkGreen },
+                            ]}
+                          >
+                            PROMO
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
-                    {active ? <View style={[styles.selectedIndicator, { backgroundColor: theme.green }]}><Text style={styles.checkText}>✓</Text></View> : null}
+
+                    {active ? (
+                      <View
+                        style={[
+                          styles.selectedIndicator,
+                          { backgroundColor: theme.green },
+                        ]}
+                      >
+                        <Text style={styles.checkText}>✓</Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.planBuyButton, { backgroundColor: theme.darkGreen }]} activeOpacity={0.85} onPress={() => setSelectedPlan(plan)}>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.planBuyButton,
+                      { backgroundColor: theme.darkGreen },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => setSelectedPlan(plan)}
+                  >
                     <Text style={styles.planBuyButtonText}>Buy Data</Text>
                   </TouchableOpacity>
                 </View>
@@ -1335,8 +1131,8 @@ const theme = {
             })}
           </View>
         )}
-        {/* PURCHASE SUMMARY */}
 
+        {/* PURCHASE SUMMARY */}
         {selectedPlan && (
           <View
             style={[
@@ -1347,104 +1143,49 @@ const theme = {
               },
             ]}
           >
-            <Text
-              style={[
-                styles.summaryTitle,
-                { color: theme.text },
-              ]}
-            >
+            <Text style={[styles.summaryTitle, { color: theme.text }]}>
               Purchase Summary
             </Text>
 
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: theme.muted },
-                ]}
-              >
+              <Text style={[styles.summaryLabel, { color: theme.muted }]}>
                 Network
               </Text>
-
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: theme.text },
-                ]}
-              >
+              <Text style={[styles.summaryValue, { color: theme.text }]}>
                 {selectedNetwork.name}
               </Text>
             </View>
 
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: theme.muted },
-                ]}
-              >
+              <Text style={[styles.summaryLabel, { color: theme.muted }]}>
                 Phone Number
               </Text>
-
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: theme.text },
-                ]}
-              >
-                {normalizePhoneNumber(phone) ||
-                  'Not entered'}
+              <Text style={[styles.summaryValue, { color: theme.text }]}>
+                {normalizePhoneNumber(phone) || 'Not entered'}
               </Text>
             </View>
 
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  { color: theme.muted },
-                ]}
-              >
+              <Text style={[styles.summaryLabel, { color: theme.muted }]}>
                 Data Plan
               </Text>
-
-              <Text
-                style={[
-                  styles.summaryValue,
-                  { color: theme.text },
-                ]}
-              >
+              <Text style={[styles.summaryValue, { color: theme.text }]}>
                 {selectedPlan.name}
               </Text>
             </View>
 
-
-
             <View style={styles.summaryRow}>
-              <Text
-                style={[
-                  styles.totalLabel,
-                  { color: theme.text },
-                ]}
-              >
+              <Text style={[styles.totalLabel, { color: theme.text }]}>
                 Total
               </Text>
-
-              <Text
-                style={[
-                  styles.totalAmount,
-                  { color: theme.green },
-                ]}
-              >
-                {formatAmount(
-                  Number(selectedPlan.amount) || 0,
-                )}
+              <Text style={[styles.totalAmount, { color: theme.green }]}>
+                {formatAmount(Number(selectedPlan.amount) || 0)}
               </Text>
             </View>
           </View>
         )}
 
         {/* CONTINUE */}
-
         <TouchableOpacity
           style={[
             styles.continueButton,
@@ -1456,61 +1197,38 @@ const theme = {
           disabled={!selectedPlan}
           onPress={handleContinue}
         >
-          <Text
-            style={styles.continueButtonText}
-          >
-            Continue
-          </Text>
-
-          <Text style={styles.continueArrow}>
-            →
-          </Text>
+          <Text style={styles.continueButtonText}>Continue</Text>
+          <Text style={styles.continueArrow}>→</Text>
         </TouchableOpacity>
 
         <View style={styles.bottomSpace} />
       </ScrollView>
 
       {/* NETWORK DROPDOWN MODAL */}
-
       <Modal
         visible={networkModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() =>
-          setNetworkModalVisible(false)
-        }
+        onRequestClose={() => setNetworkModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View
-            style={[
-              styles.networkModal,
-              { backgroundColor: theme.card },
-            ]}
+            style={[styles.networkModal, { backgroundColor: theme.card }]}
           >
             <View style={styles.modalHandle} />
 
-            <Text
-              style={[
-                styles.networkModalTitle,
-                { color: theme.text },
-              ]}
-            >
+            <Text style={[styles.networkModalTitle, { color: theme.text }]}>
               Select Network
             </Text>
 
             <Text
-              style={[
-                styles.networkModalSubtitle,
-                { color: theme.muted },
-              ]}
+              style={[styles.networkModalSubtitle, { color: theme.muted }]}
             >
               Choose the network for this phone number
             </Text>
 
             {NETWORKS.map(network => {
-              const active =
-                selectedNetwork.id ===
-                network.id;
+              const active = selectedNetwork.id === network.id;
 
               return (
                 <TouchableOpacity
@@ -1518,31 +1236,20 @@ const theme = {
                   style={[
                     styles.networkOption,
                     {
-                      backgroundColor: active
-                        ? theme.background
-                        : theme.card,
-                      borderColor: active
-                        ? theme.green
-                        : theme.border,
+                      backgroundColor: active ? theme.background : theme.card,
+                      borderColor: active ? theme.green : theme.border,
                     },
                   ]}
-                  onPress={() =>
-                    selectNetwork(network)
-                  }
+                  onPress={() => selectNetwork(network)}
                 >
                   <Image
                     source={network.logo}
-                    style={
-                      styles.networkOptionLogo
-                    }
+                    style={styles.networkOptionLogo}
                     resizeMode="contain"
                   />
 
                   <Text
-                    style={[
-                      styles.networkOptionName,
-                      { color: theme.text },
-                    ]}
+                    style={[styles.networkOptionName, { color: theme.text }]}
                   >
                     {network.name}
                   </Text>
@@ -1551,17 +1258,10 @@ const theme = {
                     <View
                       style={[
                         styles.networkCheck,
-                        {
-                          backgroundColor:
-                            theme.green,
-                        },
+                        { backgroundColor: theme.green },
                       ]}
                     >
-                      <Text
-                        style={styles.checkText}
-                      >
-                        ✓
-                      </Text>
+                      <Text style={styles.checkText}>✓</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -1570,16 +1270,9 @@ const theme = {
 
             <TouchableOpacity
               style={styles.modalCancel}
-              onPress={() =>
-                setNetworkModalVisible(false)
-              }
+              onPress={() => setNetworkModalVisible(false)}
             >
-              <Text
-                style={[
-                  styles.modalCancelText,
-                  { color: theme.muted },
-                ]}
-              >
+              <Text style={[styles.modalCancelText, { color: theme.muted }]}>
                 Cancel
               </Text>
             </TouchableOpacity>
@@ -1588,7 +1281,6 @@ const theme = {
       </Modal>
 
       {/* TRANSACTION PIN MODAL */}
-
       <Modal
         visible={pinModalVisible}
         transparent={false}
@@ -1607,54 +1299,26 @@ const theme = {
               { backgroundColor: theme.card },
             ]}
           >
-            <Text
-              style={[
-                styles.modalTitle,
-                { color: theme.text },
-              ]}
-            >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
               Enter Transaction PIN
             </Text>
 
-            <Text
-              style={[
-                styles.modalSubtitle,
-                { color: theme.muted },
-              ]}
-            >
+            <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
               Enter your 4-digit transaction PIN
             </Text>
 
             {selectedPlan && (
               <View style={styles.pinSummary}>
-                <Text
-                  style={[
-                    styles.modalPlanName,
-                    { color: theme.text },
-                  ]}
-                >
+                <Text style={[styles.modalPlanName, { color: theme.text }]}>
                   {selectedPlan.name}
                 </Text>
 
-                <Text
-                  style={[
-                    styles.modalPhone,
-                    { color: theme.muted },
-                  ]}
-                >
-                  {selectedNetwork.name} •{' '}
-                  {normalizePhoneNumber(phone)}
+                <Text style={[styles.modalPhone, { color: theme.muted }]}>
+                  {selectedNetwork.name} • {normalizePhoneNumber(phone)}
                 </Text>
 
-                <Text
-                  style={[
-                    styles.modalAmount,
-                    { color: theme.green },
-                  ]}
-                >
-                  {formatAmount(
-                    Number(selectedPlan.amount) || 0,
-                  )}
+                <Text style={[styles.modalAmount, { color: theme.green }]}>
+                  {formatAmount(Number(selectedPlan.amount) || 0)}
                 </Text>
               </View>
             )}
@@ -1664,28 +1328,42 @@ const theme = {
                 {[0, 1, 2, 3].map(index => (
                   <View
                     key={index}
-                    style={[styles.pinBox, { borderColor: theme.green, backgroundColor: theme.background }]}
+                    style={[
+                      styles.pinBox,
+                      {
+                        borderColor: theme.green,
+                        backgroundColor: theme.background,
+                      },
+                    ]}
                   >
-                    <Text style={[styles.pinBoxDigit, { color: theme.text }]}>
+                    <Text
+                      style={[styles.pinBoxDigit, { color: theme.text }]}
+                    >
                       {transactionPin[index] ? '●' : ''}
                     </Text>
                   </View>
                 ))}
               </View>
+
               <TextInput
                 style={styles.hiddenPinInput}
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={4}
                 value={transactionPin}
-                onChangeText={value => setTransactionPin(value.replace(/\D/g, '').slice(0, 4))}
+                onChangeText={value =>
+                  setTransactionPin(value.replace(/\D/g, '').slice(0, 4))
+                }
                 autoFocus
               />
             </View>
 
             {transactionPin.length === 4 && !purchasing && (
               <TouchableOpacity
-                style={[styles.confirmButton, { backgroundColor: theme.green }]}
+                style={[
+                  styles.confirmButton,
+                  { backgroundColor: theme.green },
+                ]}
                 onPress={handlePurchase}
               >
                 <Text style={styles.confirmButtonText}>
@@ -1704,12 +1382,7 @@ const theme = {
               }}
               disabled={purchasing}
             >
-              <Text
-                style={[
-                  styles.cancelButtonText,
-                  { color: theme.muted },
-                ]}
-              >
+              <Text style={[styles.cancelButtonText, { color: theme.muted }]}>
                 Cancel
               </Text>
             </TouchableOpacity>
@@ -1724,16 +1397,23 @@ const theme = {
         animationType="fade"
         onRequestClose={() => {}}
       >
-        <View style={[styles.processingScreen, { backgroundColor: theme.background }]}>
+        <View
+          style={[
+            styles.processingScreen,
+            { backgroundColor: theme.background },
+          ]}
+        >
           <ActivityIndicator size="large" color={theme.green} />
-          <Text style={[styles.processingTitle, { color: theme.text }]}>Processing purchase</Text>
-          <Text style={[styles.processingSubtitle, { color: theme.muted }]}>Please wait while we complete your data purchase.</Text>
+          <Text style={[styles.processingTitle, { color: theme.text }]}>
+            Processing purchase
+          </Text>
+          <Text style={[styles.processingSubtitle, { color: theme.muted }]}>
+            Please wait while we complete your data purchase.
+          </Text>
         </View>
       </Modal>
 
-
       {/* TRANSACTION RESULT MODAL */}
-
       <Modal
         visible={resultModalVisible}
         transparent
@@ -1742,208 +1422,155 @@ const theme = {
       >
         <View style={styles.modalOverlay}>
           <View
-            style={[
-              styles.resultModal,
-              { backgroundColor: theme.card },
-            ]}
+            style={[styles.resultModal, { backgroundColor: theme.card }]}
           >
-            {getTransactionStatus() ===
-            'success' ? (
-              <>
-                <View
-                  style={[
-                    styles.resultIcon,
-                    {
-                      backgroundColor:
-                        theme.background,
-                    },
-                  ]}
-                >
-                  <Text
+            {(() => {
+              const status = getTransactionStatus();
+
+              if (status === 'success') {
+                return (
+                  <>
+                    <View
+                      style={[
+                        styles.resultIcon,
+                        { backgroundColor: theme.background },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.resultIconText, { color: theme.green }]}
+                      >
+                        ✓
+                      </Text>
+                    </View>
+                    <Text style={[styles.resultTitle, { color: theme.text }]}>
+                      Purchase Successful
+                    </Text>
+                    <Text
+                      style={[styles.resultMessage, { color: theme.muted }]}
+                    >
+                      Your data purchase has been completed successfully.
+                    </Text>
+                  </>
+                );
+              }
+
+              if (status === 'pending') {
+                return (
+                  <>
+                    <View
+                      style={[
+                        styles.resultIcon,
+                        { backgroundColor: theme.background },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.resultIconText,
+                          { color: theme.darkGreen },
+                        ]}
+                      >
+                        …
+                      </Text>
+                    </View>
+                    <Text style={[styles.resultTitle, { color: theme.text }]}>
+                      Purchase Pending
+                    </Text>
+                    <Text
+                      style={[styles.resultMessage, { color: theme.muted }]}
+                    >
+                      We could not confirm this purchase yet. Please check
+                      your transaction history before trying again.
+                    </Text>
+                  </>
+                );
+              }
+
+              // failed
+              return (
+                <>
+                  <View
                     style={[
-                      styles.resultIconText,
-                      { color: theme.green },
+                      styles.resultIcon,
+                      { backgroundColor: theme.background },
                     ]}
                   >
-                    ✓
+                    <Text
+                      style={[
+                        styles.resultIconText,
+                        { color: theme.darkGreen },
+                      ]}
+                    >
+                      ✕
+                    </Text>
+                  </View>
+                  <Text style={[styles.resultTitle, { color: theme.text }]}>
+                    Purchase Failed
                   </Text>
-                </View>
-
-                <Text
-                  style={[
-                    styles.resultTitle,
-                    { color: theme.text },
-                  ]}
-                >
-                  Purchase Successful
-                </Text>
-
-                <Text
-                  style={[
-                    styles.resultMessage,
-                    { color: theme.muted },
-                  ]}
-                >
-                  Your data purchase has been
-                  completed successfully.
-                </Text>
-              </>
-            ) : (
-              <>
-                <View
-                  style={[
-                    styles.resultIcon,
-                    {
-                      backgroundColor:
-                        theme.background,
-                    },
-                  ]}
-                >
                   <Text
-                    style={[
-                      styles.resultIconText,
-                      { color: theme.darkGreen },
-                    ]}
+                    style={[styles.resultMessage, { color: theme.muted }]}
                   >
-                    ✕
-                  </Text>
-                </View>
-
-                <Text
-                  style={[
-                    styles.resultTitle,
-                    { color: theme.text },
-                  ]}
-                >
-                  Purchase Failed
-                </Text>
-
-                <Text
-                  style={[
-                    styles.resultMessage,
-                    { color: theme.muted },
-                  ]}
-                >
-                  {getTransactionStatus() === 'pending'
-                    ? 'We could not confirm this purchase yet. Please avoid trying again until you verify the transaction.'
-                    : transactionResult?.message ||
+                    {transactionResult?.message ||
                       transactionResult?.error ||
                       'Your data purchase could not be completed.'}
-                </Text>
-              </>
-            )}
+                  </Text>
+                </>
+              );
+            })()}
 
             {transactionResult && (
               <View
                 style={[
                   styles.resultDetails,
                   {
-                    backgroundColor:
-                      theme.background,
+                    backgroundColor: theme.background,
                     borderColor: theme.border,
                   },
                 ]}
               >
                 <View style={styles.resultRow}>
-                  <Text
-                    style={[
-                      styles.resultLabel,
-                      { color: theme.muted },
-                    ]}
-                  >
+                  <Text style={[styles.resultLabel, { color: theme.muted }]}>
                     Network
                   </Text>
-
-                  <Text
-                    style={[
-                      styles.resultValue,
-                      { color: theme.text },
-                    ]}
-                  >
+                  <Text style={[styles.resultValue, { color: theme.text }]}>
                     {transactionResult.network}
                   </Text>
                 </View>
 
                 <View style={styles.resultRow}>
-                  <Text
-                    style={[
-                      styles.resultLabel,
-                      { color: theme.muted },
-                    ]}
-                  >
+                  <Text style={[styles.resultLabel, { color: theme.muted }]}>
                     Phone Number
                   </Text>
-
-                  <Text
-                    style={[
-                      styles.resultValue,
-                      { color: theme.text },
-                    ]}
-                  >
+                  <Text style={[styles.resultValue, { color: theme.text }]}>
                     {transactionResult.phone}
                   </Text>
                 </View>
 
                 <View style={styles.resultRow}>
-                  <Text
-                    style={[
-                      styles.resultLabel,
-                      { color: theme.muted },
-                    ]}
-                  >
+                  <Text style={[styles.resultLabel, { color: theme.muted }]}>
                     Plan
                   </Text>
-
-                  <Text
-                    style={[
-                      styles.resultValue,
-                      { color: theme.text },
-                    ]}
-                  >
+                  <Text style={[styles.resultValue, { color: theme.text }]}>
                     {transactionResult.plan}
                   </Text>
                 </View>
 
                 <View style={styles.resultRow}>
-                  <Text
-                    style={[
-                      styles.resultLabel,
-                      { color: theme.muted },
-                    ]}
-                  >
+                  <Text style={[styles.resultLabel, { color: theme.muted }]}>
                     Amount
                   </Text>
-
-                  <Text
-                    style={[
-                      styles.resultValue,
-                      { color: theme.green },
-                    ]}
-                  >
-                    {formatAmount(
-                      Number(
-                        transactionResult.amount,
-                      ) || 0,
-                    )}
+                  <Text style={[styles.resultValue, { color: theme.green }]}>
+                    {formatAmount(Number(transactionResult.amount) || 0)}
                   </Text>
                 </View>
               </View>
             )}
 
             <TouchableOpacity
-              style={[
-                styles.resultButton,
-                { backgroundColor: theme.green },
-              ]}
+              style={[styles.resultButton, { backgroundColor: theme.green }]}
               onPress={closeResultModal}
             >
-              <Text
-                style={styles.resultButtonText}
-              >
-                {getTransactionStatus() ===
-                'success'
-                  ? 'Done'
-                  : 'Close'}
+              <Text style={styles.resultButtonText}>
+                {getTransactionStatus() === 'success' ? 'Done' : 'Close'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2014,12 +1641,10 @@ const styles = StyleSheet.create({
 
   phoneInputContainer: {
     minHeight: 58,
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: PALETTE.border,
     borderRadius: 14,
     overflow: 'hidden',
   },
@@ -2030,7 +1655,6 @@ const styles = StyleSheet.create({
     marginRight: 10,
     minWidth: 64,
     flexShrink: 0,
-    color: PALETTE.text,
   },
 
   phoneInput: {
@@ -2040,7 +1664,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 2,
     borderWidth: 0,
-    color: PALETTE.text,
   },
 
   networkDropdown: {
@@ -2053,7 +1676,6 @@ const styles = StyleSheet.create({
     width: 106,
     flexShrink: 0,
     borderLeftWidth: 1,
-    borderLeftColor: PALETTE.border,
   },
 
   dropdownLogo: {
@@ -2071,11 +1693,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
     fontWeight: '700',
-  },
-
-  helperText: {
-    fontSize: 11,
-    marginTop: 7,
   },
 
   searchContainer: {
@@ -2188,7 +1805,7 @@ const styles = StyleSheet.create({
   },
 
   checkText: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900',
   },
@@ -2210,7 +1827,7 @@ const styles = StyleSheet.create({
   },
 
   planBuyButtonText: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '800',
   },
@@ -2279,7 +1896,7 @@ const styles = StyleSheet.create({
   },
 
   retryButtonText: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
 
@@ -2314,8 +1931,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-
-
   totalLabel: {
     fontSize: 14,
     fontWeight: '800',
@@ -2336,13 +1951,13 @@ const styles = StyleSheet.create({
   },
 
   continueButtonText: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
   },
 
   continueArrow: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
     marginLeft: 10,
@@ -2354,8 +1969,9 @@ const styles = StyleSheet.create({
 
   pinFullScreenOverlay: {
     flex: 1,
-    backgroundColor: PALETTE.background,
+    backgroundColor: '#FFFFFF',
   },
+
   pinFullScreenContainer: {
     flex: 1,
     width: '100%',
@@ -2365,15 +1981,17 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     borderRadius: 0,
   },
+
   pinSummary: {
     width: '100%',
     alignItems: 'center',
     marginTop: 34,
     marginBottom: 12,
   },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: PALETTE.black,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -2383,7 +2001,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 5,
-    backgroundColor: PALETTE.border,
+    backgroundColor: '#E9EDE5',
     marginBottom: 20,
   },
 
@@ -2446,26 +2064,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  modalContainer: {
-    width: '100%',
-    maxWidth: 420,
-    borderRadius: 25,
-    padding: 24,
-    alignItems: 'center',
-  },
-
-  modalIcon: {
-    width: 55,
-    height: 55,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  modalIconText: {
-    fontSize: 25,
-  },
-
   modalTitle: {
     fontSize: 21,
     fontWeight: '800',
@@ -2476,15 +2074,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 7,
     textAlign: 'center',
-  },
-
-  modalSummary: {
-    width: '100%',
-    borderWidth: 1,
-    borderRadius: 15,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 20,
   },
 
   modalPlanName: {
@@ -2510,11 +2099,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
   },
+
   pinBoxesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 12,
   },
+
   pinBox: {
     width: 40,
     height: 40,
@@ -2523,10 +2114,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   pinBoxDigit: {
     fontSize: 21,
     fontWeight: '800',
   },
+
   hiddenPinInput: {
     position: 'absolute',
     width: 1,
@@ -2535,37 +2128,27 @@ const styles = StyleSheet.create({
     color: 'transparent',
     backgroundColor: 'transparent',
     borderWidth: 0,
-    outlineWidth: 0,
   } as any,
+
   processingScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 28,
   },
+
   processingTitle: {
     fontSize: 20,
     fontWeight: '800',
     marginTop: 22,
   },
+
   processingSubtitle: {
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 21,
     marginTop: 9,
     maxWidth: 280,
-  },
-
-  pinInput: {
-    width: '100%',
-    height: 58,
-    borderWidth: 1,
-    borderRadius: 13,
-    marginTop: 20,
-    textAlign: 'center',
-    fontSize: 24,
-    letterSpacing: 12,
-    fontWeight: '800',
   },
 
   confirmButton: {
@@ -2578,7 +2161,7 @@ const styles = StyleSheet.create({
   },
 
   confirmButtonText: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -2626,21 +2209,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  pendingNotice: {
-    width: '100%',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 16,
-  },
-
-  pendingNoticeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-
   resultDetails: {
     width: '100%',
     borderWidth: 1,
@@ -2676,7 +2244,7 @@ const styles = StyleSheet.create({
   },
 
   resultButtonText: {
-    color: PALETTE.white,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
   },
