@@ -150,7 +150,6 @@ export default function AirtimeScreen({
 
   // Transaction PIN
  const [pin, setPin] = useState('');
- const pinInputRef = useRef<TextInput>(null);
 const [pinVisible, setPinVisible] = useState(false);
 const [pinError, setPinError] = useState(''); 
   
@@ -1050,7 +1049,6 @@ const [pinError, setPinError] = useState('');
 
             <TouchableOpacity
               activeOpacity={1}
-              onPress={() => pinInputRef.current?.focus()}
               style={[
                 styles.pinBoxesRow,
                 !!pinError && styles.pinInputError,
@@ -1065,7 +1063,6 @@ const [pinError, setPinError] = useState('');
                 </View>
               ))}
               <TextInput
-                ref={pinInputRef}
                 value={pin}
                 onChangeText={value => {
                   setPin(value.replace(/\D/g, '').slice(0, 4));
@@ -1535,11 +1532,11 @@ const createStyles = (
     },
 
     pinBox: {
-      width: 44,
-      height: 42,
+      width: 36,
+      height: 36,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 9,
+      borderRadius: 7,
       backgroundColor: colors.background,
       alignItems: 'center',
       justifyContent: 'center',
@@ -1547,7 +1544,7 @@ const createStyles = (
 
     pinBoxDigit: {
       color: colors.text,
-      fontSize: 24,
+      fontSize: 20,
       fontWeight: '900',
       textAlign: 'center',
     },
@@ -1555,8 +1552,8 @@ const createStyles = (
     pinHiddenInput: {
       position: 'absolute',
       opacity: 0,
-      width: 1,
-      height: 1,
+      width: '100%',
+      height: 42,
       left: 0,
       bottom: 0,
     },
