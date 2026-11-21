@@ -474,6 +474,9 @@ const theme = {
   const [purchasing, setPurchasing] =
     useState(false);
 
+  const [processingModalVisible, setProcessingModalVisible] =
+    useState(false);
+
   const [pinModalVisible, setPinModalVisible] =
     useState(false);
 
@@ -894,6 +897,8 @@ const theme = {
       transactionPin;
 
     setPurchasing(true);
+    setPinModalVisible(false);
+    setProcessingModalVisible(true);
 
     // Clear PIN from state immediately.
     setTransactionPin('');
@@ -936,7 +941,7 @@ const theme = {
         };
       }
 
-      setPinModalVisible(false);
+      setProcessingModalVisible(false);
 
       setTransactionResult({
         ...data,
@@ -949,7 +954,7 @@ const theme = {
 
       setResultModalVisible(true);
     } catch (error: any) {
-      setPinModalVisible(false);
+      setProcessingModalVisible(false);
 
       /*
        * A network error does not prove that the
@@ -1679,31 +1684,29 @@ const theme = {
               </View>
             )}
 
-            <TextInput
-              style={[
-                styles.pinInput,
-                {
-                  backgroundColor:
-                    theme.background,
-                  borderColor: theme.border,
-                  color: theme.text,
-                },
-              ]}
-              placeholder="••••"
-              placeholderTextColor={theme.muted}
-              keyboardType="number-pad"
-              secureTextEntry
-              maxLength={4}
-              value={transactionPin}
-              onChangeText={value =>
-                setTransactionPin(
-                  value
-                    .replace(/\D/g, '')
-                    .slice(0, 4),
-                )
-              }
-              autoFocus
-            />
+            <View style={styles.pinBoxesContainer}>
+              <View style={styles.pinBoxesRow}>
+                {[0, 1, 2, 3].map(index => (
+                  <View
+                    key={index}
+                    style={[styles.pinBox, { borderColor: theme.green, backgroundColor: theme.background }]}
+                  >
+                    <Text style={[styles.pinBoxDigit, { color: theme.text }]}>
+                      {transactionPin[index] ? '●' : ''}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <TextInput
+                style={styles.hiddenPinInput}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+                value={transactionPin}
+                onChangeText={value => setTransactionPin(value.replace(/\D/g, '').slice(0, 4))}
+                autoFocus
+              />
+            </View>
 
             <TouchableOpacity
               style={[
@@ -1758,6 +1761,21 @@ const theme = {
           </View>
         </View>
       </Modal>
+
+      {/* FULL-SCREEN PROCESSING */}
+      <Modal
+        visible={processingModalVisible}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={[styles.processingScreen, { backgroundColor: theme.background }]}>
+          <ActivityIndicator size="large" color={theme.green} />
+          <Text style={[styles.processingTitle, { color: theme.text }]}>Processing purchase</Text>
+          <Text style={[styles.processingSubtitle, { color: theme.muted }]}>Please wait while we complete your data purchase.</Text>
+        </View>
+      </Modal>
+
 
       {/* TRANSACTION RESULT MODAL */}
 
@@ -1815,67 +1833,6 @@ const theme = {
                   completed successfully.
                 </Text>
               </>
-            ) : getTransactionStatus() ===
-              'pending' ? (
-              <>
-                <View
-                  style={[
-                    styles.resultIcon,
-                    {
-                      backgroundColor:
-                        theme.background,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={styles.resultIconText}
-                  >
-                    ⏳
-                  </Text>
-                </View>
-
-                <Text
-                  style={[
-                    styles.resultTitle,
-                    { color: theme.text },
-                  ]}
-                >
-                  Processing Purchase
-                </Text>
-
-                <Text
-                  style={[
-                    styles.resultMessage,
-                    { color: theme.muted },
-                  ]}
-                >
-                  We're confirming your data
-                  purchase. This may take a moment.
-                </Text>
-
-                <View
-                  style={[
-                    styles.pendingNotice,
-                    {
-                      backgroundColor:
-                        theme.background,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pendingNoticeText,
-                      { color: theme.darkGreen },
-                    ]}
-                  >
-                    Please wait for confirmation
-                    before making another purchase.
-                    You can check Transaction History
-                    for updates.
-                  </Text>
-                </View>
-              </>
             ) : (
               <>
                 <View
@@ -1912,9 +1869,11 @@ const theme = {
                     { color: theme.muted },
                   ]}
                 >
-                  {transactionResult?.message ||
-                    transactionResult?.error ||
-                    'Your data purchase could not be completed.'}
+                  {getTransactionStatus() === 'pending'
+                    ? 'We could not confirm this purchase yet. Please avoid trying again until you verify the transaction.'
+                    : transactionResult?.message ||
+                      transactionResult?.error ||
+                      'Your data purchase could not be completed.'}
                 </Text>
               </>
             )}
@@ -2569,6 +2528,55 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     marginTop: 10,
+  },
+
+  pinBoxesContainer: {
+    width: '100%',
+    marginTop: 20,
+    position: 'relative',
+    alignItems: 'center',
+  },
+  pinBoxesRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  pinBox: {
+    width: 62,
+    height: 64,
+    borderWidth: 1.5,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinBoxDigit: {
+    fontSize: 25,
+    fontWeight: '800',
+  },
+  hiddenPinInput: {
+    position: 'absolute',
+    width: '100%',
+    height: 64,
+    opacity: 0.02,
+    color: 'transparent',
+  },
+  processingScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
+  },
+  processingTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 22,
+  },
+  processingSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginTop: 9,
+    maxWidth: 280,
   },
 
   pinInput: {
