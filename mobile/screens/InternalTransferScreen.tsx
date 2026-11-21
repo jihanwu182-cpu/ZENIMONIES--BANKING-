@@ -108,7 +108,7 @@ export default function InternalTransferScreen({
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={BG} />
+       <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView
         style={styles.keyboard}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
