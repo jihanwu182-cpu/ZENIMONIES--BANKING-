@@ -519,6 +519,13 @@ const [transferDraft, setTransferDraft] =
     narration: string;
   } | null>(null); 
 
+ const [transferReceipt, setTransferReceipt] =
+  useState<{
+    amount: number;
+    reference: string;
+    transactionDate: string;
+  } | null>(null); 
+
   const [dashboardLoading, setDashboardLoading] =
     useState(false);
 
@@ -2062,22 +2069,17 @@ if (
 
       <InternalTransferScreen
         onVerifyRecipient={async (phone) => {
-  const response = await axios.get(
-    `${API_BASE}/internal-transfers/user`,
-    {
-      params: { phone },
-      headers: {
-        Authorization: `Bearer ${session.token}`,
-      },
-    }
+  const response = await authenticatedFetch(
+    `${API_BASE}/internal-transfers/user?phone=${encodeURIComponent(phone)}`,
+    session.token
   );
 
-  const user = response.data?.user;
+  const data = await readJson(response);
+  const user = data?.user;
 
-  if (!response.data?.success || !user) {
+  if (!response.ok || !data?.success || !user) {
     throw new Error(
-      response.data?.message ||
-        'Unable to verify recipient.'
+      data?.message || 'Unable to verify recipient.'
     );
   }
 
@@ -2091,6 +2093,36 @@ if (
           setScreen('transfer-review');
         }}
         onBack={() => setScreen('home')}
+      />
+    </SafeAreaView>
+  );
+}
+  // INTERNAL TRANSFER SUCCESS
+if (
+  screen === 'transfer-success' &&
+  session &&
+  transferDraft &&
+  transferReceipt
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <TransferSuccessScreen
+        amount={transferReceipt.amount}
+        receivingInstitution="ZENIMONIES"
+        transferType="internal"
+        transactionReference={
+          transferReceipt.reference
+        }
+        transactionDate={
+          transferReceipt.transactionDate
+        }
+        onDone={() => {
+          setTransferDraft(null);
+          setTransferReceipt(null);
+          setScreen('home');
+        }}
       />
     </SafeAreaView>
   );
@@ -2112,11 +2144,39 @@ if (
         recipient={transferDraft.recipient}
         amount={transferDraft.amount}
         narration={transferDraft.narration}
-        onConfirm={async (pin) => {
-          throw new Error(
-            'Transfer processing is not connected yet.'
-          );
-        }}
+       onConfirm={async (pin) => {
+  const result = await authenticatedPost(
+    `${API_BASE}/internal-transfers`,
+    session.token,
+    {
+      recipient_phone:
+        transferDraft.recipient.phone,
+      amount: transferDraft.amount,
+      narration: transferDraft.narration,
+      transaction_pin: pin,
+    }
+  );
+
+  const transfer = result.data?.transfer;
+
+  if (
+    result.data?.success !== true ||
+    transfer?.status !== 'completed'
+  ) {
+    throw new Error(
+      result.data?.message ||
+        'Transfer could not be confirmed.'
+    );
+  }
+
+  setTransferReceipt({
+    amount: Number(transfer.amount),
+    reference: transfer.reference || '',
+    transactionDate: transfer.created_at || '',
+  });
+
+  setScreen('transfer-success');
+}}
         onBack={() =>
           setScreen('internal-transfer')
         }
