@@ -19,7 +19,7 @@ export type TransferPinScreenProps = {
   onBack: () => void;
 };
 
-const GREEN = '#78A900';
+const GREEN = '#07803F';
 const BLACK = '#172018';
 const MUTED = '#858B83';
 const WHITE = '#FFFFFF';
