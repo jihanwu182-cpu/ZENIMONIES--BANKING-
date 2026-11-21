@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -150,6 +150,7 @@ export default function AirtimeScreen({
 
   // Transaction PIN
  const [pin, setPin] = useState('');
+ const pinInputRef = useRef<TextInput>(null);
 const [pinVisible, setPinVisible] = useState(false);
 const [pinError, setPinError] = useState(''); 
   
@@ -787,7 +788,7 @@ const [pinError, setPinError] = useState('');
                 ? 'Purchase Successful'
                 : result.status === 'failed'
                 ? 'Purchase failed'
-                : 'Processing purchase'}
+                : 'Purchase status unavailable'}
             </Text>
 
             <Text style={styles.resultMessage}>
@@ -1047,25 +1048,36 @@ const [pinError, setPinError] = useState('');
 
             {/* 4-DIGIT TRANSACTION PIN */}
 
-            <TextInput
-              value={pin}
-              onChangeText={value => {
-                setPin(
-                  value
-                    .replace(/\D/g, '')
-                    .slice(0, 4)
-                );
-                setPinError('');
-              }}
-              secureTextEntry
-              keyboardType="number-pad"
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => pinInputRef.current?.focus()}
               style={[
-                styles.pinInput,
+                styles.pinBoxesRow,
                 !!pinError && styles.pinInputError,
               ]}
-              maxLength={4}
-              autoFocus
-            />
+              accessibilityLabel="Enter four digit transaction PIN"
+            >
+              {[0, 1, 2, 3].map(index => (
+                <View key={index} style={styles.pinBox}>
+                  <Text style={styles.pinBoxDigit}>
+                    {pin.length > index ? '•' : ''}
+                  </Text>
+                </View>
+              ))}
+              <TextInput
+                ref={pinInputRef}
+                value={pin}
+                onChangeText={value => {
+                  setPin(value.replace(/\D/g, '').slice(0, 4));
+                  setPinError('');
+                }}
+                keyboardType="number-pad"
+                maxLength={4}
+                autoFocus
+                caretHidden
+                style={styles.pinHiddenInput}
+              />
+            </TouchableOpacity>
 
             {/* PIN ERROR MESSAGE */}
 
@@ -1469,9 +1481,9 @@ const createStyles = (
       backgroundColor: colors.surface,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      paddingHorizontal: 16,
-      paddingTop: 6,
-      paddingBottom: 6,
+      paddingHorizontal: 12,
+      paddingTop: 4,
+      paddingBottom: 2,
     },
 
     pinModalHandle: {
@@ -1480,50 +1492,73 @@ const createStyles = (
       borderRadius: 3,
       backgroundColor: colors.border,
       alignSelf: 'center',
-      marginBottom: 5,
+      marginBottom: 2,
     },
 
     pinTitle: {
       color: colors.text,
-      fontSize: 17,
+      fontSize: 15,
       fontWeight: '900',
       textAlign: 'center',
     },
 
     pinDescription: {
       color: colors.textSecondary,
-      fontSize: 10,
+      fontSize: 9,
       textAlign: 'center',
-      marginTop: 3,
+      marginTop: 1,
     },
 
     pinSummary: {
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: 7,
-      fontSize: 11,
+      marginTop: 3,
+      fontSize: 10,
       fontWeight: '700',
     },
 
     pinAmount: {
       color: colors.text,
       textAlign: 'center',
-      marginTop: 1,
-      fontSize: 21,
+      marginTop: 0,
+      fontSize: 18,
       fontWeight: '900',
     },
 
-    pinInput: {
+    pinBoxesRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 10,
+      marginTop: 6,
+      paddingVertical: 2,
+      position: 'relative',
+    },
+
+    pinBox: {
+      width: 44,
       height: 42,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      color: colors.text,
-      textAlign: 'center',
-      fontSize: 20,
-      letterSpacing: 8,
-      marginTop: 8,
+      borderRadius: 9,
       backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    pinBoxDigit: {
+      color: colors.text,
+      fontSize: 24,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+
+    pinHiddenInput: {
+      position: 'absolute',
+      opacity: 0,
+      width: 1,
+      height: 1,
+      left: 0,
+      bottom: 0,
     },
 
     pinInputError: {
@@ -1539,17 +1574,17 @@ const createStyles = (
     },
 
     confirmButton: {
-      minHeight: 44,
-      borderRadius: 12,
+      minHeight: 38,
+      borderRadius: 10,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 8,
+      marginTop: 5,
     },
 
     cancelButton: {
-      paddingVertical: 5,
-      paddingHorizontal: 12,
+      paddingVertical: 2,
+      paddingHorizontal: 10,
       alignItems: 'center',
     },
 
