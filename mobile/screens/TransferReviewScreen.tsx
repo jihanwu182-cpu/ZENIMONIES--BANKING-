@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -22,12 +22,11 @@ export type TransferReviewScreenProps = {
 };
 
 const GREEN = '#78A900';
-const DARK_GREEN = '#527900';
 const BLACK = '#172018';
 const MUTED = '#858B83';
-const BACKGROUND = '#F6F8F3';
+const BACKGROUND = '#F7F7F7';
 const WHITE = '#FFFFFF';
-const BORDER = '#E9EDE5';
+const BORDER = '#E2E5E1';
 
 const formatNaira = (amount: number) =>
   `₦${amount.toLocaleString('en-NG', {
@@ -44,6 +43,7 @@ export default function TransferReviewScreen({
 }: TransferReviewScreenProps) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const pinInputRef = useRef<TextInput>(null);
 
   const fee = 0;
   const totalDebit = amount + fee;
@@ -56,8 +56,8 @@ export default function TransferReviewScreen({
       await onConfirm(pin);
     } catch (error) {
       Alert.alert(
-        'Transfer',
-        'Unable to confirm this transfer. Please check your transaction status before trying again.'
+        'Transfer status',
+        'We could not confirm the result of this transfer. Please check your transaction history before trying again.'
       );
     } finally {
       setLoading(false);
@@ -83,8 +83,8 @@ export default function TransferReviewScreen({
           <Text style={styles.headerTitle}>Review Transfer</Text>
         </View>
 
-        {/* Amount */}
-        <View style={styles.amountCard}>
+        {/* Compact Amount */}
+        <View style={styles.amountSection}>
           <Text style={styles.amountLabel}>You are sending</Text>
           <Text style={styles.amount}>{formatNaira(amount)}</Text>
         </View>
@@ -103,7 +103,7 @@ export default function TransferReviewScreen({
             <View style={styles.recipientInfo}>
               <Text style={styles.recipientName}>{recipient.name}</Text>
               <Text style={styles.recipientPhone}>{recipient.phone}</Text>
-              <Text style={styles.institution}>Account verified</Text>
+              <Text style={styles.verifiedText}>Account verified</Text>
             </View>
           </View>
         </View>
@@ -137,22 +137,26 @@ export default function TransferReviewScreen({
           ) : null}
         </View>
 
-        {/* Transaction PIN */}
+        {/* PIN */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Authorize Transfer</Text>
 
           <Text style={styles.pinDescription}>
-            Enter your 4-digit transaction PIN to confirm this transfer.
+            Enter your 4-digit transaction PIN.
           </Text>
 
-          <View style={styles.pinBoxesContainer}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.pinContainer}
+            onPress={() => pinInputRef.current?.focus()}
+            disabled={loading}
+          >
             <View style={styles.pinBoxes}>
               {[0, 1, 2, 3].map((index) => (
                 <View
                   key={index}
                   style={[
                     styles.pinBox,
-                    pin.length > index && styles.pinBoxFilled,
                     pin.length === index && styles.pinBoxActive,
                   ]}
                 >
@@ -163,29 +167,33 @@ export default function TransferReviewScreen({
               ))}
             </View>
 
+            {/* Touchable, transparent input overlay */}
             <TextInput
+              ref={pinInputRef}
               value={pin}
               onChangeText={(value) =>
                 setPin(value.replace(/\D/g, '').slice(0, 4))
               }
               keyboardType="number-pad"
-              secureTextEntry
+              secureTextEntry={false}
               maxLength={4}
-              autoFocus
+              autoFocus={false}
               caretHidden
-              style={styles.hiddenPinInput}
               editable={!loading}
-              accessibilityLabel="Enter your four digit transaction PIN"
+              style={styles.pinInputOverlay}
+              selectionColor="transparent"
+              underlineColorAndroid="transparent"
+              accessibilityLabel="Transaction PIN"
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* Confirm Button - only appears after 4 PIN digits */}
+        {/* Confirm appears only when PIN is complete */}
         {pin.length === 4 && (
           <TouchableOpacity
             style={[
               styles.confirmButton,
-              loading && styles.disabledButton,
+              loading && styles.loadingButton,
             ]}
             onPress={handleConfirm}
             disabled={loading}
@@ -211,59 +219,61 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 35,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 12,
   },
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   backText: {
     color: BLACK,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 29,
+    lineHeight: 32,
     marginTop: -3,
   },
   headerTitle: {
     color: BLACK,
-    fontSize: 21,
+    fontSize: 20,
     fontWeight: '700',
   },
-  amountCard: {
-    backgroundColor: GREEN,
-    borderRadius: 22,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 18,
+  amountSection: {
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   amountLabel: {
-    color: WHITE,
-    fontSize: 14,
-    marginBottom: 10,
+    color: MUTED,
+    fontSize: 13,
+    marginBottom: 4,
   },
   amount: {
-    color: WHITE,
-    fontSize: 30,
+    color: BLACK,
+    fontSize: 26,
     fontWeight: '800',
   },
   card: {
     backgroundColor: WHITE,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: BORDER,
   },
@@ -271,24 +281,24 @@ const styles = StyleSheet.create({
     color: BLACK,
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   recipientRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F2EF',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F0F0F0',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 13,
+    marginRight: 12,
   },
   avatarText: {
     color: BLACK,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
   recipientInfo: {
@@ -298,15 +308,15 @@ const styles = StyleSheet.create({
     color: BLACK,
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   recipientPhone: {
     color: MUTED,
     fontSize: 13,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  institution: {
-    color: DARK_GREEN,
+  verifiedText: {
+    color: GREEN,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -314,7 +324,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 11,
   },
   detailLabel: {
     color: MUTED,
@@ -328,8 +338,8 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: BORDER,
-    marginVertical: 4,
-    marginBottom: 14,
+    marginTop: 2,
+    marginBottom: 12,
   },
   totalLabel: {
     color: BLACK,
@@ -337,89 +347,87 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   totalValue: {
-    color: DARK_GREEN,
-    fontSize: 17,
+    color: BLACK,
+    fontSize: 16,
     fontWeight: '800',
   },
   narrationContainer: {
-    marginTop: 10,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
   narrationText: {
     color: BLACK,
     fontSize: 14,
-    marginTop: 7,
+    marginTop: 5,
   },
   pinDescription: {
     color: MUTED,
     fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 18,
+    marginBottom: 14,
   },
-  pinBoxesContainer: {
-    position: 'relative',
-    alignItems: 'center',
+  pinContainer: {
+    height: 58,
     justifyContent: 'center',
+    position: 'relative',
   },
   pinBoxes: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 14,
+    gap: 12,
   },
   pinBox: {
-    width: 54,
-    height: 58,
-    borderRadius: 12,
+    width: 52,
+    height: 54,
+    borderRadius: 10,
     backgroundColor: WHITE,
     borderWidth: 1.5,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pinBoxFilled: {
-    borderColor: GREEN,
-  },
   pinBoxActive: {
     borderColor: GREEN,
-    borderWidth: 2,
+    borderWidth: 1.5,
   },
   pinDot: {
     color: BLACK,
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 27,
+    fontWeight: '700',
   },
-  hiddenPinInput: {
+  pinInputOverlay: {
     position: 'absolute',
     left: 0,
-    right: 0,
     top: 0,
-    bottom: 0,
-    opacity: 0,
     width: '100%',
-    height: 58,
+    height: '100%',
+    opacity: 0.02,
+    color: 'transparent',
+    backgroundColor: 'transparent',
+    padding: 0,
+    margin: 0,
   },
   confirmButton: {
     backgroundColor: GREEN,
-    borderRadius: 15,
-    height: 56,
+    borderRadius: 13,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 0,
   },
-  disabledButton: {
-    opacity: 0.6,
+  loadingButton: {
+    opacity: 0.65,
   },
   confirmButtonText: {
     color: WHITE,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
   securityText: {
     color: MUTED,
     fontSize: 11,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 10,
   },
 });
