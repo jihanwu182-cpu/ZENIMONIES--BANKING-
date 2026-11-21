@@ -2140,10 +2140,12 @@ if (
       <StatusBar barStyle="dark-content" />
 
       <TransferReviewScreen
-        recipient={transferDraft.recipient}
-        amount={transferDraft.amount}
-        narration={transferDraft.narration}
-       onConfirm={async (pin) => {
+  recipient={transferDraft.recipient}
+  amount={transferDraft.amount}
+  narration={transferDraft.narration}
+  onContinue={() => setScreen('transfer-pin')}
+  onBack={() => setScreen('internal-transfer')}
+/>
   const result = await authenticatedPost(
     `${API_BASE}/internal-transfers`,
     session.token,
