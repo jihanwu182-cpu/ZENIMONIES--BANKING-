@@ -505,6 +505,20 @@ const [profileReturnScreen, setProfileReturnScreen] =
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
 
+ // ====================================================
+// INTERNAL TRANSFER DRAFT
+// ====================================================
+
+const [transferDraft, setTransferDraft] =
+  useState<{
+    recipient: {
+      name: string;
+      phone: string;
+    };
+    amount: number;
+    narration: string;
+  } | null>(null); 
+
   const [dashboardLoading, setDashboardLoading] =
     useState(false);
 
@@ -1661,6 +1675,11 @@ const [profileReturnScreen, setProfileReturnScreen] =
   const handleDashboardAction = (
     action: string
   ) => {
+      if (action === 'transfer') {
+        setScreen('internal-transfer');
+        return;
+     }
+    
     if (action === 'airtime') {
       setScreen('airtime');
       return;
@@ -2029,7 +2048,62 @@ if (
       </SafeAreaView>
     );
   }
+// ====================================================
+// INTERNAL TRANSFER
+// ====================================================
 
+if (
+  screen === 'internal-transfer' &&
+  session
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <InternalTransferScreen
+        onVerifyRecipient={async (phone) => {
+          throw new Error(
+            'Recipient verification is not connected yet.'
+          );
+        }}
+        onContinue={(payload) => {
+          setTransferDraft(payload);
+          setScreen('transfer-review');
+        }}
+        onBack={() => setScreen('home')}
+      />
+    </SafeAreaView>
+  );
+}
+  // ====================================================
+// INTERNAL TRANSFER REVIEW
+// ====================================================
+
+if (
+  screen === 'transfer-review' &&
+  session &&
+  transferDraft
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <TransferReviewScreen
+        recipient={transferDraft.recipient}
+        amount={transferDraft.amount}
+        narration={transferDraft.narration}
+        onConfirm={async (pin) => {
+          throw new Error(
+            'Transfer processing is not connected yet.'
+          );
+        }}
+        onBack={() =>
+          setScreen('internal-transfer')
+        }
+      />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // DATA PURCHASE
   // ====================================================
