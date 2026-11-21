@@ -21,12 +21,12 @@ export type TransferReviewScreenProps = {
   onBack: () => void;
 };
 
-const GREEN = '#78A900';
 const BLACK = '#172018';
 const MUTED = '#858B83';
 const BACKGROUND = '#F7F7F7';
 const WHITE = '#FFFFFF';
 const BORDER = '#E2E5E1';
+const ACCENT = '#333333';
 
 const formatNaira = (amount: number) =>
   `₦${amount.toLocaleString('en-NG', {
@@ -43,6 +43,7 @@ export default function TransferReviewScreen({
 }: TransferReviewScreenProps) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+
   const pinInputRef = useRef<React.ComponentRef<typeof TextInput> | null>(null);
 
   const fee = 0;
@@ -83,7 +84,7 @@ export default function TransferReviewScreen({
           <Text style={styles.headerTitle}>Review Transfer</Text>
         </View>
 
-        {/* Compact Amount */}
+        {/* Amount */}
         <View style={styles.amountSection}>
           <Text style={styles.amountLabel}>You are sending</Text>
           <Text style={styles.amount}>{formatNaira(amount)}</Text>
@@ -167,7 +168,6 @@ export default function TransferReviewScreen({
               ))}
             </View>
 
-            {/* Touchable, transparent input overlay */}
             <TextInput
               ref={pinInputRef}
               value={pin}
@@ -188,7 +188,7 @@ export default function TransferReviewScreen({
           </TouchableOpacity>
         </View>
 
-        {/* Confirm appears only when PIN is complete */}
+        {/* Confirm - appears after 4 digits */}
         {pin.length === 4 && (
           <TouchableOpacity
             style={[
@@ -316,9 +316,9 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   verifiedText: {
-    color: GREEN,
+    color: BLACK,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   detailRow: {
     flexDirection: 'row',
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pinBoxActive: {
-    borderColor: GREEN,
+    borderColor: ACCENT,
     borderWidth: 1.5,
   },
   pinDot: {
@@ -402,14 +402,17 @@ const styles = StyleSheet.create({
     top: 0,
     width: '100%',
     height: '100%',
-    opacity: 0.02,
+    opacity: 0.01,
     color: 'transparent',
     backgroundColor: 'transparent',
     padding: 0,
     margin: 0,
+    borderWidth: 0,
+    outlineWidth: 0,
+    outlineColor: 'transparent',
   },
   confirmButton: {
-    backgroundColor: GREEN,
+    backgroundColor: BLACK,
     borderRadius: 13,
     height: 52,
     alignItems: 'center',
