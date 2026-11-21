@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -63,17 +63,16 @@ const NETWORKS: NetworkItem[] = [
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
-// Keep the customer's entered national number as-is
-// (with or without the leading 0).
-// If +234 is pasted, remove that country prefix.
+// Keep the customer's entered national number as-is (with or without the leading 0).
+// If +234 is pasted, remove that country prefix because it is displayed separately.
 const normalizePhone = (value: string) => {
   let digits = value.replace(/\D/g, '');
   if (digits.startsWith('234')) digits = digits.slice(3);
   return digits.slice(0, 11);
 };
 
-// Prefix detection uses a temporary 0-prefixed form
-// for 10-digit input.
+// Prefix detection uses a temporary 0-prefixed form for 10-digit input,
+// without changing the number stored or sent to the backend.
 const phoneForDetection = (phone: string) =>
   phone.length === 10 ? `0${phone}` : phone;
 
@@ -120,9 +119,7 @@ const detectNetwork = (phone: string): Network | null => {
   };
 
   if (phone.length < 4) return null;
-
   const detectionPhone = phoneForDetection(phone);
-
   return prefixes[detectionPhone.substring(0, 4)] || null;
 };
 
@@ -148,11 +145,9 @@ export default function AirtimeScreen({
   const [amount, setAmount] = useState('');
   const [customAmount, setCustomAmount] = useState('');
 
-  // Transaction PIN
- const [pin, setPin] = useState('');
-const [pinVisible, setPinVisible] = useState(false);
-const [pinError, setPinError] = useState(''); 
-  
+  const [pin, setPin] = useState('');
+  const [pinVisible, setPinVisible] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [requerying, setRequerying] = useState(false);
 
@@ -164,6 +159,7 @@ const [pinError, setPinError] = useState('');
     reference: string;
     message: string;
   } | null>(null);
+  const [successDate, setSuccessDate] = useState<Date | null>(null);
 
   const detectedNetwork = useMemo(
     () => detectNetwork(phone),
@@ -172,8 +168,7 @@ const [pinError, setPinError] = useState('');
 
   const selectedAmount = Number(amount || customAmount);
 
-  const validPhone =
-    /^(?:0[789][01]\d{8}|[789][01]\d{8})$/.test(phone);
+  const validPhone = /^(?:0[789][01]\d{8}|[789][01]\d{8})$/.test(phone);
 
   const selectedNetwork = NETWORKS.find(
     item => item.value === network
@@ -243,33 +238,27 @@ const [pinError, setPinError] = useState('');
 
     if (pendingReference) {
       Alert.alert(
-        'Purchase processing',
-        'Your previous purchase is still being confirmed. Please wait before making another purchase.'
+        'Transaction pending',
+        'Please check the status of your previous transaction before making another purchase.'
       );
       return;
     }
 
-    // Reset PIN and error whenever confirmation opens.
-    setPin('');
-    setPinError('');
     setPinVisible(true);
   };
 
-  // ====================================================
-  // CONFIRM AIRTIME PURCHASE
-  // 4-DIGIT TRANSACTION PIN
-  // ====================================================
-
   const confirmPurchase = async () => {
     if (!/^\d{4}$/.test(pin)) {
-      setPinError('Enter your 4-digit transaction PIN.');
+      Alert.alert(
+        'Invalid PIN',
+        'Enter your transaction PIN.'
+      );
       return;
     }
 
     if (!network) return;
 
     setLoading(true);
-    setPinError('');
 
     try {
       const response = await fetch(`${API_BASE}/airtime`, {
@@ -289,6 +278,9 @@ const [pinError, setPinError] = useState('');
 
       const data = await response.json();
 
+      setPin('');
+      setPinVisible(false);
+
       const transaction = data.transaction || {};
 
       const reference =
@@ -296,54 +288,12 @@ const [pinError, setPinError] = useState('');
         data.reference ||
         '';
 
-      // ====================================================
-      // INCORRECT TRANSACTION PIN
-      // ====================================================
-
-      const responseMessage = String(
-        data.message || data.error || ''
-      );
-
-      const pinFailure =
-        /incorrect.*pin|invalid.*pin|wrong.*pin|pin.*incorrect|pin.*invalid|transaction pin/i.test(
-          responseMessage
-        );
-
-      if (
-        pinFailure &&
-        !(
-          transaction.status === 'completed' ||
-          data.success === true
-        )
-      ) {
-        // Clear the PIN after a failed attempt.
-        setPin('');
-
-        // Show error and keep modal open.
-        setPinError(
-          'Incorrect transaction PIN. Please try again.'
-        );
-
-        return;
-      }
-
-      // ====================================================
-      // CLEAR PIN AFTER RESPONSE
-      // ====================================================
-
-      setPin('');
-      setPinError('');
-      setPinVisible(false);
-
-      // ====================================================
-      // SUCCESS
-      // ====================================================
-
       if (
         response.status === 200 &&
         data.success === true &&
         transaction.status === 'completed'
       ) {
+        setSuccessDate(new Date());
         setResult({
           status: 'completed',
           reference,
@@ -355,10 +305,6 @@ const [pinError, setPinError] = useState('');
         onComplete?.();
         return;
       }
-
-      // ====================================================
-      // PENDING / RECONCILIATION
-      // ====================================================
 
       if (
         response.status === 202 ||
@@ -373,15 +319,11 @@ const [pinError, setPinError] = useState('');
           reference,
           message:
             data.message ||
-            'We are completing your Airtime purchase. Please wait; do not purchase again.',
+            'Your Airtime purchase is being processed. Please do not purchase again.',
         });
 
         return;
       }
-
-      // ====================================================
-      // FAILED / REFUNDED
-      // ====================================================
 
       if (
         transaction.status === 'failed' ||
@@ -400,10 +342,6 @@ const [pinError, setPinError] = useState('');
         return;
       }
 
-      // ====================================================
-      // OTHER HTTP ERRORS
-      // ====================================================
-
       if (!response.ok) {
         throw new Error(
           data.message ||
@@ -411,17 +349,12 @@ const [pinError, setPinError] = useState('');
         );
       }
 
-      // ====================================================
-      // UNKNOWN STATUS
-      // PROTECT AGAINST DUPLICATE PURCHASES
-      // ====================================================
-
       setResult({
         status: 'pending',
         reference,
         message:
           data.message ||
-          'We are confirming your purchase. Please wait; do not purchase again.',
+          'Your transaction requires confirmation. Please do not retry.',
       });
 
       setPendingReference(reference);
@@ -435,10 +368,6 @@ const [pinError, setPinError] = useState('');
       setLoading(false);
     }
   };
-
-  // ====================================================
-  // REQUERY TRANSACTION
-  // ====================================================
 
   const handleRequery = async () => {
     if (!pendingReference || !token) return;
@@ -469,6 +398,7 @@ const [pinError, setPinError] = useState('');
       ).toLowerCase();
 
       if (status === 'completed') {
+        setSuccessDate(new Date());
         setResult({
           status: 'completed',
           reference: pendingReference,
@@ -499,7 +429,7 @@ const [pinError, setPinError] = useState('');
           reference: pendingReference,
           message:
             data.message ||
-            'We are still confirming your purchase. Please wait.',
+            'The transaction is still awaiting confirmation.',
         });
       }
 
@@ -520,88 +450,41 @@ const [pinError, setPinError] = useState('');
     }
   };
 
-  // ====================================================
-  // SILENT STATUS VERIFICATION
-  // Pending purchases are rechecked automatically without
-  // showing a processing card or status button to customers.
-  // ====================================================
-
-  useEffect(() => {
-    if (!pendingReference || !token) return;
-
-    let active = true;
-
-    const verifyStatus = async () => {
-      try {
-        const response = await fetch(
-          `${API_BASE}/airtime/requery/${encodeURIComponent(pendingReference)}`,
-          {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        const data = await response.json();
-        if (!active) return;
-
-        const status = String(
-          data.status ||
-            data.transaction?.status ||
-            data.transaction?.provider_status ||
-            ''
-        ).toLowerCase();
-
-        if (status === 'completed') {
-          setResult({
-            status: 'completed',
-            reference: pendingReference,
-            message: data.message || 'Airtime purchase completed successfully.',
-          });
-          setPendingReference('');
-          onComplete?.();
-        } else if (status === 'failed' || status === 'refunded') {
-          setResult({
-            status: 'failed',
-            reference: pendingReference,
-            message: data.message || 'The Airtime purchase failed. Check your wallet balance.',
-          });
-          setPendingReference('');
-          onComplete?.();
-        }
-      } catch {
-        // Keep checking quietly; do not expose a processing screen.
-      }
-    };
-
-    const interval = setInterval(verifyStatus, 5000);
-    void verifyStatus();
-
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [pendingReference, token, onComplete]);
-
-
-  // ====================================================
-  // RESET FORM
-  // ====================================================
-
   const resetForm = () => {
     setPhone('');
     setNetwork(null);
     setManualNetwork(false);
     setAmount('');
     setCustomAmount('');
-    setPin('');
-    setPinError('');
-    setPinVisible(false);
     setResult(null);
     setPendingReference('');
   };
+
+  if (result?.status === 'completed') {
+    return (
+      <SafeAreaView style={styles.successScreen}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <View style={styles.successContent}>
+          <View style={styles.successIconCircle}>
+            <MaterialCommunityIcons name="check-circle" size={76} color={colors.primary} />
+          </View>
+          <Text style={styles.successScreenTitle}>Purchase Successful</Text>
+          <Text style={styles.successScreenSubtitle}>Your airtime has been sent successfully.</Text>
+          <View style={styles.successDetails}>
+            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Network</Text><Text style={styles.successDetailValue}>{network ? networkLabel(network) : ''}</Text></View>
+            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Phone Number</Text><Text style={styles.successDetailValue}>{phone}</Text></View>
+            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Amount Paid</Text><Text style={[styles.successDetailValue, styles.successAmount]}>₦{selectedAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text></View>
+            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Reference</Text><Text style={styles.successDetailValue}>{result.reference || '—'}</Text></View>
+            <View style={styles.successDetailRow}><Text style={styles.successDetailLabel}>Date & Time</Text><Text style={styles.successDetailValue}>{(successDate || new Date()).toLocaleString('en-NG')}</Text></View>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.successDoneButton} onPress={resetForm}>
+          <Text style={styles.successDoneText}>Done</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -668,7 +551,6 @@ const [pinError, setPinError] = useState('');
                   style={styles.inlineNetworkLogo}
                   resizeMode="contain"
                 />
-
                 <Text style={styles.inlineNetworkName}>
                   {selectedNetwork.label}
                 </Text>
@@ -678,7 +560,6 @@ const [pinError, setPinError] = useState('');
                 Network
               </Text>
             )}
-
             <MaterialCommunityIcons
               name="chevron-down"
               size={18}
@@ -686,6 +567,7 @@ const [pinError, setPinError] = useState('');
             />
           </TouchableOpacity>
         </View>
+
 
         {/* AMOUNT */}
 
@@ -703,18 +585,20 @@ const [pinError, setPinError] = useState('');
                 key={value}
                 onPress={() => {
                   setAmount(String(value));
-                  setCustomAmount(String(value));
+                  setCustomAmount('');
                   setResult(null);
                 }}
                 style={[
                   styles.amountItem,
-                  isSelected && styles.amountSelected,
+                  isSelected &&
+                    styles.amountSelected,
                 ]}
               >
                 <Text
                   style={[
                     styles.amountText,
-                    isSelected && styles.amountTextSelected,
+                    isSelected &&
+                      styles.amountTextSelected,
                   ]}
                 >
                   ₦{value.toLocaleString('en-NG')}
@@ -753,7 +637,7 @@ const [pinError, setPinError] = useState('');
 
         {/* TRANSACTION RESULT */}
 
-        {result && result.status !== 'pending' && (
+        {result && (
           <View
             style={[
               styles.resultBox,
@@ -784,10 +668,10 @@ const [pinError, setPinError] = useState('');
 
             <Text style={styles.resultTitle}>
               {result.status === 'completed'
-                ? 'Purchase Successful'
+                ? 'Purchase successful'
                 : result.status === 'failed'
                 ? 'Purchase failed'
-                : 'Purchase status unavailable'}
+                : 'Purchase pending'}
             </Text>
 
             <Text style={styles.resultMessage}>
@@ -817,33 +701,13 @@ const [pinError, setPinError] = useState('');
                 </TouchableOpacity>
               )}
 
-            {result.status === 'completed' && (
-              <TouchableOpacity
-                style={styles.newPurchaseButton}
-                onPress={() =>
-                  Alert.alert(
-                    'Airtime Receipt',
-                    `Purchase Successful\n\nNetwork: ${networkLabel(network as Network)}\nPhone: ${phone}\nAmount: ₦${selectedAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\nReference: ${result.reference || 'Unavailable'}`,
-                    [
-                      { text: 'Close', style: 'cancel' },
-                      { text: 'Make Another Purchase', onPress: resetForm },
-                    ]
-                  )
-                }
-              >
-                <Text style={styles.newPurchaseText}>
-                  View Receipt
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {result.status === 'failed' && (
+            {result.status !== 'pending' && (
               <TouchableOpacity
                 style={styles.newPurchaseButton}
                 onPress={resetForm}
               >
                 <Text style={styles.newPurchaseText}>
-                  Try Again
+                  Make another purchase
                 </Text>
               </TouchableOpacity>
             )}
@@ -874,7 +738,9 @@ const [pinError, setPinError] = useState('');
           }
         >
           <Text style={styles.continueText}>
-            Continue
+            {pendingReference
+              ? 'Transaction pending'
+              : 'Continue'}
           </Text>
 
           <MaterialCommunityIcons
@@ -994,130 +860,43 @@ const [pinError, setPinError] = useState('');
         </View>
       </Modal>
 
-      {/* TRANSACTION PIN */}
-
-      <Modal
-        visible={pinVisible}
-        transparent={false}
-        animationType="slide"
-        onRequestClose={() => {
-          if (!loading) {
-            setPinVisible(false);
-            setPin('');
-            setPinError('');
-          }
-        }}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={
-            Platform.OS === 'ios'
-              ? 'padding'
-              : undefined
-          }
-        >
-          <View style={styles.pinModal}>
-            <Text style={styles.pinTitle}>
-              Confirm Airtime Purchase
-            </Text>
-
-            <Text style={styles.pinDescription}>
-              Enter your transaction PIN to authorize
-              this payment.
-            </Text>
-
-            <Text style={styles.pinSummary}>
-              {network
-                ? networkLabel(network)
-                : ''}{' '}
-              · {phone}
-            </Text>
-
-            <Text style={styles.pinAmount}>
-              ₦
-              {Number(
-                selectedAmount || 0
-              ).toLocaleString('en-NG', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </Text>
-
-            {/* 4-DIGIT TRANSACTION PIN */}
-
-            <TouchableOpacity
-              activeOpacity={1}
-              style={[
-                styles.pinBoxesRow,
-                !!pinError && styles.pinInputError,
-              ]}
-              accessibilityLabel="Enter four digit transaction PIN"
-            >
-              {[0, 1, 2, 3].map(index => (
-                <View key={index} style={styles.pinBox}>
-                  <Text style={styles.pinBoxDigit}>
-                    {pin.length > index ? '•' : ''}
-                  </Text>
-                </View>
-              ))}
-              <TextInput
-                value={pin}
-                onChangeText={value => {
-                  setPin(value.replace(/\D/g, '').slice(0, 4));
-                  setPinError('');
-                }}
-                keyboardType="number-pad"
-                maxLength={4}
-                autoFocus
-                caretHidden
-                style={styles.pinHiddenInput}
-              />
-            </TouchableOpacity>
-
-            {/* PIN ERROR MESSAGE */}
-
-            {!!pinError && (
-              <Text style={styles.pinError}>
-                {pinError}
-              </Text>
-            )}
-
-            {pin.length === 4 && (
-              <TouchableOpacity
-                style={[
-                  styles.confirmButton,
-                  loading && styles.disabledButton,
-                ]}
-                onPress={confirmPurchase}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.continueText}>
-                    Confirm and Pay
-                  </Text>
-                )}
+      {/* FULL-SCREEN TRANSACTION PIN AUTHORIZATION */}
+      <Modal visible={pinVisible} transparent={false} animationType="slide"
+        onRequestClose={() => { if (!loading) { setPinVisible(false); setPin(''); } }}>
+        <KeyboardAvoidingView style={styles.pinFullScreen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <SafeAreaView style={styles.pinFullScreenInner}>
+            <View style={styles.pinTopBar}>
+              <TouchableOpacity onPress={() => { if (!loading) { setPinVisible(false); setPin(''); } }} disabled={loading} style={styles.pinBackButton}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
               </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={() => {
-                if (loading) return;
-
-                setPinVisible(false);
-                setPin('');
-                setPinError('');
-              }}
-              disabled={loading}
-              style={styles.cancelButton}
-            >
-              <Text style={styles.cancelText}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <Text style={styles.pinTopTitle}>Authorize Payment</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            <View style={styles.pinFullScreenContent}>
+              <Text style={styles.pinFullScreenHeading}>Enter Transaction PIN</Text>
+              <Text style={styles.pinFullScreenInstruction}>To complete this transaction, enter your transaction PIN</Text>
+              <Text style={styles.pinSummary}>{network ? networkLabel(network) : ''} · {phone}</Text>
+              <Text style={styles.pinAmount}>₦{selectedAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+              <View style={styles.pinBoxesRow}>
+                {[0,1,2,3].map(i => <View key={i} style={styles.pinBox}><Text style={styles.pinBoxDot}>{pin.length > i ? '•' : ''}</Text></View>)}
+              </View>
+              <TextInput value={pin} onChangeText={v => setPin(v.replace(/\D/g, '').slice(0,4))} keyboardType="number-pad" secureTextEntry autoFocus maxLength={4} style={styles.hiddenPinInput} caretHidden />
+              {pin.length === 4 && (
+                <TouchableOpacity style={styles.confirmButtonCompact} onPress={confirmPurchase} disabled={loading}>
+                  <Text style={styles.confirmButtonCompactText}>Confirm and Pay</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.pinCancelAction} onPress={() => { if (!loading) { setPinVisible(false); setPin(''); } }} disabled={loading}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* LOADING INDICATOR ONLY */}
+      <Modal visible={loading} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.loadingOnlyOverlay}><ActivityIndicator size="large" color={colors.primary} /></View>
       </Modal>
     </SafeAreaView>
   );
@@ -1374,9 +1153,8 @@ const createStyles = (
 
     modalOverlay: {
       flex: 1,
-      width: '100%',
-      backgroundColor: colors.background,
-      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'flex-end',
     },
 
     networkModal: {
@@ -1476,115 +1254,100 @@ const createStyles = (
     },
 
     pinModal: {
-      flex: 1,
-      backgroundColor: colors.background,
-      paddingHorizontal: 20,
-      paddingTop: 48,
-      paddingBottom: 24,
-      justifyContent: 'center',
-    },
-
-    pinModalHandle: {
-      width: 38,
-      height: 4,
-      borderRadius: 3,
-      backgroundColor: colors.border,
-      alignSelf: 'center',
-      marginBottom: 2,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 23,
+      paddingTop: 12,
+      paddingBottom: 30,
     },
 
     pinTitle: {
       color: colors.text,
-      fontSize: 15,
+      fontSize: 19,
       fontWeight: '900',
       textAlign: 'center',
     },
 
     pinDescription: {
       color: colors.textSecondary,
-      fontSize: 9,
+      fontSize: 11,
       textAlign: 'center',
-      marginTop: 1,
+      marginTop: 7,
     },
 
     pinSummary: {
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: 3,
-      fontSize: 10,
+      marginTop: 17,
+      fontSize: 12,
       fontWeight: '700',
     },
 
     pinAmount: {
       color: colors.text,
       textAlign: 'center',
-      marginTop: 0,
-      fontSize: 18,
+      marginTop: 5,
+      fontSize: 25,
       fontWeight: '900',
     },
 
-    pinBoxesRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 10,
-      marginTop: 18,
-      paddingVertical: 2,
-      position: 'relative',
-    },
-
-    pinBox: {
-      width: 36,
-      height: 36,
+    pinInput: {
+      height: 53,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 7,
-      backgroundColor: colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-
-    pinBoxDigit: {
+      borderRadius: 12,
       color: colors.text,
+      textAlign: 'center',
       fontSize: 20,
-      fontWeight: '900',
-      textAlign: 'center',
-    },
-
-    pinHiddenInput: {
-      position: 'absolute',
-      opacity: 0,
-      width: '100%',
-      height: 42,
-      left: 0,
-      bottom: 0,
-    },
-
-    pinInputError: {
-      borderColor: '#D64545',
-    },
-
-    pinError: {
-      color: '#D64545',
-      fontSize: 12,
-      fontWeight: '700',
-      textAlign: 'center',
-      marginTop: 6,
+      letterSpacing: 8,
+      marginTop: 20,
+      backgroundColor: colors.background,
     },
 
     confirmButton: {
-      minHeight: 38,
-      borderRadius: 10,
+      minHeight: 53,
+      borderRadius: 12,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 18,
+      marginTop: 17,
     },
 
     cancelButton: {
-      paddingVertical: 10,
-      paddingHorizontal: 10,
+      padding: 13,
       alignItems: 'center',
     },
+
+
+    pinFullScreen: { flex: 1, backgroundColor: colors.background },
+    pinFullScreenInner: { flex: 1, backgroundColor: colors.background },
+    pinTopBar: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+    pinBackButton: { width: 40, height: 40, justifyContent: 'center' },
+    pinTopTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
+    pinFullScreenContent: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 48 },
+    pinFullScreenHeading: { color: colors.text, fontSize: 24, fontWeight: '900', textAlign: 'center' },
+    pinFullScreenInstruction: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 12, lineHeight: 19 },
+    pinBoxesRow: { flexDirection: 'row', gap: 12, marginTop: 30, justifyContent: 'center' },
+    pinBox: { width: 36, height: 36, borderWidth: 1.5, borderColor: colors.border, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+    pinBoxDot: { color: colors.text, fontSize: 18, fontWeight: '900' },
+    hiddenPinInput: { position: 'absolute', opacity: 0, width: 1, height: 1, left: 0, top: 0 },
+    confirmButtonCompact: { width: '68%', height: 44, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 44 },
+    confirmButtonCompactText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+    pinCancelAction: { alignItems: 'center', paddingVertical: 14, marginTop: 6 },
+    loadingOnlyOverlay: { flex: 1, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+    successScreen: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 22 },
+    successContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    successIconCircle: { marginBottom: 20 },
+    successScreenTitle: { color: colors.text, fontSize: 25, fontWeight: '900', textAlign: 'center' },
+    successScreenSubtitle: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 8 },
+    successDetails: { width: '100%', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 15, paddingVertical: 6, marginTop: 26 },
+    successDetailRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
+    successDetailLabel: { color: colors.textSecondary, fontSize: 12, flexShrink: 1 },
+    successDetailValue: { color: colors.text, fontSize: 12, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
+    successAmount: { color: colors.primary, fontSize: 14 },
+    successDoneButton: { height: 48, width: '100%', borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+    successDoneText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
 
     cancelText: {
       color: colors.textSecondary,
