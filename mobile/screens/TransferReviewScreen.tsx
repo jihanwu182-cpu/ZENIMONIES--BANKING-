@@ -44,7 +44,8 @@ export default function TransferReviewScreen({
 }: TransferReviewScreenProps) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const pinInputRef = useRef<TextInput>(null);
+
+  const pinInputRef = useRef<TextInput | null>(null);
 
   const fee = 0;
   const totalDebit = amount + fee;
@@ -114,9 +115,11 @@ export default function TransferReviewScreen({
               <Text style={styles.recipientName}>
                 {recipient.name}
               </Text>
+
               <Text style={styles.recipientPhone}>
                 {recipient.phone}
               </Text>
+
               <Text style={styles.verifiedText}>
                 Account verified
               </Text>
@@ -154,33 +157,39 @@ export default function TransferReviewScreen({
           {!!narration?.trim() && (
             <View style={styles.narrationContainer}>
               <Text style={styles.detailLabel}>Narration</Text>
-              <Text style={styles.narrationText}>{narration}</Text>
+              <Text style={styles.narrationText}>
+                {narration}
+              </Text>
             </View>
           )}
         </View>
 
-        {/* Transaction PIN */}
+        {/* PIN */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Authorize Transfer</Text>
+          <Text style={styles.sectionTitle}>
+            Authorize Transfer
+          </Text>
 
           <Text style={styles.pinDescription}>
             Enter your 4-digit transaction PIN.
           </Text>
 
-          {/* Hidden input: prevents the browser focus rectangle */}
+          {/* Invisible PIN input without outer border */}
           <TextInput
-          value={pin}
-          onChangeText={handlePinChange}
-          keyboardType="number-pad"
-          secureTextEntry
-          maxLength={4}
-          editable={!loading}
-          autoComplete="off"
-          textContentType="none"
-          style={styles.hiddenPinInput}
-       />
+            ref={pinInputRef}
+            value={pin}
+            onChangeText={handlePinChange}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={4}
+            editable={!loading}
+            autoComplete="off"
+            textContentType="none"
+            caretHidden
+            style={styles.hiddenPinInput}
+          />
 
-          {/* ONLY the four PIN boxes; no outer box */}
+          {/* Only the 4 PIN boxes */}
           <TouchableOpacity
             activeOpacity={1}
             onPress={focusPinInput}
@@ -189,7 +198,8 @@ export default function TransferReviewScreen({
           >
             {[0, 1, 2, 3].map((index) => {
               const isFilled = index < pin.length;
-              const isActive = index === pin.length && pin.length < 4;
+              const isActive =
+                index === pin.length && pin.length < 4;
 
               return (
                 <View
@@ -208,7 +218,7 @@ export default function TransferReviewScreen({
           </TouchableOpacity>
         </View>
 
-        {/* Confirm appears only after all 4 PIN digits */}
+        {/* Button only appears after all 4 PIN digits */}
         {pin.length === 4 && (
           <TouchableOpacity
             style={[
@@ -251,13 +261,13 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 18,
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
 
   backButton: {
@@ -273,7 +283,7 @@ const styles = StyleSheet.create({
   },
 
   backText: {
-    color: BLACK,
+    color: GREEN,
     fontSize: 30,
     lineHeight: 34,
     marginTop: -3,
@@ -285,34 +295,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* Existing ZENIMONIES green */
+  /* Brand green amount card */
   amountCard: {
     backgroundColor: GREEN,
-    borderRadius: 20,
-    paddingVertical: 22,
+    borderRadius: 18,
+    paddingVertical: 19,
     paddingHorizontal: 20,
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   amountLabel: {
     color: WHITE,
     fontSize: 14,
-    marginBottom: 8,
+    marginBottom: 7,
   },
 
   amount: {
     color: WHITE,
-    fontSize: 30,
+    fontSize: 29,
     fontWeight: '900',
   },
 
-  /* White cards only */
+  /* White cards with neutral borders */
   card: {
     backgroundColor: WHITE,
     borderRadius: 18,
-    padding: 17,
-    marginBottom: 14,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: BORDER,
   },
@@ -321,7 +331,7 @@ const styles = StyleSheet.create({
     color: BLACK,
     fontSize: 16,
     fontWeight: '800',
-    marginBottom: 13,
+    marginBottom: 12,
   },
 
   recipientRow: {
@@ -372,7 +382,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 13,
+    marginBottom: 12,
   },
 
   detailLabel: {
@@ -390,7 +400,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: BORDER,
     marginTop: 2,
-    marginBottom: 13,
+    marginBottom: 12,
   },
 
   totalLabel: {
@@ -406,8 +416,8 @@ const styles = StyleSheet.create({
   },
 
   narrationContainer: {
-    marginTop: 9,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 11,
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
@@ -415,30 +425,30 @@ const styles = StyleSheet.create({
   narrationText: {
     color: BLACK,
     fontSize: 14,
-    marginTop: 6,
+    marginTop: 5,
   },
 
   pinDescription: {
     color: MUTED,
     fontSize: 13,
-    marginBottom: 16,
+    marginBottom: 12,
   },
 
-  /* Invisible input is moved off-screen.
-     It cannot create the blue rectangular outline. */
+  /* Input has NO visible border or outer square */
   hiddenPinInput: {
-  position: 'absolute',
-  width: '100%',
-  height: 60,
-  opacity: 0.01,
-  zIndex: 2,
-  borderWidth: 0,
-  backgroundColor: 'transparent',
-  padding: 0,
-  margin: 0,
-},
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    width: 1,
+    height: 1,
+    opacity: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    padding: 0,
+    margin: 0,
+  },
 
-  /* Four individual boxes ONLY */
+  /* No surrounding container border */
   pinBoxesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -448,7 +458,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    outlineStyle: 'none' as any,
   },
 
   pinBox: {
@@ -473,11 +482,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* Confirm uses the actual brand green */
+  /* Confirm button in ZENIMONIES green */
   confirmButton: {
     backgroundColor: GREEN,
     borderRadius: 15,
-    height: 54,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -504,6 +513,6 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 11,
     textAlign: 'center',
-    marginTop: 14,
+    marginTop: 12,
   },
 });
