@@ -27,6 +27,7 @@ import { getColors } from '../theme/colors';
 
 type DashboardAction =
   | 'transfer'
+  | 'internal-transfer'
   | 'add-money'
   | 'withdraw'
   | 'airtime'
@@ -99,11 +100,11 @@ const quickActions: {
     icon: 'bank-outline',
     action: 'transfer',
   },
-  {
-    title: 'Send to\nZENIMONIES',
-    icon: 'send',
-    action: 'transfer',
-  },
+{
+  title: 'Send to\nZENIMONIES',
+  icon: 'send',
+  action: 'internal-transfer',
+},
   {
     title: 'Withdraw',
     icon: 'arrow-down',
