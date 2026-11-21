@@ -1591,7 +1591,7 @@ const theme = {
 
       <Modal
         visible={pinModalVisible}
-        transparent
+        transparent={false}
         animationType="slide"
         onRequestClose={() => {
           if (!purchasing) {
@@ -1600,36 +1600,20 @@ const theme = {
           }
         }}
       >
-        <View style={styles.modalOverlay}>
+        <View style={styles.pinFullScreenOverlay}>
           <View
             style={[
-              styles.modalContainer,
+              styles.pinFullScreenContainer,
               { backgroundColor: theme.card },
             ]}
           >
-            <View style={styles.modalHandle} />
-
-            <View
-              style={[
-                styles.modalIcon,
-                {
-                  backgroundColor:
-                    theme.background,
-                },
-              ]}
-            >
-              <Text style={styles.modalIconText}>
-                🔐
-              </Text>
-            </View>
-
             <Text
               style={[
                 styles.modalTitle,
                 { color: theme.text },
               ]}
             >
-              Confirm Purchase
+              Enter Transaction PIN
             </Text>
 
             <Text
@@ -1642,16 +1626,7 @@ const theme = {
             </Text>
 
             {selectedPlan && (
-              <View
-                style={[
-                  styles.modalSummary,
-                  {
-                    backgroundColor:
-                      theme.background,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
+              <View style={styles.pinSummary}>
                 <Text
                   style={[
                     styles.modalPlanName,
@@ -1710,22 +1685,15 @@ const theme = {
 
             {transactionPin.length === 4 && !purchasing && (
               <TouchableOpacity
-                style={[
-                  styles.confirmButton,
-                  { backgroundColor: theme.green },
-                ]}
-                disabled={purchasing}
+                style={[styles.confirmButton, { backgroundColor: theme.green }]}
                 onPress={handlePurchase}
               >
-                {purchasing ? (
-                  <ActivityIndicator color={theme.white} />
-                ) : (
-                  <Text style={styles.confirmButtonText}>
-                    Confirm & Buy Data
-                  </Text>
-                )}
+                <Text style={styles.confirmButtonText}>
+                  Confirm & Buy Data
+                </Text>
               </TouchableOpacity>
             )}
+
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => {
@@ -1865,16 +1833,7 @@ const theme = {
               </>
             )}
 
-            {transactionResult && getTransactionStatus() === 'success' ? (
-              <View style={styles.successSummary}>
-                <Text style={[styles.successAmount, { color: theme.green }]}>
-                  {formatAmount(Number(transactionResult.amount) || 0)}
-                </Text>
-                <Text style={[styles.successPhone, { color: theme.text }]}>
-                  {transactionResult.phone}
-                </Text>
-              </View>
-            ) : transactionResult ? (
+            {transactionResult && (
               <View
                 style={[
                   styles.resultDetails,
@@ -1969,12 +1928,11 @@ const theme = {
                   </Text>
                 </View>
               </View>
-            ) : null}
+            )}
 
             <TouchableOpacity
               style={[
                 styles.resultButton,
-                getTransactionStatus() === 'success' && styles.resultButtonSuccess,
                 { backgroundColor: theme.green },
               ]}
               onPress={closeResultModal}
@@ -2394,6 +2352,25 @@ const styles = StyleSheet.create({
     height: 40,
   },
 
+  pinFullScreenOverlay: {
+    flex: 1,
+    backgroundColor: PALETTE.background,
+  },
+  pinFullScreenContainer: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 96,
+    paddingBottom: 24,
+    borderRadius: 0,
+  },
+  pinSummary: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 34,
+    marginBottom: 12,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: PALETTE.black,
@@ -2529,14 +2506,14 @@ const styles = StyleSheet.create({
 
   pinBoxesContainer: {
     width: '100%',
-    marginTop: 20,
+    marginTop: 36,
     position: 'relative',
     alignItems: 'center',
   },
   pinBoxesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: 12,
   },
   pinBox: {
     width: 40,
@@ -2547,19 +2524,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pinBoxDigit: {
-    fontSize: 25,
+    fontSize: 21,
     fontWeight: '800',
   },
   hiddenPinInput: {
     position: 'absolute',
-    width: '100%',
-    height: 40,
+    width: 1,
+    height: 1,
     opacity: 0,
     color: 'transparent',
     backgroundColor: 'transparent',
     borderWidth: 0,
     outlineWidth: 0,
-  },
+  } as any,
   processingScreen: {
     flex: 1,
     justifyContent: 'center',
@@ -2689,19 +2666,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  successSummary: {
-    alignItems: 'center',
-    marginTop: 10,
-    gap: 5,
-  },
-  successAmount: {
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  successPhone: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
   resultButton: {
     width: '100%',
     height: 52,
@@ -2709,13 +2673,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
-  },
-  resultButtonSuccess: {
-    width: 76,
-    height: 34,
-    alignSelf: 'flex-end',
-    borderRadius: 8,
-    marginTop: 12,
   },
 
   resultButtonText: {
