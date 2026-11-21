@@ -1,14 +1,11 @@
 
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
-  ActivityIndicator,
 } from 'react-native';
 
 export type TransferReviewScreenProps = {
@@ -18,7 +15,7 @@ export type TransferReviewScreenProps = {
   };
   amount: number;
   narration: string;
-  onConfirm: (pin: string) => Promise<void>;
+  onContinue: () => void;
   onBack: () => void;
 };
 
@@ -39,41 +36,11 @@ export default function TransferReviewScreen({
   recipient,
   amount,
   narration,
-  onConfirm,
+  onContinue,
   onBack,
 }: TransferReviewScreenProps) {
-  const [pin, setPin] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const pinInputRef = useRef<any>(null);
-
   const fee = 0;
   const totalDebit = amount + fee;
-
-  const focusPinInput = () => {
-    pinInputRef.current?.focus();
-  };
-
-  const handlePinChange = (value: string) => {
-    setPin(value.replace(/\D/g, '').slice(0, 4));
-  };
-
-  const handleConfirm = async () => {
-    if (pin.length !== 4 || loading) return;
-
-    try {
-      setLoading(true);
-      await onConfirm(pin);
-    } catch (error: any) {
-      Alert.alert(
-        'Transfer Failed',
-        error?.message ||
-          'Unable to complete this transfer. Please check your connection and try again.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -91,18 +58,27 @@ export default function TransferReviewScreen({
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Review Transfer</Text>
+          <Text style={styles.headerTitle}>
+            Review Transfer
+          </Text>
         </View>
 
         {/* Amount */}
         <View style={styles.amountCard}>
-          <Text style={styles.amountLabel}>You are sending</Text>
-          <Text style={styles.amount}>{formatNaira(amount)}</Text>
+          <Text style={styles.amountLabel}>
+            You are sending
+          </Text>
+
+          <Text style={styles.amount}>
+            {formatNaira(amount)}
+          </Text>
         </View>
 
         {/* Recipient */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Recipient Details</Text>
+          <Text style={styles.sectionTitle}>
+            Recipient Details
+          </Text>
 
           <View style={styles.recipientRow}>
             <View style={styles.avatar}>
@@ -129,17 +105,25 @@ export default function TransferReviewScreen({
 
         {/* Transfer Details */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Transfer Details</Text>
+          <Text style={styles.sectionTitle}>
+            Transfer Details
+          </Text>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Transfer amount</Text>
+            <Text style={styles.detailLabel}>
+              Transfer amount
+            </Text>
+
             <Text style={styles.detailValue}>
               {formatNaira(amount)}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Transfer fee</Text>
+            <Text style={styles.detailLabel}>
+              Transfer fee
+            </Text>
+
             <Text style={styles.detailValue}>
               {formatNaira(fee)}
             </Text>
@@ -148,7 +132,10 @@ export default function TransferReviewScreen({
           <View style={styles.divider} />
 
           <View style={styles.detailRow}>
-            <Text style={styles.totalLabel}>Total debit</Text>
+            <Text style={styles.totalLabel}>
+              Total debit
+            </Text>
+
             <Text style={styles.totalValue}>
               {formatNaira(totalDebit)}
             </Text>
@@ -156,7 +143,10 @@ export default function TransferReviewScreen({
 
           {!!narration?.trim() && (
             <View style={styles.narrationContainer}>
-              <Text style={styles.detailLabel}>Narration</Text>
+              <Text style={styles.detailLabel}>
+                Narration
+              </Text>
+
               <Text style={styles.narrationText}>
                 {narration}
               </Text>
@@ -164,85 +154,16 @@ export default function TransferReviewScreen({
           )}
         </View>
 
-        {/* PIN */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Authorize Transfer
+        {/* Continue */}
+        <TouchableOpacity
+          style={styles.continueButton}
+          onPress={onContinue}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.continueButtonText}>
+            Continue
           </Text>
-
-          <Text style={styles.pinDescription}>
-            Enter your 4-digit transaction PIN.
-          </Text>
-
-          {/* Invisible PIN input without outer border */}
-          <TextInput
-            ref={pinInputRef}
-            value={pin}
-            onChangeText={handlePinChange}
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={4}
-            editable={!loading}
-            autoComplete="off"
-            textContentType="none"
-            caretHidden
-            style={styles.hiddenPinInput}
-          />
-
-          {/* Only the 4 PIN boxes */}
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={focusPinInput}
-            disabled={loading}
-            style={styles.pinBoxesRow}
-          >
-            {[0, 1, 2, 3].map((index) => {
-              const isFilled = index < pin.length;
-              const isActive =
-                index === pin.length && pin.length < 4;
-
-              return (
-                <View
-                  key={index}
-                  style={[
-                    styles.pinBox,
-                    isActive && styles.pinBoxActive,
-                  ]}
-                >
-                  <Text style={styles.pinDot}>
-                    {isFilled ? '●' : ''}
-                  </Text>
-                </View>
-              );
-            })}
-          </TouchableOpacity>
-        </View>
-
-        {/* Button only appears after all 4 PIN digits */}
-        {pin.length === 4 && (
-          <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              loading && styles.loadingButton,
-            ]}
-            onPress={handleConfirm}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <View style={styles.loadingContent}>
-                <ActivityIndicator color={WHITE} size="small" />
-                <Text style={styles.confirmButtonText}>
-                  Processing Transfer...
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.confirmButtonText}>
-                Confirm Transfer
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
+        </TouchableOpacity>
 
         <Text style={styles.securityText}>
           Your transaction is protected.
@@ -261,7 +182,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 18,
     paddingTop: 12,
-    paddingBottom: 20,
+    paddingBottom: 28,
   },
 
   header: {
@@ -295,7 +216,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* Brand green amount card */
   amountCard: {
     backgroundColor: GREEN,
     borderRadius: 18,
@@ -317,7 +237,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  /* White cards with neutral borders */
   card: {
     backgroundColor: WHITE,
     borderRadius: 18,
@@ -428,82 +347,16 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
-  pinDescription: {
-    color: MUTED,
-    fontSize: 13,
-    marginBottom: 12,
-  },
-
-  /* Input has NO visible border or outer square */
-  hiddenPinInput: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    width: 1,
-    height: 1,
-    opacity: 0,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    padding: 0,
-    margin: 0,
-  },
-
-  /* No surrounding container border */
-  pinBoxesRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    padding: 0,
-    marginTop: 2,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
-
-  pinBox: {
-    width: 58,
-    height: 60,
-    borderRadius: 14,
-    backgroundColor: WHITE,
-    borderWidth: 1.5,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  pinBoxActive: {
-    borderColor: GREEN,
-    borderWidth: 2,
-  },
-
-  pinDot: {
-    color: BLACK,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  /* Confirm button in ZENIMONIES green */
-  confirmButton: {
+  continueButton: {
     backgroundColor: GREEN,
     borderRadius: 15,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: 4,
   },
 
-  loadingButton: {
-    opacity: 0.85,
-  },
-
-  loadingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-
-  confirmButtonText: {
+  continueButtonText: {
     color: WHITE,
     fontSize: 15,
     fontWeight: '900',
