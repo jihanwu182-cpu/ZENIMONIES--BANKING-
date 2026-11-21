@@ -998,7 +998,7 @@ const [pinError, setPinError] = useState('');
 
       <Modal
         visible={pinVisible}
-        transparent
+        transparent={false}
         animationType="slide"
         onRequestClose={() => {
           if (!loading) {
@@ -1017,8 +1017,6 @@ const [pinError, setPinError] = useState('');
           }
         >
           <View style={styles.pinModal}>
-            <View style={styles.pinModalHandle} />
-
             <Text style={styles.pinTitle}>
               Confirm Airtime Purchase
             </Text>
@@ -1084,22 +1082,24 @@ const [pinError, setPinError] = useState('');
               </Text>
             )}
 
-            <TouchableOpacity
-              style={[
-                styles.confirmButton,
-                loading && styles.disabledButton,
-              ]}
-              onPress={confirmPurchase}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.continueText}>
-                  Confirm and Pay
-                </Text>
-              )}
-            </TouchableOpacity>
+            {pin.length === 4 && (
+              <TouchableOpacity
+                style={[
+                  styles.confirmButton,
+                  loading && styles.disabledButton,
+                ]}
+                onPress={confirmPurchase}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.continueText}>
+                    Confirm and Pay
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               onPress={() => {
@@ -1374,8 +1374,9 @@ const createStyles = (
 
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-      justifyContent: 'flex-end',
+      width: '100%',
+      backgroundColor: colors.background,
+      justifyContent: 'center',
     },
 
     networkModal: {
@@ -1475,12 +1476,12 @@ const createStyles = (
     },
 
     pinModal: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      paddingHorizontal: 12,
-      paddingTop: 4,
-      paddingBottom: 2,
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingHorizontal: 20,
+      paddingTop: 48,
+      paddingBottom: 24,
+      justifyContent: 'center',
     },
 
     pinModalHandle: {
@@ -1526,7 +1527,7 @@ const createStyles = (
       flexDirection: 'row',
       justifyContent: 'center',
       gap: 10,
-      marginTop: 6,
+      marginTop: 18,
       paddingVertical: 2,
       position: 'relative',
     },
@@ -1576,11 +1577,11 @@ const createStyles = (
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 5,
+      marginTop: 18,
     },
 
     cancelButton: {
-      paddingVertical: 2,
+      paddingVertical: 10,
       paddingHorizontal: 10,
       alignItems: 'center',
     },
