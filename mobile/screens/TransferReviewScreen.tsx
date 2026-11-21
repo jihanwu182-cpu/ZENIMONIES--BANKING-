@@ -49,10 +49,7 @@ export default function TransferReviewScreen({
   const totalDebit = amount + fee;
 
   const handleConfirm = async () => {
-    if (pin.length !== 4) {
-      Alert.alert('Invalid PIN', 'Please enter your 4-digit transaction PIN.');
-      return;
-    }
+    if (pin.length !== 4 || loading) return;
 
     try {
       setLoading(true);
@@ -60,7 +57,7 @@ export default function TransferReviewScreen({
     } catch (error) {
       Alert.alert(
         'Transfer',
-        'Unable to complete this transfer. Please try again.'
+        'Unable to confirm this transfer. Please check your transaction status before trying again.'
       );
     } finally {
       setLoading(false);
@@ -75,7 +72,11 @@ export default function TransferReviewScreen({
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backButton}
+            disabled={loading}
+          >
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
 
@@ -86,9 +87,6 @@ export default function TransferReviewScreen({
         <View style={styles.amountCard}>
           <Text style={styles.amountLabel}>You are sending</Text>
           <Text style={styles.amount}>{formatNaira(amount)}</Text>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>ZENIMONIES Transfer</Text>
-          </View>
         </View>
 
         {/* Recipient */}
@@ -105,7 +103,7 @@ export default function TransferReviewScreen({
             <View style={styles.recipientInfo}>
               <Text style={styles.recipientName}>{recipient.name}</Text>
               <Text style={styles.recipientPhone}>{recipient.phone}</Text>
-              <Text style={styles.institution}>ZENIMONIES</Text>
+              <Text style={styles.institution}>Account verified</Text>
             </View>
           </View>
         </View>
@@ -139,42 +137,68 @@ export default function TransferReviewScreen({
           ) : null}
         </View>
 
-        {/* PIN */}
+        {/* Transaction PIN */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Authorize Transfer</Text>
+
           <Text style={styles.pinDescription}>
             Enter your 4-digit transaction PIN to confirm this transfer.
           </Text>
 
-          <TextInput
-            value={pin}
-            onChangeText={(value) =>
-              setPin(value.replace(/\D/g, '').slice(0, 4))
-            }
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={4}
-            placeholder="••••"
-            placeholderTextColor="#A5ACA0"
-            style={styles.pinInput}
-            editable={!loading}
-          />
+          <View style={styles.pinBoxesContainer}>
+            <View style={styles.pinBoxes}>
+              {[0, 1, 2, 3].map((index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.pinBox,
+                    pin.length > index && styles.pinBoxFilled,
+                    pin.length === index && styles.pinBoxActive,
+                  ]}
+                >
+                  <Text style={styles.pinDot}>
+                    {pin.length > index ? '•' : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <TextInput
+              value={pin}
+              onChangeText={(value) =>
+                setPin(value.replace(/\D/g, '').slice(0, 4))
+              }
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={4}
+              autoFocus
+              caretHidden
+              style={styles.hiddenPinInput}
+              editable={!loading}
+              accessibilityLabel="Enter your four digit transaction PIN"
+            />
+          </View>
         </View>
 
-        {/* Confirm Button */}
-        <TouchableOpacity
-          style={[styles.confirmButton, loading && styles.disabledButton]}
-          onPress={handleConfirm}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.confirmButtonText}>
-            {loading ? 'Processing...' : 'Confirm Transfer'}
-          </Text>
-        </TouchableOpacity>
+        {/* Confirm Button - only appears after 4 PIN digits */}
+        {pin.length === 4 && (
+          <TouchableOpacity
+            style={[
+              styles.confirmButton,
+              loading && styles.disabledButton,
+            ]}
+            onPress={handleConfirm}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.confirmButtonText}>
+              {loading ? 'Processing...' : 'Confirm Transfer'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.securityText}>
-          Your transaction is protected by ZENIMONIES security.
+          Your transaction is protected.
         </Text>
       </ScrollView>
     </View>
@@ -226,7 +250,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   amountLabel: {
-    color: '#F2FFE1',
+    color: WHITE,
     fontSize: 14,
     marginBottom: 10,
   },
@@ -234,18 +258,6 @@ const styles = StyleSheet.create({
     color: WHITE,
     fontSize: 30,
     fontWeight: '800',
-    marginBottom: 14,
-  },
-  statusBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  statusText: {
-    color: WHITE,
-    fontSize: 12,
-    fontWeight: '600',
   },
   card: {
     backgroundColor: WHITE,
@@ -269,13 +281,13 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EAF3D8',
+    backgroundColor: '#F0F2EF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 13,
   },
   avatarText: {
-    color: DARK_GREEN,
+    color: BLACK,
     fontSize: 18,
     fontWeight: '800',
   },
@@ -344,19 +356,49 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 13,
     lineHeight: 19,
-    marginBottom: 15,
+    marginBottom: 18,
   },
-  pinInput: {
-    backgroundColor: BACKGROUND,
-    borderWidth: 1,
+  pinBoxesContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinBoxes: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  pinBox: {
+    width: 54,
+    height: 58,
+    borderRadius: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1.5,
     borderColor: BORDER,
-    borderRadius: 14,
-    height: 56,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinBoxFilled: {
+    borderColor: GREEN,
+  },
+  pinBoxActive: {
+    borderColor: GREEN,
+    borderWidth: 2,
+  },
+  pinDot: {
     color: BLACK,
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  hiddenPinInput: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0,
+    width: '100%',
+    height: 58,
   },
   confirmButton: {
     backgroundColor: GREEN,
