@@ -44,6 +44,7 @@ import TransferReviewScreen from './screens/TransferReviewScreen';
 import TransferSuccessScreen from './screens/TransferSuccessScreen';
 import TransferPinScreen from './screens/TransferPinScreen';
 import ToBankScreen from './screens/ToBankScreen';
+import ExternalBankTransferReviewScreen from './screens/ExternalBankTransferReviewScreen';
 
 import {
   registerPushNotifications,
@@ -84,10 +85,12 @@ type Screen =
   | 'tv'
   | 'internal-transfer'
   | 'to-bank'
+  | 'external-bank-review'
   | 'transfer-review'
-  | 'transfer-pin'
+  |'transfer-pin'
   | 'transfer-processing'
   | 'transfer-success';
+  
 
 type Account = {
   id?: string;
@@ -533,6 +536,16 @@ const [transferDraft, setTransferDraft] =
     initiatedAt: string;
     processedAt: string;
     receivedAt: string;
+  } | null>(null);
+
+  const [externalBankTransferDraft, setExternalBankTransferDraft] =
+  useState<{
+    bankCode: string;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+    amount: number;
+    narration: string;
   } | null>(null);
   
   const [dashboardLoading, setDashboardLoading] =
@@ -2071,7 +2084,7 @@ if (
       </SafeAreaView>
     );
   }
-  // ====================================================
+  //====================================================
 // EXTERNAL BANK TRANSFER — SELECT BANK
 // ====================================================
 
@@ -2082,9 +2095,37 @@ if (screen === 'to-bank' && session) {
 
       <ToBankScreen
         onContinue={(transfer) => {
+          setExternalBankTransferDraft(transfer);
+          setScreen('external-bank-review');
+        }}
+      />
+    </SafeAreaView>
+  );
+}
+  // ====================================================
+// EXTERNAL BANK TRANSFER — REVIEW
+// ====================================================
+
+if (
+  screen === 'external-bank-review' &&
+  session &&
+  externalBankTransferDraft
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <ExternalBankTransferReviewScreen
+        bankName={externalBankTransferDraft.bankName}
+        accountNumber={externalBankTransferDraft.accountNumber}
+        accountName={externalBankTransferDraft.accountName}
+        amount={externalBankTransferDraft.amount}
+        narration={externalBankTransferDraft.narration}
+        onBack={() => setScreen('to-bank')}
+        onContinue={() => {
           Alert.alert(
-            'Bank transfer',
-            'Transfer review will be connected after account verification.'
+            'Transfer security',
+            'The external bank transfer PIN and payment processing connection is the next step. No transfer has been initiated.'
           );
         }}
       />
