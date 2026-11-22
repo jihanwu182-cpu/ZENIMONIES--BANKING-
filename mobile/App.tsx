@@ -2081,15 +2081,10 @@ if (screen === 'to-bank' && session) {
       <StatusBar barStyle="dark-content" />
 
       <ToBankScreen
-        onVerifyAccount={async () => {
-          throw new Error(
-            'Recipient account verification is not connected yet.'
-          );
-        }}
-        onContinue={() => {
+        onContinue={(transfer) => {
           Alert.alert(
             'Bank transfer',
-            'Transfer review will be connected after account verification is implemented.'
+            'Transfer review will be connected after account verification.'
           );
         }}
       />
