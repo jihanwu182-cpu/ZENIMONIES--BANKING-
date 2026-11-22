@@ -12,16 +12,36 @@ const ALLOWED_TRANSITIONS = {
 };
 
 // Create a new onboarding session
+
 const create = async ({ userId, verificationType }) => {
   const result = await pool.query(
     `INSERT INTO alat_onboarding_sessions
        (user_id, verification_type, status)
      VALUES ($1, $2, 'initiated')
+     ON CONFLICT (user_id)
+       WHERE status IN ('initiated', 'verified', 'pending')
+     DO NOTHING
      RETURNING *`,
     [userId, verificationType]
   );
 
-  return result.rows[0];
+  if (result.rows[0]) {
+    return result.rows[0];
+  }
+
+  // If an active session already exists, return it instead
+  // of creating a duplicate or throwing an error.
+  const existing = await pool.query(
+    `SELECT *
+     FROM alat_onboarding_sessions
+     WHERE user_id = $1
+       AND status IN ('initiated', 'verified', 'pending')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId]
+  );
+
+  return existing.rows[0] || null;
 };
 
 // Find latest session for a user
