@@ -1,15 +1,21 @@
 
+
 const pool = require('../../config/database');
 
 async function saveAlatAccountNumber(userId, accountNumber) {
-  if (!userId || !accountNumber) {
-    throw new Error('User ID and bank-issued account number are required.');
+  if (!userId || typeof accountNumber !== 'string') {
+    throw new Error(
+      'User ID and bank-issued account number are required.'
+    );
   }
 
-  const number = String(accountNumber).trim();
+  const number = accountNumber.trim();
 
+  // Account numbers must remain strings to preserve their exact digits.
   if (!/^\d{10}$/.test(number)) {
-    throw new Error('Invalid bank account number returned by provider.');
+    throw new Error(
+      'Invalid bank account number returned by provider.'
+    );
   }
 
   const client = await pool.connect();
@@ -49,7 +55,9 @@ async function saveAlatAccountNumber(userId, accountNumber) {
     }
 
     // Never overwrite an existing account number.
-    if (existingAccount.account_number) {
+    if (existingAccount.account_number !== null &&
+        existingAccount.account_number !== undefined &&
+        existingAccount.account_number !== '') {
       throw new Error(
         'Customer already has an account number. Manual review required.'
       );
@@ -60,8 +68,9 @@ async function saveAlatAccountNumber(userId, accountNumber) {
       `SELECT id
        FROM accounts
        WHERE account_number = $1
+         AND id <> $2
        LIMIT 1`,
-      [number]
+      [number, existingAccount.id]
     );
 
     if (duplicateResult.rows.length > 0) {
@@ -70,14 +79,18 @@ async function saveAlatAccountNumber(userId, accountNumber) {
       );
     }
 
-    // Assign the bank-issued number to the existing account.
+    // Update ONLY the account number of the locked account.
     const updateResult = await client.query(
       `UPDATE accounts
        SET account_number = $1
        WHERE id = $2
-         AND account_number IS NULL
+         AND user_id = $3
+         AND (
+           account_number IS NULL
+           OR account_number = ''
+         )
        RETURNING account_number`,
-      [number, existingAccount.id]
+      [number, existingAccount.id, userId]
     );
 
     if (updateResult.rows.length === 0) {
@@ -104,6 +117,13 @@ async function saveAlatAccountNumber(userId, accountNumber) {
           rollbackError.message
         );
       }
+    }
+
+    // PostgreSQL unique-constraint protection against concurrent assignments.
+    if (error.code === '23505') {
+      throw new Error(
+        'Bank account number is already assigned. Manual review required.'
+      );
     }
 
     throw error;
