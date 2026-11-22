@@ -46,6 +46,7 @@ import TransferPinScreen from './screens/TransferPinScreen';
 import ToBankScreen from './screens/ToBankScreen';
 import ExternalBankTransferReviewScreen from './screens/ExternalBankTransferReviewScreen';
 import ExternalBankTransferPinScreen from './screens/ExternalBankTransferPinScreen';
+import TransferSuccessScreen from './screens/TransferSuccessScreen';
 
 import {
   registerPushNotifications,
@@ -88,6 +89,8 @@ type Screen =
   | 'to-bank'
   | 'external-bank-review'
   | 'external-bank-pin'
+  | 'external-transfer-processing'
+  | 'external-transfer-success'
   | 'transfer-review'
   |'transfer-pin'
   | 'transfer-processing'
@@ -2147,19 +2150,8 @@ if (
         bankName={externalBankTransferDraft.bankName}
         onBack={() => setScreen('external-bank-review')}
         onConfirm={async (pin) => {
-         Alert.alert(
-    'Test Transfer',
-    'PIN accepted. External bank transfer is not connected yet, and no money has been sent.',
-    [
-      {
-        text: 'OK',
-        onPress: () => {
-          setScreen('external-bank-review');
-        },
-      },
-    ],
-  );
-}}
+         setScreen('external-transfer-processing');
+        }}
       />
     </SafeAreaView>
   );
@@ -2259,6 +2251,59 @@ if (
     </SafeAreaView>
   );
 } 
+  // ====================================================
+// EXTERNAL TRANSFER PROCESSING
+// ====================================================
+
+if (
+  screen === 'external-transfer-processing' &&
+  session &&
+  externalBankTransferDraft
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <View style={styles.transferProcessingContainer}>
+        <View style={styles.transferProcessingIcon}>
+          <ActivityIndicator
+            size="large"
+            color="#78A900"
+          />
+        </View>
+
+        <Text style={styles.transferProcessingTitle}>
+          Processing Transfer
+        </Text>
+
+        <Text style={styles.transferProcessingMessage}>
+          Please wait while we securely process your transfer.
+          Do not close the app.
+        </Text>
+
+        <View style={styles.transferProcessingAmountCard}>
+          <Text style={styles.transferProcessingLabel}>
+            Transfer amount
+          </Text>
+
+          <Text style={styles.transferProcessingAmount}>
+            ₦{externalBankTransferDraft.amount.toLocaleString(
+              'en-NG',
+              {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }
+            )}
+          </Text>
+
+          <Text style={styles.transferProcessingRecipient}>
+            To {externalBankTransferDraft.accountName}
+          </Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
   // INTERNAL TRANSFER SUCCESS
 if (
   screen === 'transfer-success' &&
@@ -2288,6 +2333,32 @@ if (
     </SafeAreaView>
   );
 } 
+  // ====================================================
+// EXTERNAL TRANSFER SUCCESS
+// ====================================================
+
+if (
+  screen === 'external-transfer-success' &&
+  session &&
+  externalBankTransferDraft
+) {
+  return (
+    <TransferSuccessScreen
+      amount={externalBankTransferDraft.amount}
+      receivingInstitution={externalBankTransferDraft.bankName}
+      transferType="external"
+      transactionReference={`EXT-${Date.now()}`}
+      transactionDate={new Date().toLocaleDateString('en-NG')}
+      initiatedAt={new Date().toISOString()}
+      processedAt={new Date().toISOString()}
+      receivedAt={new Date().toISOString()}
+      onDone={() => {
+        setExternalBankTransferDraft(null);
+        setScreen('home');
+      }}
+    />
+  );
+}
   // ====================================================
 // INTERNAL TRANSFER PIN
 // ====================================================
