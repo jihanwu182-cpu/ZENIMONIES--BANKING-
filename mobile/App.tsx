@@ -87,7 +87,7 @@ type Screen =
   | 'internal-transfer'
   | 'to-bank'
   | 'external-bank-review'
-  | 'external-bank-pin,
+  | 'external-bank-pin'
   | 'transfer-review'
   |'transfer-pin'
   | 'transfer-processing'
