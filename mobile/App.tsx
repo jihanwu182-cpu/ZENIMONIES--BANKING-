@@ -35,6 +35,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import AirtimeScreen from './screens/AirtimeScreen';
 import DataScreen from './screens/DataScreen';
+import AddMoneyScreen from './screens/AddMoneyScreen';
 import ElectricityScreen from './screens/ElectricityScreen';
 import TVScreen from './screens/TVScreen';
 import BillsScreen from './screens/BillsScreen';
@@ -42,7 +43,7 @@ import InternalTransferScreen from './screens/InternalTransferScreen';
 import TransferReviewScreen from './screens/TransferReviewScreen';
 import TransferSuccessScreen from './screens/TransferSuccessScreen';
 import TransferPinScreen from './screens/TransferPinScreen';
-import AddMoneyScreen from './screens/AddMoneyScreen';
+
 
 import {
   registerPushNotifications,
