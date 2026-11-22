@@ -1,4 +1,5 @@
 
+
 const {
   getPartnershipAccountDetails,
   saveProviderAccountNumber,
@@ -26,9 +27,9 @@ const getAlatAccountDetails = async (req, res) => {
       });
     }
 
-    // Retrieve the customer's existing account.
+    // Retrieve the customer's existing account only.
     const existingResult = await pool.query(
-      `SELECT account_number, currency, status
+      `SELECT id, account_number, currency, status
        FROM accounts
        WHERE user_id = $1
        ORDER BY id
@@ -45,7 +46,7 @@ const getAlatAccountDetails = async (req, res) => {
 
     const existingAccount = existingResult.rows[0];
 
-    // If already provisioned, do not make another ALAT request.
+    // Already assigned: never call the provider or overwrite.
     if (existingAccount.account_number) {
       return res.status(200).json({
         success: true,
@@ -58,7 +59,7 @@ const getAlatAccountDetails = async (req, res) => {
       });
     }
 
-    // Fetch customer details needed for provider lookup.
+    // Retrieve the authenticated customer's phone number.
     const userResult = await pool.query(
       `SELECT phone
        FROM users
@@ -67,7 +68,10 @@ const getAlatAccountDetails = async (req, res) => {
       [userId]
     );
 
-    if (userResult.rows.length === 0 || !userResult.rows[0].phone) {
+    if (
+      userResult.rows.length === 0 ||
+      !userResult.rows[0].phone
+    ) {
       return res.status(404).json({
         success: false,
         message: 'Customer phone number not found.',
@@ -76,16 +80,18 @@ const getAlatAccountDetails = async (req, res) => {
 
     const phoneNumber = userResult.rows[0].phone;
 
-    // Retrieve bank account details from ALAT.
+    // Lookup provider account details.
     const providerResponse =
       await getPartnershipAccountDetails(phoneNumber);
 
-    // Safely extract account number from provider response.
-    const accountNumber =
-      providerResponse?.data?.accountNumber ||
-      providerResponse?.accountNumber;
+    // NOTE: This extraction depends on ALAT's actual response contract
+    // and still requires confirmation against the official documentation.
+    const rawAccountNumber =
+      providerResponse?.data?.accountNumber ??
+      providerResponse?.accountNumber ??
+      null;
 
-    if (!accountNumber) {
+    if (rawAccountNumber === null || rawAccountNumber === undefined) {
       return res.status(202).json({
         success: true,
         provisioned: false,
@@ -93,11 +99,33 @@ const getAlatAccountDetails = async (req, res) => {
       });
     }
 
-    // Save the bank-issued number to the existing customer account.
+    // Validate before attempting database persistence.
+    const accountNumber = String(rawAccountNumber).trim();
+
+    if (!/^\d{10}$/.test(accountNumber)) {
+      console.error(
+        'ALAT returned an invalid account number format.'
+      );
+
+      return res.status(502).json({
+        success: false,
+        message: 'The bank returned an invalid account number.',
+      });
+    }
+
+    // Persist to the existing account only.
+    // The persistence service prevents overwrites and duplicates.
     const savedAccount = await saveProviderAccountNumber({
       userId,
-      accountNumber: String(accountNumber),
+      accountNumber,
     });
+
+    if (!savedAccount?.success || !savedAccount.accountNumber) {
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to securely save bank account details.',
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -109,12 +137,16 @@ const getAlatAccountDetails = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('ALAT account details error:', error.message);
+    // Do not expose raw provider response data or sensitive details.
+    console.error(
+      'ALAT account details request failed:',
+      error?.code || 'UNKNOWN_ERROR'
+    );
 
     if (error instanceof AccountOpeningError) {
       return res.status(400).json({
         success: false,
-        message: error.message,
+        message: 'Unable to process the bank account request.',
         code: error.code,
       });
     }
