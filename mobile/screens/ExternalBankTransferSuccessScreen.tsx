@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -72,7 +73,7 @@ export default function ExternalBankTransferSuccessScreen({
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content"/>
+      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -101,15 +102,16 @@ export default function ExternalBankTransferSuccessScreen({
           {'\n'}depending on their bank.
         </Text>
 
-        {/* RECEIPT */}
+        {/* RECEIPT CARD */}
         <View style={styles.receiptCard}>
           <Text style={styles.amount}>{formattedAmount}</Text>
 
+          {/* RECIPIENT NAME */}
           <Text style={styles.recipientName}>
             {accountName}
           </Text>
 
-          {/* BANK */}
+          {/* RECEIVING BANK */}
           <View style={styles.bankRow}>
             {bankLogo ? (
               <Image
@@ -142,12 +144,10 @@ export default function ExternalBankTransferSuccessScreen({
               <View style={styles.timelineCircle}>
                 <Text style={styles.timelineCheck}>✓</Text>
               </View>
-
               <Text style={styles.timelineLabel}>
                 Transfer
                 {'\n'}initiated
               </Text>
-
               <Text style={styles.timelineTime}>{time}</Text>
             </View>
 
@@ -155,12 +155,10 @@ export default function ExternalBankTransferSuccessScreen({
               <View style={styles.timelineCircle}>
                 <Text style={styles.timelineCheck}>✓</Text>
               </View>
-
               <Text style={styles.timelineLabel}>
                 Transfer
                 {'\n'}processed
               </Text>
-
               <Text style={styles.timelineTime}>{time}</Text>
             </View>
 
@@ -168,12 +166,10 @@ export default function ExternalBankTransferSuccessScreen({
               <View style={styles.timelineCircle}>
                 <Text style={styles.timelineCheck}>✓</Text>
               </View>
-
               <Text style={styles.timelineLabel}>
                 Sent to
                 {'\n'}beneficiary
               </Text>
-
               <Text style={styles.timelineTime}>{time}</Text>
             </View>
           </View>
@@ -222,16 +218,16 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingTop: 5,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
 
   /* SUCCESS ICON + STARS */
 
   successArea: {
-    width: 190,
-    height: 92,
+    width: 150,
+    height: 76,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -239,18 +235,18 @@ const styles = StyleSheet.create({
   },
 
   successOuter: {
-    width: 50,
-    height: 50,
-    borderRadius: 33,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -258,54 +254,54 @@ const styles = StyleSheet.create({
 
   checkmark: {
     color: WHITE,
-    fontSize: 31,
+    fontSize: 28,
     fontWeight: '900',
-    lineHeight: 36,
+    lineHeight: 33,
   },
 
   star: {
     position: 'absolute',
     color: GOLD,
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '900',
   },
 
   starSmall: {
     position: 'absolute',
     color: GOLD,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
   },
 
   starTiny: {
     position: 'absolute',
     color: GOLD,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
   },
 
   star1: {
-    left: 30,
-    top: 3,
+    left: 18,
+    top: 1,
   },
 
   star2: {
-    right: 33,
-    top: 15,
+    right: 18,
+    top: 10,
   },
 
   star3: {
-    left: 22,
-    top: 43,
+    left: 8,
+    top: 39,
   },
 
   star4: {
-    right: 19,
-    top: 52,
+    right: 5,
+    top: 43,
   },
 
   star5: {
-    bottom: 1,
+    bottom: 0,
     left: '48%',
   },
 
@@ -316,44 +312,44 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 2,
   },
 
   subtitle: {
     color: MUTED,
     fontSize: 11,
     fontWeight: '600',
-    lineHeight: 16,
+    lineHeight: 15,
     textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 12,
+    marginTop: 5,
+    marginBottom: 9,
   },
 
   /* RECEIPT CARD */
 
   receiptCard: {
-    width: '70%',
-    maxWidth: 200,
+    width: '92%',
+    maxWidth: 360,
     alignSelf: 'center',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
     borderColor: '#D6EBD2',
     borderRadius: 17,
     paddingHorizontal: 12,
-    paddingVertical: 13,
+    paddingVertical: 12,
     alignItems: 'center',
   },
 
   amount: {
     color: GREEN,
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 23,
+    fontWeight: '900',
     textAlign: 'center',
   },
 
   recipientName: {
     color: BLACK,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 5,
@@ -365,8 +361,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 7,
-    gap: 6,
+    marginTop: 6,
+    gap: 5,
   },
 
   bankLogo: {
@@ -387,7 +383,7 @@ const styles = StyleSheet.create({
   bankLogoFallbackText: {
     color: WHITE,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 
   bankName: {
@@ -400,7 +396,7 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 10,
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 3,
   },
 
   dateText: {
@@ -408,7 +404,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 5,
   },
 
   /* TIMELINE */
@@ -418,7 +414,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     position: 'relative',
-    marginTop: 13,
+    marginTop: 10,
     paddingTop: 2,
   },
 
@@ -437,9 +433,9 @@ const styles = StyleSheet.create({
   },
 
   timelineCircle: {
-    width: 23,
-    height: 23,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -449,26 +445,26 @@ const styles = StyleSheet.create({
 
   timelineCheck: {
     color: WHITE,
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 16,
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 15,
   },
 
   timelineLabel: {
     color: BLACK,
     fontSize: 9,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
     lineHeight: 12,
-    marginTop: 6,
+    marginTop: 5,
   },
 
   timelineTime: {
     color: MUTED,
     fontSize: 8,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
 
   /* REFERENCE */
@@ -477,15 +473,15 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#D8E3D7',
     width: '100%',
-    marginTop: 12,
+    marginTop: 10,
   },
 
   referenceLabel: {
     color: MUTED,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
 
   referenceValue: {
@@ -493,23 +489,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
 
   /* BUTTONS */
 
   bottomButtons: {
-    width: '70%',
-    maxWidth: 320,
+    width: '92%',
+    maxWidth: 360,
     flexDirection: 'row',
     gap: 8,
-    marginTop: 13,
+    marginTop: 11,
     alignSelf: 'center',
   },
 
   shareButton: {
     flex: 1,
-    height: 35,
+    height: 40,
     borderRadius: 12,
     borderWidth: 1.3,
     borderColor: GREEN,
@@ -522,7 +518,7 @@ const styles = StyleSheet.create({
 
   shareIcon: {
     color: GREEN,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
   },
 
@@ -534,7 +530,7 @@ const styles = StyleSheet.create({
 
   doneButton: {
     flex: 1,
-    height: 42,
+    height: 40,
     borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
@@ -543,7 +539,7 @@ const styles = StyleSheet.create({
 
   doneText: {
     color: WHITE,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
   },
 });
