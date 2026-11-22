@@ -121,6 +121,20 @@ const updateStatus = async (sessionId, status) => {
 
   return result.rows[0] || null;
 };
+// Expire only sessions whose explicit expiration time has passed
+const expireDueSessions = async () => {
+  const result = await pool.query(
+    `UPDATE alat_onboarding_sessions
+     SET status = 'expired',
+         updated_at = CURRENT_TIMESTAMP
+     WHERE status IN ('initiated', 'verified', 'pending')
+       AND expires_at IS NOT NULL
+       AND expires_at <= CURRENT_TIMESTAMP
+     RETURNING id, user_id, status, expires_at`
+  );
+
+  return result.rows;
+};
 
 module.exports = {
   create,
@@ -128,4 +142,5 @@ module.exports = {
   findById,
   saveCorrelationId,
   updateStatus,
+  expireDueSessions,
 };
