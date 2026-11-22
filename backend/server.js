@@ -13,6 +13,10 @@ const {
   runKycCompatibilityMigration,
 } = require('./database/migrations/runKycCompatibilityMigration');
 
+const {
+  runInternalTransferReferenceMigration,
+} = require('./database/migrations/runInternalTransferReferenceMigration');
+
 const pool = database;
 const { initializeDatabase } = database;
 
