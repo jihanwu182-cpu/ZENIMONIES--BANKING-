@@ -13,9 +13,11 @@ async function saveAlatAccountNumber(userId, accountNumber) {
   }
 
   const client = await pool.connect();
+  let transactionStarted = false;
 
   try {
     await client.query('BEGIN');
+    transactionStarted = true;
 
     // Lock the existing customer's account row.
     const existingResult = await client.query(
@@ -37,6 +39,7 @@ async function saveAlatAccountNumber(userId, accountNumber) {
     // Idempotent: same account number already assigned.
     if (existingAccount.account_number === number) {
       await client.query('COMMIT');
+      transactionStarted = false;
 
       return {
         success: true,
@@ -68,23 +71,41 @@ async function saveAlatAccountNumber(userId, accountNumber) {
     }
 
     // Assign the bank-issued number to the existing account.
-    await client.query(
+    const updateResult = await client.query(
       `UPDATE accounts
        SET account_number = $1
        WHERE id = $2
-         AND account_number IS NULL`,
+         AND account_number IS NULL
+       RETURNING account_number`,
       [number, existingAccount.id]
     );
 
+    if (updateResult.rows.length === 0) {
+      throw new Error(
+        'Account number assignment failed. Manual review required.'
+      );
+    }
+
     await client.query('COMMIT');
+    transactionStarted = false;
 
     return {
       success: true,
       alreadyAssigned: false,
-      accountNumber: number,
+      accountNumber: updateResult.rows[0].account_number,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'ALAT account persistence rollback failed:',
+          rollbackError.message
+        );
+      }
+    }
+
     throw error;
   } finally {
     client.release();
