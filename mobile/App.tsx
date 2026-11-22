@@ -69,6 +69,7 @@ type Screen =
   | 'login'
   | 'register'
   | 'home'
+  | 'add-money'
   | 'profile'
   | 'settings'
   | 'history'
@@ -1691,6 +1692,10 @@ const [transferDraft, setTransferDraft] =
         setScreen('internal-transfer');
         return;
       }
+    if (action === 'add-money') {
+  setScreen('add-money');
+  return;
+}
     if (action === 'airtime') {
       setScreen('airtime');
       return;
