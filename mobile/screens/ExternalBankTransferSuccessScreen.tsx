@@ -72,7 +72,7 @@ export default function ExternalBankTransferSuccessScreen({
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+      <StatusBar barStyle="dark-content"/>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
