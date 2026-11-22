@@ -2165,22 +2165,21 @@ if (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      <TransferSuccessScreen
-        amount={transferReceipt.amount}
-        receivingInstitution="ZENIMONIES"
-        transferType="internal"
-        transactionReference={
-          transferReceipt.reference
-        }
-        transactionDate={
-          transferReceipt.transactionDate
-        }
-        onDone={() => {
-          setTransferDraft(null);
-          setTransferReceipt(null);
-          setScreen('home');
-        }}
-      />
+ <TransferSuccessScreen
+  amount={transferReceipt.amount}
+  receivingInstitution="ZENIMONIES"
+  transferType="internal"
+  transactionReference={transferReceipt.reference}
+  transactionDate={transferReceipt.transactionDate}
+  initiatedAt={transferReceipt.initiatedAt}
+  processedAt={transferReceipt.processedAt}
+  receivedAt={transferReceipt.receivedAt}
+  onDone={() => {
+    setTransferDraft(null);
+    setTransferReceipt(null);
+    setScreen('home');
+  }}
+/>
     </SafeAreaView>
   );
 } 
