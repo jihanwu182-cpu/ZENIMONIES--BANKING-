@@ -1,7 +1,7 @@
 
 const pool = require('../config/database');
 
-// Allowed session status transitions
+// Allowed status transitions
 const ALLOWED_TRANSITIONS = {
   initiated: ['verified', 'pending', 'failed', 'expired'],
   verified: ['pending', 'completed', 'failed', 'expired'],
@@ -65,8 +65,15 @@ const saveCorrelationId = async (sessionId, correlationId) => {
   return result.rows[0] || null;
 };
 
-// Safely update session status
+// Safely update onboarding status atomically
 const updateStatus = async (sessionId, status) => {
+  // Find all statuses that are allowed to transition to the target status
+  const allowedPreviousStatuses = Object.entries(ALLOWED_TRANSITIONS)
+    .filter(([, allowedNextStatuses]) =>
+      allowedNextStatuses.includes(status)
+    )
+    .map(([previousStatus]) => previousStatus);
+
   const result = await pool.query(
     `UPDATE alat_onboarding_sessions
      SET status = $2,
@@ -82,29 +89,10 @@ const updateStatus = async (sessionId, status) => {
          OR status = ANY($3::varchar[])
        )
      RETURNING *`,
-    [
-      sessionId,
-      status,
-      ALLOWED_TRANSITIONS[
-        (await getCurrentStatus(sessionId)) || ''
-      ] || [],
-    ]
+    [sessionId, status, allowedPreviousStatuses]
   );
 
   return result.rows[0] || null;
-};
-
-// Retrieve current status for transition validation
-const getCurrentStatus = async (sessionId) => {
-  const result = await pool.query(
-    `SELECT status
-     FROM alat_onboarding_sessions
-     WHERE id = $1
-     LIMIT 1`,
-    [sessionId]
-  );
-
-  return result.rows[0]?.status || null;
 };
 
 module.exports = {
