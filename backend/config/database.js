@@ -226,6 +226,18 @@ const {
 
 await runAlatOnboardingMigration();
 
+ // ========================================================
+// ALAT SESSION EXPIRATION MIGRATION
+// ========================================================
+
+console.log('Applying ALAT session expiration migration...');
+
+const {
+  runAlatSessionExpirationMigration,
+} = require('../database/migrations/runAlatSessionExpirationMigration');
+
+await runAlatSessionExpirationMigration();     
+
       const accountTriggerCheck = await client.query(`
         SELECT
           trigger_name,
