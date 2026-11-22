@@ -43,7 +43,7 @@ import InternalTransferScreen from './screens/InternalTransferScreen';
 import TransferReviewScreen from './screens/TransferReviewScreen';
 import TransferSuccessScreen from './screens/TransferSuccessScreen';
 import TransferPinScreen from './screens/TransferPinScreen';
-
+import ToBankScreen from './screens/ToBankScreen';
 
 import {
   registerPushNotifications,
@@ -83,6 +83,7 @@ type Screen =
   | 'electricity'
   | 'tv'
   | 'internal-transfer'
+  | 'to-bank'
   | 'transfer-review'
   | 'transfer-pin'
   | 'transfer-processing'
@@ -1690,7 +1691,11 @@ const [transferDraft, setTransferDraft] =
   const handleDashboardAction = (
     action: string
   ) => {
-      if (action === 'internal-transfer') {
+     if (action === 'transfer') {
+        setScreen('to-bank');
+        return;
+  }
+    if (action === 'internal-transfer') {
         setScreen('internal-transfer');
         return;
       }
@@ -2066,6 +2071,31 @@ if (
       </SafeAreaView>
     );
   }
+  // ====================================================
+// EXTERNAL BANK TRANSFER — SELECT BANK
+// ====================================================
+
+if (screen === 'to-bank' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <ToBankScreen
+        onVerifyAccount={async () => {
+          throw new Error(
+            'Recipient account verification is not connected yet.'
+          );
+        }}
+        onContinue={() => {
+          Alert.alert(
+            'Bank transfer',
+            'Transfer review will be connected after account verification is implemented.'
+          );
+        }}
+      />
+    </SafeAreaView>
+  );
+}
 // ====================================================
 // INTERNAL TRANSFER
 // ====================================================
