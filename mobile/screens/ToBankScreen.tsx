@@ -510,33 +510,15 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
               </View>
             )}
 
-            {/* VERIFIED RECIPIENT */}
+           {/* VERIFIED RECIPIENT */}
 
-            {verifiedAccount && (
-              <View style={styles.verifiedBox}>
-                <View style={styles.verifiedIcon}>
-                  <Text style={styles.checkmark}>
-                    ✓
-                  </Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.verifiedLabel}>
-                    Account verified
-                  </Text>
-
-                  <Text style={styles.accountName}>
-                    {verifiedAccount.accountName}
-                  </Text>
-
-                  <Text style={styles.accountDetails}>
-                    {verifiedAccount.accountNumber} ·{' '}
-                    {verifiedAccount.bankName}
-                  </Text>
-                </View>
-              </View>
-            )}
-
+          {verifiedAccount && (
+          <View style={styles.verifiedBox}>
+         <Text style={styles.accountName}>
+           {verifiedAccount.accountName}
+        </Text>
+      </View>
+      )}
             {/* AMOUNT */}
 
             <Text style={styles.label}>
@@ -851,18 +833,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  verifiedLabel: {
-    color: GREEN,
-    fontSize: 12,
-    fontWeight: '700',
-  },
+verifiedLabel: {
+  color: GREEN,
+  fontSize: 12,
+  fontWeight: '700',
+},
 
-  accountName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: DARK,
-    marginTop: 3,
-  },
+accountName: {
+  fontSize: 17,
+  fontWeight: '800',
+  color: DARK,
+},
 
   accountDetails: {
     fontSize: 12,
