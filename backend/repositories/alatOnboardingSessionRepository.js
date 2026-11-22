@@ -1,7 +1,10 @@
 
 const pool = require('../config/database');
 
-// Allowed status transitions
+// ============================================================
+// ZENIMONIES — ALAT ONBOARDING SESSION REPOSITORY
+// ============================================================
+
 const ALLOWED_TRANSITIONS = {
   initiated: ['verified', 'pending', 'failed', 'expired'],
   verified: ['pending', 'completed', 'failed', 'expired'],
@@ -11,13 +14,24 @@ const ALLOWED_TRANSITIONS = {
   expired: [],
 };
 
-// Create a new onboarding session
+const ALLOWED_STATUSES = Object.keys(ALLOWED_TRANSITIONS);
+
+const ACTIVE_STATUSES = ['initiated', 'verified', 'pending'];
+
+// ------------------------------------------------------------
+// CREATE SESSION
+// ------------------------------------------------------------
 
 const create = async ({ userId, verificationType }) => {
-     if (!userId) {
-  throw new Error('User ID is required.');
-}
-  // 1. Expire overdue sessions for this user first
+  if (!userId) {
+    throw new Error('User ID is required.');
+  }
+
+  if (!['BVN', 'NIN'].includes(verificationType)) {
+    throw new Error('Invalid verification type.');
+  }
+
+  // Expire overdue sessions for this user first.
   await pool.query(
     `UPDATE alat_onboarding_sessions
      SET status = 'expired',
@@ -29,7 +43,7 @@ const create = async ({ userId, verificationType }) => {
     [userId]
   );
 
-  // 2. Try to create a new session
+  // Create new session, protected by the partial unique index.
   const result = await pool.query(
     `INSERT INTO alat_onboarding_sessions
        (user_id, verification_type, status)
@@ -45,7 +59,7 @@ const create = async ({ userId, verificationType }) => {
     return result.rows[0];
   }
 
-  // 3. If an active session already exists, return it
+  // If an active session already exists, return it.
   const existing = await pool.query(
     `SELECT *
      FROM alat_onboarding_sessions
@@ -59,10 +73,15 @@ const create = async ({ userId, verificationType }) => {
   return existing.rows[0] || null;
 };
 
+// ------------------------------------------------------------
+// FIND LATEST SESSION BY USER
+// ------------------------------------------------------------
 
-
-// Find latest session for a user
 const findLatestByUserId = async (userId) => {
+  if (!userId) {
+    throw new Error('User ID is required.');
+  }
+
   const result = await pool.query(
     `SELECT *
      FROM alat_onboarding_sessions
@@ -75,8 +94,15 @@ const findLatestByUserId = async (userId) => {
   return result.rows[0] || null;
 };
 
-// Find session by ID
+// ------------------------------------------------------------
+// FIND SESSION BY ID
+// ------------------------------------------------------------
+
 const findById = async (sessionId) => {
+  if (!sessionId) {
+    throw new Error('Session ID is required.');
+  }
+
   const result = await pool.query(
     `SELECT *
      FROM alat_onboarding_sessions
@@ -88,9 +114,22 @@ const findById = async (sessionId) => {
   return result.rows[0] || null;
 };
 
-// Save provider correlation ID
+// ------------------------------------------------------------
+// SAVE CORRELATION ID
+// ------------------------------------------------------------
 
 const saveCorrelationId = async (sessionId, correlationId) => {
+  if (
+    typeof sessionId !== 'string' ||
+    !sessionId.trim() ||
+    typeof correlationId !== 'string' ||
+    !correlationId.trim()
+  ) {
+    throw new Error('Session ID and correlation ID are required.');
+  }
+
+  const normalizedCorrelationId = correlationId.trim();
+
   const result = await pool.query(
     `UPDATE alat_onboarding_sessions
      SET correlation_id = $2,
@@ -102,22 +141,39 @@ const saveCorrelationId = async (sessionId, correlationId) => {
          OR correlation_id = $2
        )
      RETURNING *`,
-    [sessionId, correlationId]
+    [sessionId.trim(), normalizedCorrelationId]
   );
 
   return result.rows[0] || null;
 };
 
+// ------------------------------------------------------------
+// UPDATE SESSION STATUS
+// ------------------------------------------------------------
 
-// Safely update onboarding status atomically
 const updateStatus = async (sessionId, status) => {
-  // Find all statuses that are allowed to transition to the target status
-  const allowedPreviousStatuses = Object.entries(ALLOWED_TRANSITIONS)
-    .filter(([, allowedNextStatuses]) =>
-      allowedNextStatuses.includes(status)
-    )
+  if (
+    typeof sessionId !== 'string' ||
+    !sessionId.trim()
+  ) {
+    throw new Error('Session ID is required.');
+  }
+
+  if (
+    typeof status !== 'string' ||
+    !ALLOWED_STATUSES.includes(status)
+  ) {
+    throw new Error('Invalid onboarding status.');
+  }
+
+  // Find valid previous states for this requested status.
+  const allowedPreviousStatuses = Object.entries(
+    ALLOWED_TRANSITIONS
+  )
+    .filter(([, nextStatuses]) => nextStatuses.includes(status))
     .map(([previousStatus]) => previousStatus);
 
+  // Atomically enforce the transition.
   const result = await pool.query(
     `UPDATE alat_onboarding_sessions
      SET status = $2,
@@ -133,12 +189,16 @@ const updateStatus = async (sessionId, status) => {
          OR status = ANY($3::varchar[])
        )
      RETURNING *`,
-    [sessionId, status, allowedPreviousStatuses]
+    [sessionId.trim(), status, allowedPreviousStatuses]
   );
 
   return result.rows[0] || null;
 };
-// Expire only sessions whose explicit expiration time has passed
+
+// ------------------------------------------------------------
+// EXPIRE DUE SESSIONS
+// ------------------------------------------------------------
+
 const expireDueSessions = async () => {
   const result = await pool.query(
     `UPDATE alat_onboarding_sessions
@@ -152,6 +212,10 @@ const expireDueSessions = async () => {
 
   return result.rows;
 };
+
+// ------------------------------------------------------------
+// EXPORTS
+// ------------------------------------------------------------
 
 module.exports = {
   create,
