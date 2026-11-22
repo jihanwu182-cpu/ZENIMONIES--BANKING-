@@ -46,7 +46,7 @@ import TransferPinScreen from './screens/TransferPinScreen';
 import ToBankScreen from './screens/ToBankScreen';
 import ExternalBankTransferReviewScreen from './screens/ExternalBankTransferReviewScreen';
 import ExternalBankTransferPinScreen from './screens/ExternalBankTransferPinScreen';
-import TransferSuccessScreen from './screens/TransferSuccessScreen';
+import ExternalBankTransferSuccessScreen from './screens/ExternalBankTransferSuccessScreen';
 
 import {
   registerPushNotifications,
