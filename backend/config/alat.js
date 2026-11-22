@@ -14,7 +14,7 @@ const getEnv = (name) => {
 // Do not add /api here because endpoint paths already include /api.
 const BASE_URL =
   getEnv('ALAT_BASE_URL') ||
-  'https://apiplayground.alat.ng';
+  'https://playground.azure-api.net/create-account-face';
 const SUBSCRIPTION_KEY = getEnv(
   'ALAT_SUBSCRIPTION_KEY'
 );
