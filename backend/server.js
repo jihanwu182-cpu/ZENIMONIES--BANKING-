@@ -47,6 +47,7 @@ const passkeyRoutes = require('./routes/passkey');
 const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
 const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
+const alatAccountRoutes = require('./routes/alatAccountRoutes');
 const savingsRoutes = require('./routes/savingsRoutes');
 const saveWalletRoutes =
     require('./routes/saveWalletRoutes');
@@ -303,7 +304,7 @@ app.use(
   '/api/transfers',
   transferRoutes
 );
-
+app.use('/api/alat', alatAccountRoutes);
 // ------------------------------------------------------------
 // ZENIMONIES-TO-ZENIMONIES TRANSFERS
 // ------------------------------------------------------------
