@@ -74,26 +74,26 @@ export default function ExternalBankTransferSuccessScreen({
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Success Icon and Sparkles */}
+      {/* Success icon and gold sparkles */}
       <View style={styles.successArea}>
-        <View style={styles.sparkleTopLeft}>
-        <Text style={styles.sparkleText}>✦</Text>
-       </View>
-
-        <View style={styles.sparkleTopRight}>
-        <Text style={styles.sparkleTextSmall}>✦</Text>
-       </View>
-
-        <View style={styles.sparkleLeft}>
-        <Text style={styles.sparkleTextTiny}>✦</Text>
-       </View>
-
-        <View style={styles.sparkleRight}>
-        <Text style={styles.sparkleText}>✦</Text>
+        <View style={[styles.sparkle, styles.sparkleTopLeft]}>
+          <Text style={styles.sparkleText}>✦</Text>
         </View>
-         
-        <View style={styles.sparkleBottom}>
-        <Text style={styles.sparkleTextSmall}>✦</Text>
+
+        <View style={[styles.sparkle, styles.sparkleTopRight]}>
+          <Text style={styles.sparkleTextSmall}>✦</Text>
+        </View>
+
+        <View style={[styles.sparkle, styles.sparkleLeft]}>
+          <Text style={styles.sparkleTextTiny}>✦</Text>
+        </View>
+
+        <View style={[styles.sparkle, styles.sparkleRight]}>
+          <Text style={styles.sparkleText}>✦</Text>
+        </View>
+
+        <View style={[styles.sparkle, styles.sparkleBottom]}>
+          <Text style={styles.sparkleTextSmall}>✦</Text>
         </View>
 
         <View style={styles.successOuter}>
@@ -103,7 +103,6 @@ export default function ExternalBankTransferSuccessScreen({
         </View>
       </View>
 
-      {/* Heading */}
       <Text style={styles.title}>Transfer Successful</Text>
 
       <Text style={styles.subtitle}>
@@ -111,13 +110,12 @@ export default function ExternalBankTransferSuccessScreen({
         {'\n'}depending on their bank.
       </Text>
 
-      {/* Receipt Card */}
+      {/* Compact receipt */}
       <View style={styles.receiptCard}>
         <Text style={styles.amount}>{formattedAmount}</Text>
 
         <Text style={styles.recipientName}>{accountName}</Text>
 
-        {/* Recipient Bank */}
         <View style={styles.bankRow}>
           {bankLogo ? (
             <Image
@@ -140,7 +138,7 @@ export default function ExternalBankTransferSuccessScreen({
 
         <Text style={styles.dateText}>{formattedDate}</Text>
 
-        {/* Transfer Timeline */}
+        {/* Timeline */}
         <View style={styles.timeline}>
           <View style={styles.timelineLine} />
 
@@ -148,12 +146,10 @@ export default function ExternalBankTransferSuccessScreen({
             <View style={styles.timelineCircle}>
               <Text style={styles.timelineCheck}>✓</Text>
             </View>
-
             <Text style={styles.timelineLabel}>
               Transfer
               {'\n'}initiated
             </Text>
-
             <Text style={styles.timelineTime}>{time}</Text>
           </View>
 
@@ -161,12 +157,10 @@ export default function ExternalBankTransferSuccessScreen({
             <View style={styles.timelineCircle}>
               <Text style={styles.timelineCheck}>✓</Text>
             </View>
-
             <Text style={styles.timelineLabel}>
               Transfer
               {'\n'}processed
             </Text>
-
             <Text style={styles.timelineTime}>{time}</Text>
           </View>
 
@@ -174,29 +168,21 @@ export default function ExternalBankTransferSuccessScreen({
             <View style={styles.timelineCircle}>
               <Text style={styles.timelineCheck}>✓</Text>
             </View>
-
             <Text style={styles.timelineLabel}>
               Received by
               {'\n'}{bankName}
             </Text>
-
             <Text style={styles.timelineTime}>{time}</Text>
           </View>
         </View>
 
-        {/* Transaction Reference */}
         <View style={styles.referenceDivider} />
 
-        <Text style={styles.referenceLabel}>
-          Transaction Reference
-        </Text>
-
-        <Text style={styles.referenceValue}>
-          {transactionReference}
-        </Text>
+        <Text style={styles.referenceLabel}>Transaction Reference</Text>
+        <Text style={styles.referenceValue}>{transactionReference}</Text>
       </View>
 
-      {/* Bottom Buttons */}
+      {/* Compact buttons */}
       <View style={styles.bottomButtons}>
         <TouchableOpacity
           style={styles.shareButton}
@@ -224,32 +210,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: WHITE,
     paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 22,
+    paddingTop: 4,
+    paddingBottom: 12,
     justifyContent: 'space-between',
   },
 
   successArea: {
-    height: 170,
+    height: 126,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 2,
     position: 'relative',
   },
 
   successOuter: {
-    width: 114,
-    height: 114,
-    borderRadius: 57,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -257,9 +243,9 @@ const styles = StyleSheet.create({
 
   checkmark: {
     color: WHITE,
-    fontSize: 47,
+    fontSize: 38,
     fontWeight: '900',
-    lineHeight: 54,
+    lineHeight: 44,
   },
 
   sparkle: {
@@ -268,40 +254,40 @@ const styles = StyleSheet.create({
 
   sparkleText: {
     color: GOLD,
-    fontSize: 25,
+    fontSize: 23,
     fontWeight: '800',
   },
 
   sparkleTextSmall: {
     color: GOLD,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
 
   sparkleTextTiny: {
     color: GOLD,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
 
   sparkleTopLeft: {
-    left: '35%',
-    top: 8,
+    left: '29%',
+    top: 2,
   },
 
   sparkleTopRight: {
-    right: '34%',
-    top: 28,
+    right: '29%',
+    top: 18,
   },
 
   sparkleLeft: {
-    left: '31%',
-    top: 72,
+    left: '25%',
+    top: 54,
   },
 
   sparkleRight: {
-    right: '29%',
-    top: 83,
+    right: '23%',
+    top: 61,
   },
 
   sparkleBottom: {
@@ -311,7 +297,7 @@ const styles = StyleSheet.create({
 
   title: {
     color: BLACK,
-    fontSize: 27,
+    fontSize: 23,
     fontWeight: '900',
     textAlign: 'center',
     marginTop: 0,
@@ -319,12 +305,12 @@ const styles = StyleSheet.create({
 
   subtitle: {
     color: MUTED,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    lineHeight: 19,
+    lineHeight: 17,
     textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+    marginTop: 6,
+    marginBottom: 10,
   },
 
   receiptCard: {
@@ -332,49 +318,49 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
     borderColor: '#D6EBD2',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 16,
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingTop: 12,
+    paddingBottom: 12,
     alignItems: 'center',
     flex: 1,
     justifyContent: 'space-evenly',
-    maxHeight: 430,
+    maxHeight: 390,
   },
 
   amount: {
     color: GREEN,
-    fontSize: 30,
+    fontSize: 27,
     fontWeight: '900',
     textAlign: 'center',
   },
 
   recipientName: {
     color: BLACK,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 3,
   },
 
   bankRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 9,
-    gap: 8,
+    marginTop: 6,
+    gap: 6,
   },
 
   bankLogo: {
-    width: 27,
-    height: 27,
-    borderRadius: 14,
+    width: 23,
+    height: 23,
+    borderRadius: 12,
   },
 
   bankLogoFallback: {
-    width: 27,
-    height: 27,
-    borderRadius: 14,
+    width: 23,
+    height: 23,
+    borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -382,29 +368,29 @@ const styles = StyleSheet.create({
 
   bankLogoFallbackText: {
     color: WHITE,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
   },
 
   bankName: {
     color: DARK_GREEN,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
 
   accountNumber: {
     color: MUTED,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginTop: 5,
+    marginTop: 3,
   },
 
   dateText: {
     color: MUTED,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 5,
   },
 
   timeline: {
@@ -412,7 +398,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     position: 'relative',
-    marginTop: 12,
+    marginTop: 8,
     paddingTop: 2,
   },
 
@@ -420,8 +406,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: '16%',
     right: '16%',
-    top: 15,
-    height: 4,
+    top: 12,
+    height: 3,
     backgroundColor: GREEN,
   },
 
@@ -431,98 +417,98 @@ const styles = StyleSheet.create({
   },
 
   timelineCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#61BB60',
   },
 
   timelineCheck: {
     color: WHITE,
-    fontSize: 19,
+    fontSize: 16,
     fontWeight: '900',
-    lineHeight: 22,
+    lineHeight: 19,
   },
 
   timelineLabel: {
     color: BLACK,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     textAlign: 'center',
-    lineHeight: 16,
-    marginTop: 11,
+    lineHeight: 14,
+    marginTop: 8,
   },
 
   timelineTime: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: 7,
+    marginTop: 5,
   },
 
   referenceDivider: {
     height: 1,
     backgroundColor: '#D8E3D7',
     width: '100%',
-    marginTop: 14,
+    marginTop: 8,
   },
 
   referenceLabel: {
     color: MUTED,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 7,
   },
 
   referenceValue: {
     color: BLACK,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 3,
   },
 
   bottomButtons: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
+    gap: 9,
+    marginTop: 12,
   },
 
   shareButton: {
     flex: 1,
-    height: 58,
-    borderRadius: 14,
+    height: 49,
+    borderRadius: 13,
     borderWidth: 1.5,
     borderColor: GREEN,
     backgroundColor: WHITE,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 9,
+    gap: 7,
   },
 
   shareIcon: {
     color: GREEN,
-    fontSize: 25,
+    fontSize: 21,
     fontWeight: '900',
   },
 
   shareText: {
     color: GREEN,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900',
   },
 
   doneButton: {
     flex: 1,
-    height: 58,
-    borderRadius: 14,
+    height: 49,
+    borderRadius: 13,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -530,7 +516,7 @@ const styles = StyleSheet.create({
 
   doneText: {
     color: WHITE,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '900',
   },
 });
