@@ -2237,12 +2237,27 @@ if (
             });
 
             setScreen('transfer-success');
-          } catch (error) {
-            // Return to PIN page if transfer fails
-            setScreen('transfer-pin');
-            throw error;
-          }
-        }}
+           } catch (error: any) {
+          console.error('Internal transfer failed:', error);
+
+  const errorMessage =
+    error?.data?.message ||
+    error?.message ||
+    'Unable to complete transfer. Please try again.';
+
+  Alert.alert(
+    'Transfer Failed',
+    errorMessage,
+    [
+      {
+        text: 'OK',
+        onPress: () => setScreen('transfer-pin'),
+      },
+    ],
+    { cancelable: false }
+  );
+}
+          }}
       />
     </SafeAreaView>
   );
