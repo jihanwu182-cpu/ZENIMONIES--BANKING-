@@ -2864,71 +2864,71 @@ const styles = StyleSheet.create({
   },
   // INTERNAL TRANSFER PROCESSING
 
-  transferProcessingContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
+transferProcessingContainer: {
+  flex: 1,
+  backgroundColor: '#FFFFFF',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingHorizontal: 28,
+},
 
-  transferProcessingIcon: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 4,
-    borderColor: '#78A900',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
+transferProcessingIcon: {
+  width: 90,
+  height: 90,
+  borderRadius: 45,
+  backgroundColor: '#FFFFFF',
+  borderWidth: 4,
+  borderColor: '#07803F',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 28,
+},
 
-  transferProcessingTitle: {
-    color: '#172018',
-    fontSize: 24,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
+transferProcessingTitle: {
+  color: '#172018',
+  fontSize: 24,
+  fontWeight: '900',
+  textAlign: 'center',
+},
 
-  transferProcessingMessage: {
-    color: '#858B83',
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 30,
-  },
+transferProcessingMessage: {
+  color: '#858B83',
+  fontSize: 14,
+  lineHeight: 22,
+  textAlign: 'center',
+  marginTop: 12,
+  marginBottom: 30,
+},
 
-  transferProcessingAmountCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#78A900',
-    borderRadius: 18,
-    padding: 22,
-    alignItems: 'center',
-  },
+transferProcessingAmountCard: {
+  width: '100%',
+  backgroundColor: '#FFFFFF',
+  borderWidth: 1,
+  borderColor: '#07803F',
+  borderRadius: 18,
+  padding: 22,
+  alignItems: 'center',
+},
 
-  transferProcessingLabel: {
-    color: '#858B83',
-    fontSize: 13,
-    marginBottom: 8,
-  },
+transferProcessingLabel: {
+  color: '#858B83',
+  fontSize: 13,
+  marginBottom: 8,
+},
 
-  transferProcessingAmount: {
-    color: '#78A900',
-    fontSize: 29,
-    fontWeight: '900',
-  },
+transferProcessingAmount: {
+  color: '#07803F',
+  fontSize: 29,
+  fontWeight: '900',
+},
 
-  transferProcessingRecipient: {
-    color: '#172018',
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 12,
-  },
+transferProcessingRecipient: {
+  color: '#172018',
+  fontSize: 15,
+  fontWeight: '700',
+  textAlign: 'center',
+  marginTop: 12,
+},
   premiumFooter: {
     textAlign: 'center',
     fontSize: 9,
