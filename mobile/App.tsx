@@ -45,6 +45,7 @@ import TransferSuccessScreen from './screens/TransferSuccessScreen';
 import TransferPinScreen from './screens/TransferPinScreen';
 import ToBankScreen from './screens/ToBankScreen';
 import ExternalBankTransferReviewScreen from './screens/ExternalBankTransferReviewScreen';
+import ExternalBankTransferPinScreen from './screens/ExternalBankTransferPinScreen';
 
 import {
   registerPushNotifications,
@@ -86,6 +87,7 @@ type Screen =
   | 'internal-transfer'
   | 'to-bank'
   | 'external-bank-review'
+  | 'external-bank-pin,
   | 'transfer-review'
   |'transfer-pin'
   | 'transfer-processing'
@@ -2122,10 +2124,32 @@ if (
         amount={externalBankTransferDraft.amount}
         narration={externalBankTransferDraft.narration}
         onBack={() => setScreen('to-bank')}
-        onContinue={() => {
+        onContinue={() => setScreen('external-bank-pin')}
+      />
+    </SafeAreaView>
+  );
+}
+  // ====================================================
+// EXTERNAL BANK TRANSFER — PIN
+// ====================================================
+if (
+  screen === 'external-bank-pin' &&
+  session &&
+  externalBankTransferDraft
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <ExternalBankTransferPinScreen
+        amount={externalBankTransferDraft.amount}
+        accountName={externalBankTransferDraft.accountName}
+        accountNumber={externalBankTransferDraft.accountNumber}
+        bankName={externalBankTransferDraft.bankName}
+        onBack={() => setScreen('external-bank-review')}
+        onConfirm={async (pin) => {
           Alert.alert(
-            'Transfer security',
-            'The external bank transfer PIN and payment processing connection is the next step. No transfer has been initiated.'
+            'Transfer Not Yet Connected',
+            'Your PIN screen is ready. External bank transfer processing has not yet been connected.',
           );
         }}
       />
