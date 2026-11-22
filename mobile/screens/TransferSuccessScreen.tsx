@@ -21,7 +21,7 @@ export type TransferSuccessScreenProps = {
   onDone: () => void;
 };
 
-const GREEN = '#07803D';
+const GREEN = '#07803F';
 const BLACK = '#172018';
 const MUTED = '#858B83';
 const WHITE = '#FFFFFF';
