@@ -15,6 +15,9 @@ export type TransferSuccessScreenProps = {
   transferType?: 'internal' | 'external';
   transactionReference?: string;
   transactionDate?: string;
+  initiatedAt?: string;
+  processedAt?: string;
+  receivedAt?: string;
   onDone: () => void;
 };
 
@@ -30,6 +33,9 @@ export default function TransferSuccessScreen({
   transferType = 'external',
   transactionReference,
   transactionDate,
+  initiatedAt,
+  processedAt,
+  receivedAt,
   onDone,
 }: TransferSuccessScreenProps) {
   const formatAmount = (value: number | string) =>
@@ -54,16 +60,38 @@ export default function TransferSuccessScreen({
     });
   };
 
+  const formatTime = (value?: string) => {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    if (isNaN(date.getTime())) return null;
+
+    return date.toLocaleTimeString('en-NG', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  };
+
+  const initiatedTime = formatTime(initiatedAt);
+  const processedTime = formatTime(processedAt);
+  const receivedTime = formatTime(receivedAt);
+
   const handleShare = async () => {
     try {
       await Share.share({
         message: [
           'ZENIMONIES Transfer Receipt',
           '',
-          `Status: Successful`,
+          'Status: Successful',
           `Amount: ${formatAmount(amount)}`,
           `Recipient/Institution: ${receivingInstitution}`,
           `Date: ${formatDate(transactionDate)}`,
+          initiatedTime ? `Initiated: ${initiatedTime}` : '',
+          processedTime ? `Processed: ${processedTime}` : '',
+          receivedTime ? `Received: ${receivedTime}` : '',
           transactionReference
             ? `Reference: ${transactionReference}`
             : '',
@@ -77,6 +105,23 @@ export default function TransferSuccessScreen({
   };
 
   const isInternal = transferType === 'internal';
+
+  const timeline = [
+    {
+      label: 'Transfer\ninitiated',
+      time: initiatedTime,
+    },
+    {
+      label: 'Transfer\nprocessed',
+      time: processedTime,
+    },
+    {
+      label: isInternal
+        ? 'Received by\nZENIMONIES'
+        : 'Sent to\nbeneficiary',
+      time: receivedTime,
+    },
+  ];
 
   return (
     <View style={styles.container}>
@@ -132,21 +177,21 @@ export default function TransferSuccessScreen({
           <View style={styles.progressSection}>
             <View style={styles.progressLine} />
 
-            {[
-              'Transfer\ninitiated',
-              'Transfer\nprocessed',
-              isInternal
-                ? 'Received by\nZENIMONIES'
-                : 'Sent to\nbeneficiary',
-            ].map((label, index) => (
+            {timeline.map((item, index) => (
               <View key={index} style={styles.progressItem}>
                 <View style={styles.progressDot}>
                   <Text style={styles.progressCheck}>✓</Text>
                 </View>
 
                 <Text style={styles.progressLabel}>
-                  {label}
+                  {item.label}
                 </Text>
+
+                {item.time && (
+                  <Text style={styles.progressTime}>
+                    {item.time}
+                  </Text>
+                )}
               </View>
             ))}
           </View>
@@ -376,6 +421,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 12,
+  },
+
+  progressTime: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 4,
   },
 
   referenceSection: {
