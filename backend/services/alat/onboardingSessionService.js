@@ -24,19 +24,34 @@ const createOnboardingSession = async ({ userId, verificationType }) => {
   }
 
   try {
-    return await repository.create({
+    const session = await repository.create({
       userId,
       verificationType: normalizedType,
     });
+
+    if (!session) {
+      throw new Error('Unable to create or retrieve onboarding session.');
+    }
+
+    if (session.verification_type !== normalizedType) {
+      throw new Error(
+        `An active ${session.verification_type} onboarding session already exists. Please continue that verification or wait until it expires before starting ${normalizedType}.`
+      );
+    }
+
+    return session;
   } catch (error) {
     if (error.code === '23505') {
       throw new Error(
-        'An active ALAT onboarding session already exists for this user.'
+        'An active ALAT onboarding session already exists. Please try again.'
       );
     }
 
     throw error;
   }
+};
+
+
 };
 
 const saveCorrelationId = async ({ sessionId, correlationId }) => {
