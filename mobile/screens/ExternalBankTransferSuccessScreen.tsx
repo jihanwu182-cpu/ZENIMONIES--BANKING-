@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -26,7 +27,6 @@ const BLACK = '#172018';
 const MUTED = '#858B83';
 const WHITE = '#FFFFFF';
 const GOLD = '#E5B800';
-const LIGHT_GREEN = '#EAF5E9';
 
 export default function ExternalBankTransferSuccessScreen({
   amount,
@@ -63,7 +63,10 @@ export default function ExternalBankTransferSuccessScreen({
     if (onShareReceipt) {
       onShareReceipt();
     } else {
-      Alert.alert('Share Receipt', 'Receipt sharing will be available soon.');
+      Alert.alert(
+        'Share Receipt',
+        'Receipt sharing will be available soon.',
+      );
     }
   };
 
@@ -71,25 +74,25 @@ export default function ExternalBankTransferSuccessScreen({
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
-      {/* Success icon with gold sparkles */}
+      {/* Success Icon and Sparkles */}
       <View style={styles.successArea}>
         <View style={[styles.sparkle, styles.sparkleTopLeft]}>
-        <Text style={styles.sparkleText}>✦</Text>
-        </View>
-
-        <View style={styles.sparkle sparkleTopRight}>
-          <Text style={styles.sparkleTextSmall}>✦</Text>
-        </View>
-
-        <View style={styles.sparkle sparkleLeft}>
-          <Text style={styles.sparkleTextTiny}>✦</Text>
-        </View>
-
-        <View style={styles.sparkle sparkleRight}>
           <Text style={styles.sparkleText}>✦</Text>
         </View>
 
-        <View style={styles.sparkle sparkleBottom}>
+        <View style={[styles.sparkle, styles.sparkleTopRight]}>
+          <Text style={styles.sparkleTextSmall}>✦</Text>
+        </View>
+
+        <View style={[styles.sparkle, styles.sparkleLeft]}>
+          <Text style={styles.sparkleTextTiny}>✦</Text>
+        </View>
+
+        <View style={[styles.sparkle, styles.sparkleRight]}>
+          <Text style={styles.sparkleText}>✦</Text>
+        </View>
+
+        <View style={[styles.sparkle, styles.sparkleBottom]}>
           <Text style={styles.sparkleTextSmall}>✦</Text>
         </View>
 
@@ -108,13 +111,13 @@ export default function ExternalBankTransferSuccessScreen({
         {'\n'}depending on their bank.
       </Text>
 
-      {/* Receipt card */}
+      {/* Receipt Card */}
       <View style={styles.receiptCard}>
         <Text style={styles.amount}>{formattedAmount}</Text>
 
         <Text style={styles.recipientName}>{accountName}</Text>
 
-        {/* Actual recipient bank logo and bank name */}
+        {/* Recipient Bank */}
         <View style={styles.bankRow}>
           {bankLogo ? (
             <Image
@@ -133,9 +136,11 @@ export default function ExternalBankTransferSuccessScreen({
           <Text style={styles.bankName}>{bankName}</Text>
         </View>
 
+        <Text style={styles.accountNumber}>{accountNumber}</Text>
+
         <Text style={styles.dateText}>{formattedDate}</Text>
 
-        {/* Transfer timeline */}
+        {/* Transfer Timeline */}
         <View style={styles.timeline}>
           <View style={styles.timelineLine} />
 
@@ -143,10 +148,12 @@ export default function ExternalBankTransferSuccessScreen({
             <View style={styles.timelineCircle}>
               <Text style={styles.timelineCheck}>✓</Text>
             </View>
+
             <Text style={styles.timelineLabel}>
               Transfer
               {'\n'}initiated
             </Text>
+
             <Text style={styles.timelineTime}>{time}</Text>
           </View>
 
@@ -154,10 +161,12 @@ export default function ExternalBankTransferSuccessScreen({
             <View style={styles.timelineCircle}>
               <Text style={styles.timelineCheck}>✓</Text>
             </View>
+
             <Text style={styles.timelineLabel}>
               Transfer
               {'\n'}processed
             </Text>
+
             <Text style={styles.timelineTime}>{time}</Text>
           </View>
 
@@ -165,22 +174,29 @@ export default function ExternalBankTransferSuccessScreen({
             <View style={styles.timelineCircle}>
               <Text style={styles.timelineCheck}>✓</Text>
             </View>
+
             <Text style={styles.timelineLabel}>
               Received by
               {'\n'}{bankName}
             </Text>
+
             <Text style={styles.timelineTime}>{time}</Text>
           </View>
         </View>
 
-        {/* Transaction reference */}
+        {/* Transaction Reference */}
         <View style={styles.referenceDivider} />
 
-        <Text style={styles.referenceLabel}>Transaction Reference</Text>
-        <Text style={styles.referenceValue}>{transactionReference}</Text>
+        <Text style={styles.referenceLabel}>
+          Transaction Reference
+        </Text>
+
+        <Text style={styles.referenceValue}>
+          {transactionReference}
+        </Text>
       </View>
 
-      {/* Bottom actions */}
+      {/* Bottom Buttons */}
       <View style={styles.bottomButtons}>
         <TouchableOpacity
           style={styles.shareButton}
@@ -202,6 +218,7 @@ export default function ExternalBankTransferSuccessScreen({
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -373,6 +390,13 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     fontSize: 13,
     fontWeight: '800',
+  },
+
+  accountNumber: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
   },
 
   dateText: {
