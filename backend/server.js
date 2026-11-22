@@ -661,7 +661,15 @@ const startServer = async () => {
 console.log(
   'Database initialization completed.'
 );
+// ========================================================
+// INTERNAL TRANSFER SHARED REFERENCE MIGRATION
+// ========================================================
 
+await runInternalTransferReferenceMigration(pool);
+
+console.log(
+  'Internal transfer reference migration is ready.'
+);
 // ========================================================
 // ZENIMONIES KYC SCHEMA COMPATIBILITY MIGRATION
 // ========================================================
