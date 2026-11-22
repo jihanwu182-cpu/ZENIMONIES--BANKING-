@@ -73,8 +73,8 @@ export default function ExternalBankTransferSuccessScreen({
 
       {/* Success icon with gold sparkles */}
       <View style={styles.successArea}>
-        <View style={styles.sparkle sparkleTopLeft}>
-          <Text style={styles.sparkleText}>✦</Text>
+        <View style={[styles.sparkle, styles.sparkleTopLeft]}>
+        <Text style={styles.sparkleText}>✦</Text>
         </View>
 
         <View style={styles.sparkle sparkleTopRight}>
