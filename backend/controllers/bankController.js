@@ -149,9 +149,9 @@ const resolveBankAccount = async (req, res) => {
      */
 
     if (
-      cleanBankCode === '057' &&
-      cleanAccountNumber === '0000000000'
-    ) {
+  cleanBankCode === '001' &&
+  cleanAccountNumber === '0000000000'
+) {
       console.log(
         'Paystack test bank account detected'
       );
