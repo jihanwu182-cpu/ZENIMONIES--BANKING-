@@ -42,6 +42,7 @@ import InternalTransferScreen from './screens/InternalTransferScreen';
 import TransferReviewScreen from './screens/TransferReviewScreen';
 import TransferSuccessScreen from './screens/TransferSuccessScreen';
 import TransferPinScreen from './screens/TransferPinScreen';
+import AddMoneyScreen from './screens/AddMoneyScreen';
 
 import {
   registerPushNotifications,
@@ -2507,7 +2508,17 @@ if (screen === 'bills' && session) {
       </SafeAreaView>
     );
   }
+  // ====================================================
+  // ADD MONEY SCREEN
+  // ====================================================
 
+  if (screen === 'add-money') {
+    return (
+      <AddMoneyScreen
+        onBack={() => setScreen('home')}
+      />
+    );
+  }
   // ====================================================
   // PREMIUM WELCOME SCREEN
   // ====================================================
