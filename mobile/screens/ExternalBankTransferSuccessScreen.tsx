@@ -72,7 +72,7 @@ export default function ExternalBankTransferSuccessScreen({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+      <StatusBar barStyle="dark-content" />
 
       {/* Success Icon and Sparkles */}
       <View style={styles.successArea}>
