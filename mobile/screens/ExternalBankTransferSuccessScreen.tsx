@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -8,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 
 export type ExternalBankTransferSuccessScreenProps = {
@@ -71,172 +71,186 @@ export default function ExternalBankTransferSuccessScreen({
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={styles.screen}>
+      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
-      {/* Success icon and gold sparkles */}
-      <View style={styles.successArea}>
-        <View style={[styles.sparkle, styles.sparkleTopLeft]}>
-          <Text style={styles.sparkleText}>✦</Text>
-        </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* SUCCESS ICON + GOLD STARS */}
+        <View style={styles.successArea}>
+          <Text style={[styles.star, styles.star1]}>✦</Text>
+          <Text style={[styles.starSmall, styles.star2]}>✦</Text>
+          <Text style={[styles.starTiny, styles.star3]}>✦</Text>
+          <Text style={[styles.star, styles.star4]}>✦</Text>
+          <Text style={[styles.starSmall, styles.star5]}>✦</Text>
 
-        <View style={[styles.sparkle, styles.sparkleTopRight]}>
-          <Text style={styles.sparkleTextSmall}>✦</Text>
-        </View>
-
-        <View style={[styles.sparkle, styles.sparkleLeft]}>
-          <Text style={styles.sparkleTextTiny}>✦</Text>
-        </View>
-
-        <View style={[styles.sparkle, styles.sparkleRight]}>
-          <Text style={styles.sparkleText}>✦</Text>
-        </View>
-
-        <View style={[styles.sparkle, styles.sparkleBottom]}>
-          <Text style={styles.sparkleTextSmall}>✦</Text>
-        </View>
-
-        <View style={styles.successOuter}>
-          <View style={styles.successInner}>
-            <Text style={styles.checkmark}>✓</Text>
+          <View style={styles.successOuter}>
+            <View style={styles.successInner}>
+              <Text style={styles.checkmark}>✓</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <Text style={styles.title}>Transfer Successful</Text>
+        {/* HEADING */}
+        <Text style={styles.title}>Transfer Successful</Text>
 
-      <Text style={styles.subtitle}>
-        Beneficiary should get the money within 5 mins,
-        {'\n'}depending on their bank.
-      </Text>
+        <Text style={styles.subtitle}>
+          Beneficiary should get the money within 5 mins,
+          {'\n'}depending on their bank.
+        </Text>
 
-      {/* Compact receipt */}
-      <View style={styles.receiptCard}>
-        <Text style={styles.amount}>{formattedAmount}</Text>
+        {/* RECEIPT */}
+        <View style={styles.receiptCard}>
+          <Text style={styles.amount}>{formattedAmount}</Text>
 
-        <Text style={styles.recipientName}>{accountName}</Text>
+          <Text style={styles.recipientName}>
+            {accountName}
+          </Text>
 
-        <View style={styles.bankRow}>
-          {bankLogo ? (
-            <Image
-              source={{ uri: bankLogo }}
-              style={styles.bankLogo}
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={styles.bankLogoFallback}>
-              <Text style={styles.bankLogoFallbackText}>
-                {bankName.charAt(0).toUpperCase()}
+          {/* BANK */}
+          <View style={styles.bankRow}>
+            {bankLogo ? (
+              <Image
+                source={{ uri: bankLogo }}
+                style={styles.bankLogo}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.bankLogoFallback}>
+                <Text style={styles.bankLogoFallbackText}>
+                  {bankName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+
+            <Text style={styles.bankName}>{bankName}</Text>
+          </View>
+
+          <Text style={styles.accountNumber}>
+            {accountNumber}
+          </Text>
+
+          <Text style={styles.dateText}>{formattedDate}</Text>
+
+          {/* TRANSFER TIMELINE */}
+          <View style={styles.timeline}>
+            <View style={styles.timelineLine} />
+
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineCircle}>
+                <Text style={styles.timelineCheck}>✓</Text>
+              </View>
+
+              <Text style={styles.timelineLabel}>
+                Transfer
+                {'\n'}initiated
               </Text>
-            </View>
-          )}
 
-          <Text style={styles.bankName}>{bankName}</Text>
+              <Text style={styles.timelineTime}>{time}</Text>
+            </View>
+
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineCircle}>
+                <Text style={styles.timelineCheck}>✓</Text>
+              </View>
+
+              <Text style={styles.timelineLabel}>
+                Transfer
+                {'\n'}processed
+              </Text>
+
+              <Text style={styles.timelineTime}>{time}</Text>
+            </View>
+
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineCircle}>
+                <Text style={styles.timelineCheck}>✓</Text>
+              </View>
+
+              <Text style={styles.timelineLabel}>
+                Sent to
+                {'\n'}beneficiary
+              </Text>
+
+              <Text style={styles.timelineTime}>{time}</Text>
+            </View>
+          </View>
+
+          {/* TRANSACTION REFERENCE */}
+          <View style={styles.referenceDivider} />
+
+          <Text style={styles.referenceLabel}>
+            Transaction Reference
+          </Text>
+
+          <Text style={styles.referenceValue}>
+            {transactionReference}
+          </Text>
         </View>
 
-        <Text style={styles.accountNumber}>{accountNumber}</Text>
+        {/* BUTTONS */}
+        <View style={styles.bottomButtons}>
+          <TouchableOpacity
+            style={styles.shareButton}
+            activeOpacity={0.85}
+            onPress={handleShare}
+          >
+            <Text style={styles.shareIcon}>↗</Text>
+            <Text style={styles.shareText}>Share Receipt</Text>
+          </TouchableOpacity>
 
-        <Text style={styles.dateText}>{formattedDate}</Text>
-
-        {/* Timeline */}
-        <View style={styles.timeline}>
-          <View style={styles.timelineLine} />
-
-          <View style={styles.timelineItem}>
-            <View style={styles.timelineCircle}>
-              <Text style={styles.timelineCheck}>✓</Text>
-            </View>
-            <Text style={styles.timelineLabel}>
-              Transfer
-              {'\n'}initiated
-            </Text>
-            <Text style={styles.timelineTime}>{time}</Text>
-          </View>
-
-          <View style={styles.timelineItem}>
-            <View style={styles.timelineCircle}>
-              <Text style={styles.timelineCheck}>✓</Text>
-            </View>
-            <Text style={styles.timelineLabel}>
-              Transfer
-              {'\n'}processed
-            </Text>
-            <Text style={styles.timelineTime}>{time}</Text>
-          </View>
-
-          <View style={styles.timelineItem}>
-            <View style={styles.timelineCircle}>
-              <Text style={styles.timelineCheck}>✓</Text>
-            </View>
-            <Text style={styles.timelineLabel}>
-              Received by
-              {'\n'}{bankName}
-            </Text>
-            <Text style={styles.timelineTime}>{time}</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.doneButton}
+            activeOpacity={0.85}
+            onPress={onDone}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.referenceDivider} />
-
-        <Text style={styles.referenceLabel}>Transaction Reference</Text>
-        <Text style={styles.referenceValue}>{transactionReference}</Text>
-      </View>
-
-      {/* Compact buttons */}
-      <View style={styles.bottomButtons}>
-        <TouchableOpacity
-          style={styles.shareButton}
-          activeOpacity={0.85}
-          onPress={handleShare}
-        >
-          <Text style={styles.shareIcon}>↗</Text>
-          <Text style={styles.shareText}>Share Receipt</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.doneButton}
-          activeOpacity={0.85}
-          onPress={onDone}
-        >
-          <Text style={styles.doneText}>Done</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: WHITE,
-    paddingHorizontal: 18,
-    paddingTop: 2,
-    paddingBottom: 10,
-    justifyContent: 'space-between',
   },
 
-  /* SUCCESS ICON + GOLD SPARKLES */
+  scrollContent: {
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 5,
+    paddingBottom: 16,
+  },
+
+  /* SUCCESS ICON + STARS */
+
   successArea: {
-    height: 108,
+    width: 190,
+    height: 92,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 0,
     position: 'relative',
+    marginBottom: 2,
   },
 
   successOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 53,
+    height: 53,
+    borderRadius: 27,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -244,127 +258,127 @@ const styles = StyleSheet.create({
 
   checkmark: {
     color: WHITE,
-    fontSize: 33,
+    fontSize: 31,
     fontWeight: '900',
-    lineHeight: 38,
+    lineHeight: 36,
   },
 
-  sparkle: {
+  star: {
     position: 'absolute',
-    zIndex: 5,
-  },
-
-  sparkleText: {
     color: GOLD,
-    fontSize: 23,
+    fontSize: 20,
     fontWeight: '900',
   },
 
-  sparkleTextSmall: {
+  starSmall: {
+    position: 'absolute',
     color: GOLD,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '900',
   },
 
-  sparkleTextTiny: {
+  starTiny: {
+    position: 'absolute',
     color: GOLD,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
   },
 
-  sparkleTopLeft: {
-    left: '31%',
-    top: 0,
+  star1: {
+    left: 30,
+    top: 3,
   },
 
-  sparkleTopRight: {
-    right: '30%',
-    top: 12,
+  star2: {
+    right: 33,
+    top: 15,
   },
 
-  sparkleLeft: {
-    left: '23%',
-    top: 42,
+  star3: {
+    left: 22,
+    top: 43,
   },
 
-  sparkleRight: {
-    right: '22%',
-    top: 54,
+  star4: {
+    right: 19,
+    top: 52,
   },
 
-  sparkleBottom: {
-    bottom: 0,
-    left: '49%',
+  star5: {
+    bottom: 1,
+    left: '48%',
   },
 
   /* HEADING */
+
   title: {
     color: BLACK,
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 0,
+    marginTop: 3,
   },
 
   subtitle: {
     color: MUTED,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    lineHeight: 17,
+    lineHeight: 16,
     textAlign: 'center',
-    marginTop: 5,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 12,
   },
 
   /* RECEIPT CARD */
+
   receiptCard: {
-    width: '100%',
+    width: '94%',
+    maxWidth: 370,
+    alignSelf: 'center',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
-    borderColor: '#D6EBD2',
-    borderRadius: 18,
+    borderColor: '#D6EBD2,
+    borderRadius: 17,
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingVertical: 13,
     alignItems: 'center',
-    flex: 1,
-    justifyContent: 'space-evenly',
-    maxHeight: 365,
   },
 
   amount: {
     color: GREEN,
-    fontSize: 26,
+    fontSize: 25,
     fontWeight: '900',
     textAlign: 'center',
   },
 
   recipientName: {
     color: BLACK,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
-    marginTop: 2,
+    marginTop: 5,
   },
+
+  /* BANK */
 
   bankRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 5,
+    marginTop: 7,
     gap: 6,
   },
 
   bankLogo: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
 
   bankLogoFallback: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -372,13 +386,13 @@ const styles = StyleSheet.create({
 
   bankLogoFallbackText: {
     color: WHITE,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
   },
 
   bankName: {
     color: DARK_GREEN,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
 
@@ -386,24 +400,25 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 10,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 4,
   },
 
   dateText: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 6,
   },
 
   /* TIMELINE */
+
   timeline: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     position: 'relative',
-    marginTop: 6,
+    marginTop: 13,
     paddingTop: 2,
   },
 
@@ -422,46 +437,47 @@ const styles = StyleSheet.create({
   },
 
   timelineCircle: {
-    width: 24,
-    height: 24,
+    width: 23,
+    height: 23,
     borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#61BB60',
   },
 
   timelineCheck: {
     color: WHITE,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
-    lineHeight: 17,
+    lineHeight: 16,
   },
 
   timelineLabel: {
     color: BLACK,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 12,
     marginTop: 6,
   },
 
   timelineTime: {
     color: MUTED,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
     textAlign: 'center',
     marginTop: 4,
   },
 
   /* REFERENCE */
+
   referenceDivider: {
     height: 1,
     backgroundColor: '#D8E3D7',
     width: '100%',
-    marginTop: 6,
+    marginTop: 12,
   },
 
   referenceLabel: {
@@ -469,7 +485,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 8,
   },
 
   referenceValue: {
@@ -477,45 +493,49 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 2,
+    marginTop: 4,
   },
 
   /* BUTTONS */
+
   bottomButtons: {
+    width: '94%',
+    maxWidth: 370,
     flexDirection: 'row',
-    gap: 9,
-    marginTop: 10,
+    gap: 8,
+    marginTop: 13,
+    alignSelf: 'center',
   },
 
   shareButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 13,
-    borderWidth: 1.5,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.3,
     borderColor: GREEN,
     backgroundColor: WHITE,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 5,
   },
 
   shareIcon: {
     color: GREEN,
-    fontSize: 21,
+    fontSize: 18,
     fontWeight: '900',
   },
 
   shareText: {
     color: GREEN,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900',
   },
 
   doneButton: {
     flex: 1,
-    height: 48,
-    borderRadius: 13,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -523,7 +543,7 @@ const styles = StyleSheet.create({
 
   doneText: {
     color: WHITE,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
   },
 });
