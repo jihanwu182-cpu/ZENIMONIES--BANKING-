@@ -833,12 +833,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-verifiedLabel: {
-  color: GREEN,
-  fontSize: 12,
-  fontWeight: '700',
-},
-
 accountName: {
   fontSize: 17,
   fontWeight: '800',
