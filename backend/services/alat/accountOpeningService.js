@@ -4,6 +4,10 @@
 
 const { request } = require('./alatClient');
 
+const {
+  saveAlatAccountNumber,
+} = require('./accountPersistenceService');
+
 const ENDPOINTS = Object.freeze({
   dropdowns:
     '/api/CustomerInfo/GetDropDownList',
@@ -236,6 +240,19 @@ const getPartnershipAccountDetails = async (
       `${ENDPOINTS.accountDetails}?${query.toString()}`,
   });
 };
+// ------------------------------------------------------------
+// SAVE BANK-ISSUED ACCOUNT NUMBER
+// ------------------------------------------------------------
+
+const saveProviderAccountNumber = async ({
+  userId,
+  accountNumber,
+}) => {
+  return saveAlatAccountNumber(
+    userId,
+    accountNumber
+  );
+};
 
 module.exports = {
   getDropdownLists,
@@ -243,5 +260,6 @@ module.exports = {
   createTier1WithNIN,
   createTier2PartnershipAccount,
   getPartnershipAccountDetails,
+  saveProviderAccountNumber,
   AccountOpeningError,
 };
