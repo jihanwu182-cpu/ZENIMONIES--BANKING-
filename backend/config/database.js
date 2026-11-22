@@ -214,6 +214,17 @@ const initializeDatabase = async () => {
           AND table_name = 'accounts'
           AND column_name = 'account_number';
       `);
+   // ========================================================
+// ALAT ONBOARDING SESSION MIGRATION
+// ========================================================
+
+console.log('Applying ALAT onboarding migration...');
+
+const {
+  runAlatOnboardingMigration,
+} = require('../database/migrations/runAlatOnboardingMigration');
+
+await runAlatOnboardingMigration();
 
       const accountTriggerCheck = await client.query(`
         SELECT
