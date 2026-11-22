@@ -80,19 +80,18 @@ export default function ExternalBankTransferSuccessScreen({
           <Text style={styles.sparkleText}>✦</Text>
         </View>
 
-        <View style={{ ...styles.sparkle, ...styles.sparkleTopLeft }}>
+         <View style={{ ...styles.sparkle, ...styles.sparkleTopRight }}>
           <Text style={styles.sparkleTextSmall}>✦</Text>
         </View>
 
-        <View style={{ ...styles.sparkle, ...styles.sparkleTopLeft }}>
+        <View style={{ ...styles.sparkle, ...styles.sparkleRight }}>
           <Text style={styles.sparkleTextTiny}>✦</Text>
         </View>
 
         <View style={{ ...styles.sparkle, ...styles.sparkleTopLeft }}>
           <Text style={styles.sparkleText}>✦</Text>
         </View>
-
-        <View style={[styles.sparkle, styles.sparkleBottom]}>
+         <View style={{ ...styles.sparkle, ...styles.sparkleBottom }}>
           <Text style={styles.sparkleTextSmall}>✦</Text>
         </View>
 
