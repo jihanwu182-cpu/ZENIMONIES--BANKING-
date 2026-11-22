@@ -332,8 +332,8 @@ const styles = StyleSheet.create({
   /* RECEIPT CARD */
 
   receiptCard: {
-    width: '84%',
-    maxWidth: 300,
+    width: '70%',
+    maxWidth: 200,
     alignSelf: 'center',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
@@ -347,13 +347,13 @@ const styles = StyleSheet.create({
   amount: {
     color: GREEN,
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: '800',
     textAlign: 'center',
   },
 
   recipientName: {
     color: BLACK,
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 5,
@@ -386,8 +386,8 @@ const styles = StyleSheet.create({
 
   bankLogoFallbackText: {
     color: WHITE,
-    fontSize: 11,
-    fontWeight: '900',
+    fontSize: 10,
+    fontWeight: '700',
   },
 
   bankName: {
@@ -450,14 +450,14 @@ const styles = StyleSheet.create({
   timelineCheck: {
     color: WHITE,
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '600',
     lineHeight: 16,
   },
 
   timelineLabel: {
     color: BLACK,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '600',
     textAlign: 'center',
     lineHeight: 12,
     marginTop: 6,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   timelineTime: {
     color: MUTED,
     fontSize: 8,
-    fontWeight: '700',
+    fontWeight: '600',
     textAlign: 'center',
     marginTop: 4,
   },
@@ -499,8 +499,8 @@ const styles = StyleSheet.create({
   /* BUTTONS */
 
   bottomButtons: {
-    width: '94%',
-    maxWidth: 370,
+    width: '70%',
+    maxWidth: 320,
     flexDirection: 'row',
     gap: 8,
     marginTop: 13,
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
 
   shareButton: {
     flex: 1,
-    height: 44,
+    height: 35,
     borderRadius: 12,
     borderWidth: 1.3,
     borderColor: GREEN,
