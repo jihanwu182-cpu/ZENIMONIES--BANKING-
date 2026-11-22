@@ -210,32 +210,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: WHITE,
     paddingHorizontal: 18,
-    paddingTop: 4,
-    paddingBottom: 12,
+    paddingTop: 2,
+    paddingBottom: 10,
     justifyContent: 'space-between',
   },
 
+  /* SUCCESS ICON + GOLD SPARKLES */
   successArea: {
-    height: 126,
+    height: 108,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: 0,
     position: 'relative',
   },
 
   successOuter: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -243,51 +244,52 @@ const styles = StyleSheet.create({
 
   checkmark: {
     color: WHITE,
-    fontSize: 38,
+    fontSize: 33,
     fontWeight: '900',
-    lineHeight: 44,
+    lineHeight: 38,
   },
 
   sparkle: {
     position: 'absolute',
+    zIndex: 5,
   },
 
   sparkleText: {
     color: GOLD,
     fontSize: 23,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 
   sparkleTextSmall: {
     color: GOLD,
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 
   sparkleTextTiny: {
     color: GOLD,
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '900',
   },
 
   sparkleTopLeft: {
-    left: '29%',
-    top: 2,
+    left: '31%',
+    top: 0,
   },
 
   sparkleTopRight: {
-    right: '29%',
-    top: 18,
+    right: '30%',
+    top: 12,
   },
 
   sparkleLeft: {
-    left: '25%',
-    top: 54,
+    left: '23%',
+    top: 42,
   },
 
   sparkleRight: {
-    right: '23%',
-    top: 61,
+    right: '22%',
+    top: 54,
   },
 
   sparkleBottom: {
@@ -295,6 +297,7 @@ const styles = StyleSheet.create({
     left: '49%',
   },
 
+  /* HEADING */
   title: {
     color: BLACK,
     fontSize: 23,
@@ -309,28 +312,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 17,
     textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 10,
+    marginTop: 5,
+    marginBottom: 8,
   },
 
+  /* RECEIPT CARD */
   receiptCard: {
     width: '100%',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
     borderColor: '#D6EBD2',
     borderRadius: 18,
-    paddingHorizontal: 13,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
     alignItems: 'center',
     flex: 1,
     justifyContent: 'space-evenly',
-    maxHeight: 390,
+    maxHeight: 365,
   },
 
   amount: {
     color: GREEN,
-    fontSize: 27,
+    fontSize: 26,
     fontWeight: '900',
     textAlign: 'center',
   },
@@ -340,27 +344,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 2,
   },
 
   bankRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
+    marginTop: 5,
     gap: 6,
   },
 
   bankLogo: {
-    width: 23,
-    height: 23,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
 
   bankLogoFallback: {
-    width: 23,
-    height: 23,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -380,9 +384,9 @@ const styles = StyleSheet.create({
 
   accountNumber: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    marginTop: 3,
+    marginTop: 2,
   },
 
   dateText: {
@@ -390,15 +394,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 4,
   },
 
+  /* TIMELINE */
   timeline: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     position: 'relative',
-    marginTop: 8,
+    marginTop: 6,
     paddingTop: 2,
   },
 
@@ -406,7 +411,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: '16%',
     right: '16%',
-    top: 12,
+    top: 11,
     height: 3,
     backgroundColor: GREEN,
   },
@@ -417,9 +422,9 @@ const styles = StyleSheet.create({
   },
 
   timelineCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -429,60 +434,62 @@ const styles = StyleSheet.create({
 
   timelineCheck: {
     color: WHITE,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    lineHeight: 19,
+    lineHeight: 17,
   },
 
   timelineLabel: {
     color: BLACK,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     textAlign: 'center',
-    lineHeight: 14,
-    marginTop: 8,
+    lineHeight: 13,
+    marginTop: 6,
   },
 
   timelineTime: {
     color: MUTED,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 4,
   },
 
+  /* REFERENCE */
   referenceDivider: {
     height: 1,
     backgroundColor: '#D8E3D7',
     width: '100%',
-    marginTop: 8,
+    marginTop: 6,
   },
 
   referenceLabel: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 7,
+    marginTop: 5,
   },
 
   referenceValue: {
     color: BLACK,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 2,
   },
 
+  /* BUTTONS */
   bottomButtons: {
     flexDirection: 'row',
     gap: 9,
-    marginTop: 12,
+    marginTop: 10,
   },
 
   shareButton: {
     flex: 1,
-    height: 49,
+    height: 48,
     borderRadius: 13,
     borderWidth: 1.5,
     borderColor: GREEN,
@@ -507,7 +514,7 @@ const styles = StyleSheet.create({
 
   doneButton: {
     flex: 1,
-    height: 49,
+    height: 48,
     borderRadius: 13,
     backgroundColor: GREEN,
     alignItems: 'center',
