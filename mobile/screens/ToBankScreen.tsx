@@ -164,7 +164,13 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
             });
 
         if (mounted) {
-          setBanks(normalizedBanks);
+          setBanks([
+  {
+    code: '001',
+    name: 'Paystack Test Bank',
+  },
+  ...normalizedBanks,
+]);
         }
       } catch {
         if (mounted) {
