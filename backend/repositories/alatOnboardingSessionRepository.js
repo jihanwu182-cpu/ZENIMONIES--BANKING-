@@ -14,6 +14,9 @@ const ALLOWED_TRANSITIONS = {
 // Create a new onboarding session
 
 const create = async ({ userId, verificationType }) => {
+     if (!userId) {
+  throw new Error('User ID is required.');
+}
   // 1. Expire overdue sessions for this user first
   await pool.query(
     `UPDATE alat_onboarding_sessions
