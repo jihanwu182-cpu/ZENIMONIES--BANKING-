@@ -521,13 +521,16 @@ const [transferDraft, setTransferDraft] =
     narration: string;
   } | null>(null); 
 
- const [transferReceipt, setTransferReceipt] =
+  const [transferReceipt, setTransferReceipt] =
   useState<{
     amount: number;
     reference: string;
     transactionDate: string;
-  } | null>(null); 
-
+    initiatedAt: string;
+    processedAt: string;
+    receivedAt: string;
+  } | null>(null);
+  
   const [dashboardLoading, setDashboardLoading] =
     useState(false);
 
@@ -2230,11 +2233,13 @@ if (
             }
 
             setTransferReceipt({
-              amount: Number(transfer.amount),
-              reference: transfer.reference || '',
-              transactionDate:
-                transfer.created_at || '',
-            });
+             amount: Number(transfer.amount),
+             reference: transfer.reference || '',
+             transactionDate: transfer.created_at || '',
+             initiatedAt: transfer.initiated_at || '',
+             processedAt: transfer.processed_at || '',
+             receivedAt: transfer.received_at || '',
+           });
 
             setScreen('transfer-success');
            } catch (error: any) {
