@@ -1,25 +1,26 @@
 
-const express = require('express');
 
+const express = require('express');
 const {
   getAlatAccountDetails,
 } = require('../controllers/alatAccountController');
 
 const {
-  authenticateToken,
-} = require('../utils/authMiddleware');
+  createSession,
+  getLatestSession,
+  getSession,
+} = require('../controllers/alatOnboardingController');
+
+const { authenticateToken } = require('../utils/authMiddleware');
 
 const router = express.Router();
 
-// ============================================================
-// ZENIMONIES — ALAT ACCOUNT ROUTES
-// ============================================================
+// Existing ALAT account endpoint
+router.get('/account', authenticateToken, getAlatAccountDetails);
 
-// Retrieve the authenticated customer's ALAT bank account.
-router.get(
-  '/account',
-  authenticateToken,
-  getAlatAccountDetails
-);
+// ALAT onboarding session endpoints
+router.post('/onboarding/session', authenticateToken, createSession);
+router.get('/onboarding/session', authenticateToken, getLatestSession);
+router.get('/onboarding/session/:sessionId', authenticateToken, getSession);
 
 module.exports = router;
