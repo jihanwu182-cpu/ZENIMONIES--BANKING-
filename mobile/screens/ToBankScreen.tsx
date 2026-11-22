@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -69,7 +68,7 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
   const [error, setError] = useState('');
 
   // ==========================================================
-  // LOAD BANK LIST FROM ZENIMONIES BACKEND
+  // LOAD BANK LIST
   // ==========================================================
 
   useEffect(() => {
@@ -80,7 +79,10 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
         setLoadingBanks(true);
         setError('');
 
-        const response = await fetch(`${API_BASE}/api/banks`);
+        const response = await fetch(
+          `${API_BASE}/api/banks`
+        );
+
         const json = await response.json();
 
         if (!response.ok || json.success === false) {
@@ -114,7 +116,7 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
         if (mounted) {
           setBanks(normalizedBanks);
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
           setError('Unable to load banks. Please try again.');
         }
@@ -137,7 +139,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
   // ==========================================================
 
   const filteredBanks = banks.filter((bank) =>
-    bank.name.toLowerCase().includes(bankSearch.toLowerCase())
+    bank.name
+      .toLowerCase()
+      .includes(bankSearch.toLowerCase())
   );
 
   // ==========================================================
@@ -158,7 +162,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
   // ==========================================================
 
   const handleAccountNumberChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '').slice(0, 10);
+    const cleaned = value
+      .replace(/\D/g, '')
+      .slice(0, 10);
 
     setAccountNumber(cleaned);
     setAccountName('');
@@ -167,43 +173,97 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
   };
 
   // ==========================================================
-  // RECIPIENT VERIFICATION
-  // ==========================================================
-  // Backend resolve endpoint must be confirmed before live use.
+  // AUTOMATIC ACCOUNT VERIFICATION
   // ==========================================================
 
-  const handleVerifyAccount = async () => {
-    if (!selectedBank) {
-      setError('Please select a bank.');
-      return;
-    }
-
-    if (accountNumber.length !== 10) {
-      setError('Enter a valid 10-digit account number.');
-      return;
-    }
-
-    try {
-      setVerifying(true);
-      setError('');
-      setAccountName('');
+  useEffect(() => {
+    if (!selectedBank || accountNumber.length !== 10) {
       setVerifiedAccount(null);
-
-      // Verification endpoint has not yet been confirmed.
-      // Do not falsely display an account as verified.
-
-      setError(
-        'Account verification is not connected yet.'
- 
-      );
-    } catch {
-      setError(
-        'Account verification failed. Please try again.'
-      );
-    } finally {
+      setAccountName('');
       setVerifying(false);
+      return;
     }
-  };
+
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      try {
+        setVerifying(true);
+        setError('');
+        setAccountName('');
+        setVerifiedAccount(null);
+
+        const response = await fetch(
+          `${API_BASE}/api/banks/resolve`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              account_number: accountNumber,
+              bank_code: selectedBank.code,
+            }),
+          }
+        );
+
+        const json = await response.json();
+
+        if (
+          !response.ok ||
+          !json.success ||
+          !json.verified
+        ) {
+          throw new Error(
+            json.message ||
+              'Unable to verify this bank account.'
+          );
+        }
+
+        const resolvedAccount = json.account;
+
+        if (!resolvedAccount?.account_name) {
+          throw new Error(
+            'Account name could not be retrieved.'
+          );
+        }
+
+        if (!cancelled) {
+          const verified: VerifiedAccount = {
+            accountName:
+              resolvedAccount.account_name,
+            accountNumber:
+              resolvedAccount.account_number ||
+              accountNumber,
+            bankCode: selectedBank.code,
+            bankName: selectedBank.name,
+          };
+
+          setVerifiedAccount(verified);
+          setAccountName(verified.accountName);
+          setError('');
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setVerifiedAccount(null);
+          setAccountName('');
+          setError(
+            err?.message ||
+              'Account verification failed. Please check the account details.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setVerifying(false);
+        }
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [selectedBank, accountNumber]);
 
   // ==========================================================
   // AMOUNT
@@ -221,7 +281,11 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
     const parts = cleaned.split('.');
 
     if (parts.length > 2) {
-      return parts[0] + '.' + parts.slice(1).join('');
+      return (
+        parts[0] +
+        '.' +
+        parts.slice(1).join('')
+      );
     }
 
     return cleaned;
@@ -233,7 +297,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
 
   const handleContinue = () => {
     if (!verifiedAccount || !selectedBank) {
-      setError('Please verify the recipient account first.');
+      setError(
+        'Please wait for account verification to complete.'
+      );
       return;
     }
 
@@ -243,10 +309,10 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
     }
 
     onContinue?.({
-      bankCode: selectedBank.code,
-      bankName: selectedBank.name,
-      accountNumber,
-      accountName,
+      bankCode: verifiedAccount.bankCode,
+      bankName: verifiedAccount.bankName,
+      accountNumber: verifiedAccount.accountNumber,
+      accountName: verifiedAccount.accountName,
       amount: numericAmount,
       narration: narration.trim(),
     });
@@ -260,7 +326,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={
+          Platform.OS === 'ios' ? 'padding' : undefined
+        }
       >
         <ScrollView
           contentContainerStyle={styles.container}
@@ -308,7 +376,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
 
             {/* ACCOUNT NUMBER */}
 
-            <Text style={styles.label}>Account Number</Text>
+            <Text style={styles.label}>
+              Account Number
+            </Text>
 
             <TextInput
               style={styles.input}
@@ -320,32 +390,20 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
               maxLength={10}
             />
 
-            {/* VERIFY ACCOUNT */}
+            {/* AUTOMATIC VERIFICATION LOADING */}
 
-            <TouchableOpacity
-              style={[
-                styles.verifyButton,
-                (verifying ||
-                  !selectedBank ||
-                  accountNumber.length !== 10) &&
-                  styles.disabledButton,
-              ]}
-              disabled={
-                verifying ||
-                !selectedBank ||
-                accountNumber.length !== 10
-              }
-              onPress={handleVerifyAccount}
-              activeOpacity={0.8}
-            >
-              {verifying ? (
-                <ActivityIndicator color={WHITE} />
-              ) : (
-                <Text style={styles.verifyButtonText}>
-                  Verify Account
+            {verifying && (
+              <View style={styles.verificationStatus}>
+                <ActivityIndicator
+                  color={GREEN}
+                  size="small"
+                />
+
+                <Text style={styles.verificationStatusText}>
+                  Verifying account...
                 </Text>
-              )}
-            </TouchableOpacity>
+              </View>
+            )}
 
             {/* VERIFIED RECIPIENT */}
 
@@ -394,11 +452,17 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
             {/* NARRATION */}
 
             <Text style={styles.label}>
-              Narration <Text style={styles.optional}>(Optional)</Text>
+              Narration{' '}
+              <Text style={styles.optional}>
+                (Optional)
+              </Text>
             </Text>
 
             <TextInput
-              style={[styles.input, styles.narrationInput]}
+              style={[
+                styles.input,
+                styles.narrationInput,
+              ]}
               placeholder="What is this transfer for?"
               placeholderTextColor="#A0A69D"
               value={narration}
@@ -410,7 +474,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
 
             {!!error && (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles.errorText}>
+                  {error}
+                </Text>
               </View>
             )}
           </View>
@@ -464,7 +530,9 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
                     setBankModalVisible(false)
                   }
                 >
-                  <Text style={styles.closeButton}>✕</Text>
+                  <Text style={styles.closeButton}>
+                    ✕
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -522,7 +590,8 @@ const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
                         {item.name}
                       </Text>
 
-                      {selectedBank?.code === item.code && (
+                      {selectedBank?.code ===
+                        item.code && (
                         <Text style={styles.selectedCheck}>
                           ✓
                         </Text>
@@ -623,19 +692,18 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
-  verifyButton: {
-    backgroundColor: GREEN,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
+  verificationStatus: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 15,
+    paddingVertical: 10,
   },
 
-  verifyButtonText: {
-    color: WHITE,
-    fontWeight: '700',
-    fontSize: 14,
+  verificationStatusText: {
+    marginLeft: 10,
+    fontSize: 13,
+    color: MUTED,
+    fontWeight: '600',
   },
 
   disabledButton: {
