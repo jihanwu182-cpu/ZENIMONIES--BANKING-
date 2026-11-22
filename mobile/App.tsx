@@ -500,6 +500,15 @@ const getApiErrorMessage = (
 export default function App() {
   const [screen, setScreen] =
     useState<Screen>('welcome');
+  useEffect(() => {
+  if (screen !== 'external-transfer-processing') return;
+
+  const timer = setTimeout(() => {
+    setScreen('external-transfer-success');
+  }, 2500);
+
+  return () => clearTimeout(timer);
+}, [screen]);
   
 const [profileReturnScreen, setProfileReturnScreen] =
   useState<'home' | 'settings'>('home');
