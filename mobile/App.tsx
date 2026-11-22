@@ -82,6 +82,7 @@ type Screen =
   | 'internal-transfer'
   | 'transfer-review'
   | 'transfer-pin'
+  | 'transfer-processing'
   | 'transfer-success';
 
 type Account = {
@@ -2097,6 +2098,59 @@ if (
     </SafeAreaView>
   );
 }
+ // ====================================================
+// INTERNAL TRANSFER PROCESSING
+// ====================================================
+
+if (
+  screen === 'transfer-processing' &&
+  session &&
+  transferDraft
+) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <View style={styles.transferProcessingContainer}>
+        <View style={styles.transferProcessingIcon}>
+          <ActivityIndicator
+            size="large"
+            color="#78A900"
+          />
+        </View>
+
+        <Text style={styles.transferProcessingTitle}>
+          Processing Transfer
+        </Text>
+
+        <Text style={styles.transferProcessingMessage}>
+          Please wait while we securely process your transfer.
+          Do not close the app.
+        </Text>
+
+        <View style={styles.transferProcessingAmountCard}>
+          <Text style={styles.transferProcessingLabel}>
+            Transfer amount
+          </Text>
+
+          <Text style={styles.transferProcessingAmount}>
+            ₦{transferDraft.amount.toLocaleString(
+              'en-NG',
+              {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }
+            )}
+          </Text>
+
+          <Text style={styles.transferProcessingRecipient}>
+            To {transferDraft.recipient.name}
+          </Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+} 
   // INTERNAL TRANSFER SUCCESS
 if (
   screen === 'transfer-success' &&
@@ -2127,7 +2181,11 @@ if (
     </SafeAreaView>
   );
 } 
-  if (
+  // ====================================================
+// INTERNAL TRANSFER PIN
+// ====================================================
+
+if (
   screen === 'transfer-pin' &&
   session &&
   transferDraft
@@ -2142,37 +2200,48 @@ if (
         recipientPhone={transferDraft.recipient.phone}
         onBack={() => setScreen('transfer-review')}
         onConfirm={async (pin) => {
-          const result = await authenticatedPost(
-            `${API_BASE}/internal-transfers`,
-            session.token,
-            {
-              recipient_phone:
-                transferDraft.recipient.phone,
-              amount: transferDraft.amount,
-              narration: transferDraft.narration,
-              transaction_pin: pin,
-            }
-          );
+          // Open full-screen processing immediately
+          setScreen('transfer-processing');
 
-          const transfer = result.data?.transfer;
-
-          if (
-            result.data?.success !== true ||
-            transfer?.status !== 'completed'
-          ) {
-            throw new Error(
-              result.data?.message ||
-                'Transfer could not be confirmed.'
+          try {
+            const result = await authenticatedPost(
+              `${API_BASE}/internal-transfers`,
+              session.token,
+              {
+                recipient_phone:
+                  transferDraft.recipient.phone,
+                amount: transferDraft.amount,
+                narration: transferDraft.narration,
+                transaction_pin: pin,
+              }
             );
+
+            const transfer = result.data?.transfer;
+
+            // Only proceed when backend confirms completion
+            if (
+              result.data?.success !== true ||
+              transfer?.status !== 'completed'
+            ) {
+              throw new Error(
+                result.data?.message ||
+                  'Transfer could not be confirmed.'
+              );
+            }
+
+            setTransferReceipt({
+              amount: Number(transfer.amount),
+              reference: transfer.reference || '',
+              transactionDate:
+                transfer.created_at || '',
+            });
+
+            setScreen('transfer-success');
+          } catch (error) {
+            // Return to PIN page if transfer fails
+            setScreen('transfer-pin');
+            throw error;
           }
-
-          setTransferReceipt({
-            amount: Number(transfer.amount),
-            reference: transfer.reference || '',
-            transactionDate: transfer.created_at || '',
-          });
-
-          setScreen('transfer-success');
         }}
       />
     </SafeAreaView>
@@ -2793,7 +2862,73 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  // INTERNAL TRANSFER PROCESSING
 
+  transferProcessingContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+
+  transferProcessingIcon: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 4,
+    borderColor: '#78A900',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+
+  transferProcessingTitle: {
+    color: '#172018',
+    fontSize: 24,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  transferProcessingMessage: {
+    color: '#858B83',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 30,
+  },
+
+  transferProcessingAmountCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#78A900',
+    borderRadius: 18,
+    padding: 22,
+    alignItems: 'center',
+  },
+
+  transferProcessingLabel: {
+    color: '#858B83',
+    fontSize: 13,
+    marginBottom: 8,
+  },
+
+  transferProcessingAmount: {
+    color: '#78A900',
+    fontSize: 29,
+    fontWeight: '900',
+  },
+
+  transferProcessingRecipient: {
+    color: '#172018',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 12,
+  },
   premiumFooter: {
     textAlign: 'center',
     fontSize: 9,
