@@ -236,6 +236,8 @@ const findUserByPhone = async (req, res) => {
 // ============================================================
 
 const transferToZenimoniesUser = async (req, res) => {
+  const initiatedAt = new Date().toISOString();
+
   const client = await pool.connect();
 
   let transactionStarted = false;
@@ -1125,6 +1127,9 @@ const transferToZenimoniesUser = async (req, res) => {
       transfer: {
         id: senderTransaction.id,
         reference,
+          initiated_at: initiatedAt,
+          processed_at: senderTransaction.created_at,
+          received_at: recipientTransaction.created_at,
         recipient_name:
           recipientUser.full_name,
         recipient_phone:
