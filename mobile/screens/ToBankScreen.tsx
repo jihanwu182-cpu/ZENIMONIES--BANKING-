@@ -22,7 +22,9 @@ const BACKGROUND = '#F6F8F3';
 const BORDER = '#E9EDE5';
 const WHITE = '#FFFFFF';
 
-export interface BankItem {
+const API_BASE = 'https://zenimonies-banking.onrender.com';
+
+interface BankItem {
   code: string;
   name: string;
 }
@@ -35,17 +37,6 @@ interface VerifiedAccount {
 }
 
 interface ToBankScreenProps {
-  banks?: BankItem[];
-
-  onLoadBanks?: () => Promise<BankItem[]>;
-
-  onVerifyAccount?: (params: {
-    accountNumber: string;
-    bankCode: string;
-  }) => Promise<{
-    accountName: string;
-  }>;
-
   onContinue?: (transfer: {
     bankCode: string;
     bankName: string;
@@ -56,13 +47,8 @@ interface ToBankScreenProps {
   }) => void;
 }
 
-const ToBankScreen = ({
-  banks: initialBanks = [],
-  onLoadBanks,
-  onVerifyAccount,
-  onContinue,
-}: ToBankScreenProps) => {
-  const [banks, setBanks] = useState<BankItem[]>(initialBanks);
+const ToBankScreen = ({ onContinue }: ToBankScreenProps) => {
+  const [banks, setBanks] = useState<BankItem[]>([]);
   const [selectedBank, setSelectedBank] =
     useState<BankItem | null>(null);
 
@@ -82,20 +68,53 @@ const ToBankScreen = ({
 
   const [error, setError] = useState('');
 
+  // ==========================================================
+  // LOAD BANK LIST FROM ZENIMONIES BACKEND
+  // ==========================================================
+
   useEffect(() => {
     let mounted = true;
 
-    const load = async () => {
-      if (!onLoadBanks) return;
-
+    const loadBanks = async () => {
       try {
         setLoadingBanks(true);
-        const result = await onLoadBanks();
+        setError('');
+
+        const response = await fetch(`${API_BASE}/api/banks`);
+        const json = await response.json();
+
+        if (!response.ok || json.success === false) {
+          throw new Error(
+            json.message || 'Unable to load banks.'
+          );
+        }
+
+        const bankList =
+          json.banks ??
+          json.data?.banks ??
+          json.data ??
+          [];
+
+        if (!Array.isArray(bankList)) {
+          throw new Error('Invalid bank list response.');
+        }
+
+        const normalizedBanks: BankItem[] = bankList
+          .filter(
+            (bank: any) =>
+              bank &&
+              bank.name &&
+              bank.code
+          )
+          .map((bank: any) => ({
+            name: String(bank.name),
+            code: String(bank.code),
+          }));
 
         if (mounted) {
-          setBanks(result);
+          setBanks(normalizedBanks);
         }
-      } catch {
+      } catch (err) {
         if (mounted) {
           setError('Unable to load banks. Please try again.');
         }
@@ -106,16 +125,24 @@ const ToBankScreen = ({
       }
     };
 
-    load();
+    loadBanks();
 
     return () => {
       mounted = false;
     };
-  }, [onLoadBanks]);
+  }, []);
+
+  // ==========================================================
+  // FILTER BANKS
+  // ==========================================================
 
   const filteredBanks = banks.filter((bank) =>
     bank.name.toLowerCase().includes(bankSearch.toLowerCase())
   );
+
+  // ==========================================================
+  // SELECT BANK
+  // ==========================================================
 
   const handleSelectBank = (bank: BankItem) => {
     setSelectedBank(bank);
@@ -126,6 +153,10 @@ const ToBankScreen = ({
     setError('');
   };
 
+  // ==========================================================
+  // ACCOUNT NUMBER
+  // ==========================================================
+
   const handleAccountNumberChange = (value: string) => {
     const cleaned = value.replace(/\D/g, '').slice(0, 10);
 
@@ -134,6 +165,12 @@ const ToBankScreen = ({
     setVerifiedAccount(null);
     setError('');
   };
+
+  // ==========================================================
+  // RECIPIENT VERIFICATION
+  // ==========================================================
+  // Backend resolve endpoint must be confirmed before live use.
+  // ==========================================================
 
   const handleVerifyAccount = async () => {
     if (!selectedBank) {
@@ -146,49 +183,53 @@ const ToBankScreen = ({
       return;
     }
 
-    if (!onVerifyAccount) {
-      setError('Account verification is not connected yet.');
-      return;
-    }
-
     try {
       setVerifying(true);
       setError('');
       setAccountName('');
+      setVerifiedAccount(null);
 
-      const result = await onVerifyAccount({
-        accountNumber,
-        bankCode: selectedBank.code,
-      });
+      // Verification endpoint has not yet been confirmed.
+      // Do not falsely display an account as verified.
 
-      if (!result?.accountName) {
-        setError('Unable to verify this account. Please try again.');
-        return;
-      }
-
-      setAccountName(result.accountName);
-
-      setVerifiedAccount({
-        accountName: result.accountName,
-        accountNumber,
-        bankCode: selectedBank.code,
-        bankName: selectedBank.name,
-      });
+      setError(
+        'Account verification is not connected yet.'
+ 
+      );
     } catch {
       setError(
-        'Account verification failed. Check the details and try again.'
+        'Account verification failed. Please try again.'
       );
     } finally {
       setVerifying(false);
     }
   };
 
-  const numericAmount = Number(amount.replace(/,/g, ''));
+  // ==========================================================
+  // AMOUNT
+  // ==========================================================
+
+  const numericAmount = Number(amount);
 
   const canContinue =
     !!verifiedAccount &&
     numericAmount > 0 &&
     Number.isFinite(numericAmount);
+
+  const formatAmountInput = (value: string) => {
+    const cleaned = value.replace(/[^\d.]/g, '');
+    const parts = cleaned.split('.');
+
+    if (parts.length > 2) {
+      return parts[0] + '.' + parts.slice(1).join('');
+    }
+
+    return cleaned;
+  };
+
+  // ==========================================================
+  // CONTINUE
+  // ==========================================================
 
   const handleContinue = () => {
     if (!verifiedAccount || !selectedBank) {
@@ -211,16 +252,9 @@ const ToBankScreen = ({
     });
   };
 
-  const formatAmountInput = (value: string) => {
-    const cleaned = value.replace(/[^\d.]/g, '');
-    const parts = cleaned.split('.');
-
-    if (parts.length > 2) {
-      return parts[0] + '.' + parts.slice(1).join('');
-    }
-
-    return cleaned;
-  };
+  // ==========================================================
+  // SCREEN
+  // ==========================================================
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -233,17 +267,23 @@ const ToBankScreen = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* HEADER */}
+
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Transfer to Bank</Text>
+            <Text style={styles.headerTitle}>
+              Transfer to Bank
+            </Text>
+
             <Text style={styles.headerSubtitle}>
               Send money to any Nigerian bank account
             </Text>
           </View>
 
-          {/* Transfer Card */}
+          {/* FORM CARD */}
+
           <View style={styles.card}>
-            {/* Bank Selector */}
+            {/* BANK */}
+
             <Text style={styles.label}>Bank</Text>
 
             <TouchableOpacity
@@ -257,13 +297,17 @@ const ToBankScreen = ({
                   !selectedBank && styles.placeholder,
                 ]}
               >
-                {selectedBank?.name || 'Select destination bank'}
+                {selectedBank?.name ||
+                  (loadingBanks
+                    ? 'Loading banks...'
+                    : 'Select destination bank')}
               </Text>
 
               <Text style={styles.chevron}>⌄</Text>
             </TouchableOpacity>
 
-            {/* Account Number */}
+            {/* ACCOUNT NUMBER */}
+
             <Text style={styles.label}>Account Number</Text>
 
             <TextInput
@@ -276,7 +320,8 @@ const ToBankScreen = ({
               maxLength={10}
             />
 
-            {/* Verify Button */}
+            {/* VERIFY ACCOUNT */}
+
             <TouchableOpacity
               style={[
                 styles.verifyButton,
@@ -302,7 +347,8 @@ const ToBankScreen = ({
               )}
             </TouchableOpacity>
 
-            {/* Verified Recipient */}
+            {/* VERIFIED RECIPIENT */}
+
             {verifiedAccount && (
               <View style={styles.verifiedBox}>
                 <View style={styles.verifiedIcon}>
@@ -313,9 +359,11 @@ const ToBankScreen = ({
                   <Text style={styles.verifiedLabel}>
                     Account verified
                   </Text>
+
                   <Text style={styles.accountName}>
                     {verifiedAccount.accountName}
                   </Text>
+
                   <Text style={styles.accountDetails}>
                     {verifiedAccount.accountNumber} ·{' '}
                     {verifiedAccount.bankName}
@@ -324,7 +372,8 @@ const ToBankScreen = ({
               </View>
             )}
 
-            {/* Amount */}
+            {/* AMOUNT */}
+
             <Text style={styles.label}>Amount</Text>
 
             <View style={styles.amountField}>
@@ -342,7 +391,8 @@ const ToBankScreen = ({
               />
             </View>
 
-            {/* Narration */}
+            {/* NARRATION */}
+
             <Text style={styles.label}>
               Narration <Text style={styles.optional}>(Optional)</Text>
             </Text>
@@ -356,7 +406,8 @@ const ToBankScreen = ({
               maxLength={100}
             />
 
-            {/* Error */}
+            {/* ERROR */}
+
             {!!error && (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{error}</Text>
@@ -364,7 +415,8 @@ const ToBankScreen = ({
             )}
           </View>
 
-          {/* Continue Button */}
+          {/* CONTINUE BUTTON */}
+
           <TouchableOpacity
             style={[
               styles.continueButton,
@@ -379,32 +431,44 @@ const ToBankScreen = ({
             </Text>
           </TouchableOpacity>
 
+          {/* SECURITY NOTE */}
+
           <View style={styles.securityNote}>
             <Text style={styles.securityIcon}>🔒</Text>
+
             <Text style={styles.securityText}>
               Your transfer is protected by ZENIMONIES security.
             </Text>
           </View>
         </ScrollView>
 
-        {/* Bank Selection Modal */}
+        {/* BANK SELECTION MODAL */}
+
         <Modal
           visible={bankModalVisible}
           animationType="slide"
           transparent
-          onRequestClose={() => setBankModalVisible(false)}
+          onRequestClose={() =>
+            setBankModalVisible(false)
+          }
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Bank</Text>
+                <Text style={styles.modalTitle}>
+                  Select Bank
+                </Text>
 
                 <TouchableOpacity
-                  onPress={() => setBankModalVisible(false)}
+                  onPress={() =>
+                    setBankModalVisible(false)
+                  }
                 >
                   <Text style={styles.closeButton}>✕</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* SEARCH */}
 
               <TextInput
                 style={styles.searchInput}
@@ -414,9 +478,15 @@ const ToBankScreen = ({
                 onChangeText={setBankSearch}
               />
 
+              {/* BANK LIST */}
+
               {loadingBanks ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator color={GREEN} size="large" />
+                  <ActivityIndicator
+                    color={GREEN}
+                    size="large"
+                  />
+
                   <Text style={styles.loadingText}>
                     Loading banks...
                   </Text>
@@ -428,24 +498,34 @@ const ToBankScreen = ({
                   keyboardShouldPersistTaps="handled"
                   ListEmptyComponent={
                     <Text style={styles.emptyText}>
-                      No banks found.
+                      {error
+                        ? 'Unable to load banks.'
+                        : 'No banks found.'}
                     </Text>
                   }
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={styles.bankItem}
-                      onPress={() => handleSelectBank(item)}
+                      onPress={() =>
+                        handleSelectBank(item)
+                      }
                     >
                       <View style={styles.bankIcon}>
                         <Text style={styles.bankIconText}>
-                          {item.name.charAt(0).toUpperCase()}
+                          {item.name
+                            .charAt(0)
+                            .toUpperCase()}
                         </Text>
                       </View>
 
-                      <Text style={styles.bankName}>{item.name}</Text>
+                      <Text style={styles.bankName}>
+                        {item.name}
+                      </Text>
 
                       {selectedBank?.code === item.code && (
-                        <Text style={styles.selectedCheck}>✓</Text>
+                        <Text style={styles.selectedCheck}>
+                          ✓
+                        </Text>
                       )}
                     </TouchableOpacity>
                   )}
@@ -458,6 +538,10 @@ const ToBankScreen = ({
     </SafeAreaView>
   );
 };
+
+// ============================================================
+// STYLES
+// ============================================================
 
 const styles = StyleSheet.create({
   safeArea: {
