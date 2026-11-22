@@ -52,18 +52,25 @@ const findById = async (sessionId) => {
 };
 
 // Save provider correlation ID
+
 const saveCorrelationId = async (sessionId, correlationId) => {
   const result = await pool.query(
     `UPDATE alat_onboarding_sessions
      SET correlation_id = $2,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $1
+       AND status IN ('initiated', 'verified', 'pending')
+       AND (
+         correlation_id IS NULL
+         OR correlation_id = $2
+       )
      RETURNING *`,
     [sessionId, correlationId]
   );
 
   return result.rows[0] || null;
 };
+
 
 // Safely update onboarding status atomically
 const updateStatus = async (sessionId, status) => {
