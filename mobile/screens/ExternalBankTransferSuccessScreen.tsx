@@ -202,3 +202,311 @@ export default function ExternalBankTransferSuccessScreen({
     </View>
   );
 }
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: WHITE,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 22,
+    justifyContent: 'space-between',
+  },
+
+  successArea: {
+    height: 170,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    position: 'relative',
+  },
+
+  successOuter: {
+    width: 114,
+    height: 114,
+    borderRadius: 57,
+    backgroundColor: '#72C66B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  successInner: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  checkmark: {
+    color: WHITE,
+    fontSize: 47,
+    fontWeight: '900',
+    lineHeight: 54,
+  },
+
+  sparkle: {
+    position: 'absolute',
+  },
+
+  sparkleText: {
+    color: GOLD,
+    fontSize: 25,
+    fontWeight: '800',
+  },
+
+  sparkleTextSmall: {
+    color: GOLD,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+
+  sparkleTextTiny: {
+    color: GOLD,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  sparkleTopLeft: {
+    left: '35%',
+    top: 8,
+  },
+
+  sparkleTopRight: {
+    right: '34%',
+    top: 28,
+  },
+
+  sparkleLeft: {
+    left: '31%',
+    top: 72,
+  },
+
+  sparkleRight: {
+    right: '29%',
+    top: 83,
+  },
+
+  sparkleBottom: {
+    bottom: 0,
+    left: '49%',
+  },
+
+  title: {
+    color: BLACK,
+    fontSize: 27,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 0,
+  },
+
+  subtitle: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+
+  receiptCard: {
+    width: '100%',
+    backgroundColor: '#F5FAF4',
+    borderWidth: 1,
+    borderColor: '#D6EBD2',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 16,
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'space-evenly',
+    maxHeight: 430,
+  },
+
+  amount: {
+    color: GREEN,
+    fontSize: 30,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+
+  recipientName: {
+    color: BLACK,
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  bankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 9,
+    gap: 8,
+  },
+
+  bankLogo: {
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+  },
+
+  bankLogoFallback: {
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  bankLogoFallbackText: {
+    color: WHITE,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  bankName: {
+    color: DARK_GREEN,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  dateText: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  timeline: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    position: 'relative',
+    marginTop: 12,
+    paddingTop: 2,
+  },
+
+  timelineLine: {
+    position: 'absolute',
+    left: '16%',
+    right: '16%',
+    top: 15,
+    height: 4,
+    backgroundColor: GREEN,
+  },
+
+  timelineItem: {
+    width: '32%',
+    alignItems: 'center',
+  },
+
+  timelineCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#61BB60',
+  },
+
+  timelineCheck: {
+    color: WHITE,
+    fontSize: 19,
+    fontWeight: '900',
+    lineHeight: 22,
+  },
+
+  timelineLabel: {
+    color: BLACK,
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 11,
+  },
+
+  timelineTime: {
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 7,
+  },
+
+  referenceDivider: {
+    height: 1,
+    backgroundColor: '#D8E3D7',
+    width: '100%',
+    marginTop: 14,
+  },
+
+  referenceLabel: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+
+  referenceValue: {
+    color: BLACK,
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  bottomButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+
+  shareButton: {
+    flex: 1,
+    height: 58,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    backgroundColor: WHITE,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+  },
+
+  shareIcon: {
+    color: GREEN,
+    fontSize: 25,
+    fontWeight: '900',
+  },
+
+  shareText: {
+    color: GREEN,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+
+  doneButton: {
+    flex: 1,
+    height: 58,
+    borderRadius: 14,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  doneText: {
+    color: WHITE,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+});
