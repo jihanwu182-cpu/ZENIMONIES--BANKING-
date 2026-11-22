@@ -14,6 +14,19 @@ const ALLOWED_TRANSITIONS = {
 // Create a new onboarding session
 
 const create = async ({ userId, verificationType }) => {
+  // 1. Expire overdue sessions for this user first
+  await pool.query(
+    `UPDATE alat_onboarding_sessions
+     SET status = 'expired',
+         updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = $1
+       AND status IN ('initiated', 'verified', 'pending')
+       AND expires_at IS NOT NULL
+       AND expires_at <= CURRENT_TIMESTAMP`,
+    [userId]
+  );
+
+  // 2. Try to create a new session
   const result = await pool.query(
     `INSERT INTO alat_onboarding_sessions
        (user_id, verification_type, status)
@@ -29,8 +42,7 @@ const create = async ({ userId, verificationType }) => {
     return result.rows[0];
   }
 
-  // If an active session already exists, return it instead
-  // of creating a duplicate or throwing an error.
+  // 3. If an active session already exists, return it
   const existing = await pool.query(
     `SELECT *
      FROM alat_onboarding_sessions
@@ -43,6 +55,8 @@ const create = async ({ userId, verificationType }) => {
 
   return existing.rows[0] || null;
 };
+
+
 
 // Find latest session for a user
 const findLatestByUserId = async (userId) => {
