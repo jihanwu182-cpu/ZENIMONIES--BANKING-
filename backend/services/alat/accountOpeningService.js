@@ -1,265 +1,267 @@
-// ============================================================
-// ZENIMONIES BANKING — ALAT ACCOUNT OPENING SERVICE
-// ============================================================
 
-const { request } = require('./alatClient');
+ // ============================================================
+ // ZENIMONIES BANKING — ALAT ACCOUNT OPENING SERVICE
+ // ============================================================
 
-const {
-  saveAlatAccountNumber,
-} = require('./accountPersistenceService');
+ const { request } = require('./alatClient');
 
-const ENDPOINTS = Object.freeze({
-  dropdowns:
-    '/api/CustomerInfo/GetDropDownList',
+ const {
+   saveAlatAccountNumber,
+ } = require('./accountPersistenceService');
 
-  tier1BVN:
-    '/api/partnership/tier1-bvn-withoutOtp-v2',
+ const ENDPOINTS = Object.freeze({
+   dropdowns:
+     '/api/CustomerInfo/GetDropDownList',
 
-  tier1NIN:
-    '/api/partnership/tier1-nin-withoutOtp-v2',
+   tier1BVN:
+     '/api/partnership/tier1-bvn-withoutOtp-v2',
 
-  tier2:
-    '/api/partnership/tier2-partnershipaccount-withoutOtp-v2',
+   tier1NIN:
+     '/api/partnership/tier1-nin-withoutOtp-v2',
 
-  accountDetails:
-    '/api/CustomerAccount/GetPartnershipAccountDetails',
-});
+   tier2:
+     '/api/partnership/tier2-partnershipaccount-withoutOtp-v2',
 
-class AccountOpeningError extends Error {
-  constructor(message, code = 'ACCOUNT_OPENING_ERROR') {
-    super(message);
-    this.name = 'AccountOpeningError';
-    this.code = code;
-  }
-}
+   accountDetails:
+     '/api/CustomerAccount/GetPartnershipAccountDetails',
+ });
 
-const requireString = (value, fieldName) => {
-  if (
-    typeof value !== 'string' ||
-    !value.trim()
-  ) {
-    throw new AccountOpeningError(
-      `${fieldName} is required.`,
-      'INVALID_INPUT'
-    );
-  }
+ class AccountOpeningError extends Error {
+   constructor(message, code = 'ACCOUNT_OPENING_ERROR') {
+     super(message);
+     this.name = 'AccountOpeningError';
+     this.code = code;
+   }
+ }
 
-  return value.trim();
-};
+ const requireString = (value, fieldName) => {
+   if (
+     typeof value !== 'string' ||
+     !value.trim()
+   ) {
+     throw new AccountOpeningError(
+       `${fieldName} is required.`,
+       'INVALID_INPUT'
+     );
+   }
 
-// ------------------------------------------------------------
-// GET ALAT DROPDOWN INFORMATION
-// ------------------------------------------------------------
+   return value.trim();
+ };
 
-const getDropdownLists = async () => {
-  return request({
-    method: 'GET',
-    endpoint: ENDPOINTS.dropdowns,
-  });
-};
+ // ------------------------------------------------------------
+ // GET ALAT DROPDOWN INFORMATION
+ // ------------------------------------------------------------
 
-// ------------------------------------------------------------
-// TIER 1 — BVN ONBOARDING
-// ------------------------------------------------------------
+ const getDropdownLists = async () => {
+   return request({
+     method: 'GET',
+     endpoint: ENDPOINTS.dropdowns,
+   });
+ };
 
-const createTier1WithBVN = async ({
-  phoneNumber,
-  email,
-  bvn,
-  correlationId,
-}) => {
-  const body = {
-    phoneNumber: requireString(
-      phoneNumber,
-      'Phone number'
-    ),
+ // ------------------------------------------------------------
+ // TIER 1 — BVN ONBOARDING
+ // ------------------------------------------------------------
 
-    email: requireString(
-      email,
-      'Email address'
-    ),
+ const createTier1WithBVN = async ({
+   phoneNumber,
+   email,
+   bvn,
+   correlationId,
+ }) => {
+   const body = {
+     phoneNumber: requireString(
+       phoneNumber,
+       'Phone number'
+     ),
 
-    bvn: requireString(
-      bvn,
-      'BVN'
-    ),
+     email: requireString(
+       email,
+       'Email address'
+     ),
 
-    correlationId: requireString(
-      correlationId,
-      'Correlation ID'
-    ),
-  };
+     bvn: requireString(
+       bvn,
+       'BVN'
+     ),
 
-  return request({
-    method: 'POST',
-    endpoint: ENDPOINTS.tier1BVN,
-    body,
-  });
-};
+     correlationId: requireString(
+       correlationId,
+       'Correlation ID'
+     ),
+   };
 
-// ------------------------------------------------------------
-// TIER 1 — NIN ONBOARDING
-// ------------------------------------------------------------
+   return request({
+     method: 'POST',
+     endpoint: ENDPOINTS.tier1BVN,
+     body,
+   });
+ };
 
-const createTier1WithNIN = async ({
-  phoneNumber,
-  email,
-  nin,
-  correlationId,
-}) => {
-  const body = {
-    phoneNumber: requireString(
-      phoneNumber,
-      'Phone number'
-    ),
+ // ------------------------------------------------------------
+ // TIER 1 — NIN ONBOARDING
+ // ------------------------------------------------------------
 
-    email: requireString(
-      email,
-      'Email address'
-    ),
+ const createTier1WithNIN = async ({
+   phoneNumber,
+   email,
+   nin,
+   correlationId,
+ }) => {
+   const body = {
+     phoneNumber: requireString(
+       phoneNumber,
+       'Phone number'
+     ),
 
-    nin: requireString(
-      nin,
-      'NIN'
-    ),
+     email: requireString(
+       email,
+       'Email address'
+     ),
 
-    correlationId: requireString(
-      correlationId,
-      'Correlation ID'
-    ),
-  };
+     nin: requireString(
+       nin,
+       'NIN'
+     ),
 
-  return request({
-    method: 'POST',
-    endpoint: ENDPOINTS.tier1NIN,
-    body,
-  });
-};
+     correlationId: requireString(
+       correlationId,
+       'Correlation ID'
+     ),
+   };
 
-// ------------------------------------------------------------
-// TIER 2 — PARTNERSHIP ACCOUNT ONBOARDING
-// ------------------------------------------------------------
+   return request({
+     method: 'POST',
+     endpoint: ENDPOINTS.tier1NIN,
+     body,
+   });
+ };
 
-const createTier2PartnershipAccount = async ({
-  bvn,
-  nin,
-  phoneNumber,
-  emailAddress,
-  residentialAddress,
-  liveImageOfFace,
-}) => {
-  const address = residentialAddress || {};
+ // ------------------------------------------------------------
+ // TIER 2 — PARTNERSHIP ACCOUNT ONBOARDING
+ // ------------------------------------------------------------
 
-  const requiredAddressFields = [
-    'buildingNumber',
-    'city',
-    'country',
-    'fullAddress',
-    'landmark',
-    'lga',
-    'state',
-    'street',
-  ];
+ const createTier2PartnershipAccount = async ({
+   bvn,
+   nin,
+   phoneNumber,
+   emailAddress,
+   residentialAddress,
+   liveImageOfFace,
+ }) => {
+   const address = residentialAddress || {};
 
-  const validatedAddress = {};
+   const requiredAddressFields = [
+     'buildingNumber',
+     'city',
+     'country',
+     'fullAddress',
+     'landmark',
+     'lga',
+     'state',
+     'street',
+   ];
 
-  for (const field of requiredAddressFields) {
-    validatedAddress[field] = requireString(
-      address[field],
-      `Residential address ${field}`
-    );
-  }
+   const validatedAddress = {};
 
-  const optionalAddressFields = [
-    'apartment',
-    'town',
-    'lcda',
-    'additionalInformation',
-  ];
+   for (const field of requiredAddressFields) {
+     validatedAddress[field] = requireString(
+       address[field],
+       `Residential address ${field}`
+     );
+   }
 
-  for (const field of optionalAddressFields) {
-    if (
-      address[field] !== undefined &&
-      address[field] !== null &&
-      String(address[field]).trim()
-    ) {
-      validatedAddress[field] = String(
-        address[field]
-      ).trim();
-    }
-  }
+   const optionalAddressFields = [
+     'apartment',
+     'town',
+     'lcda',
+     'additionalInformation',
+   ];
 
-  const body = {
-    bvn: requireString(bvn, 'BVN'),
-    nin: requireString(nin, 'NIN'),
+   for (const field of optionalAddressFields) {
+     if (
+       address[field] !== undefined &&
+       address[field] !== null &&
+       String(address[field]).trim()
+     ) {
+       validatedAddress[field] = String(
+         address[field]
+       ).trim();
+     }
+   }
 
-    phoneNumber: requireString(
-      phoneNumber,
-      'Phone number'
-    ),
+   const body = {
+     bvn: requireString(bvn, 'BVN'),
+     nin: requireString(nin, 'NIN'),
 
-    emailAddress: requireString(
-      emailAddress,
-      'Email address'
-    ),
+     phoneNumber: requireString(
+       phoneNumber,
+       'Phone number'
+     ),
 
-    residentialAddress: validatedAddress,
+     emailAddress: requireString(
+       emailAddress,
+       'Email address'
+     ),
 
-    liveImageOfFace: requireString(
-      liveImageOfFace,
-      'Live face image'
-    ),
-  };
+     residentialAddress: validatedAddress,
 
-  return request({
-    method: 'POST',
-    endpoint: ENDPOINTS.tier2,
-    body,
-  });
-};
+     liveImageOfFace: requireString(
+       liveImageOfFace,
+       'Live face image'
+     ),
+   };
 
-// ------------------------------------------------------------
-// GET PARTNERSHIP ACCOUNT DETAILS
-// ------------------------------------------------------------
+   return request({
+     method: 'POST',
+     endpoint: ENDPOINTS.tier2,
+     body,
+   });
+ };
 
-const getPartnershipAccountDetails = async (
-  phoneNumber
-) => {
-  const phone = requireString(
-    phoneNumber,
-    'Phone number'
-  );
+ // ------------------------------------------------------------
+ // GET PARTNERSHIP ACCOUNT DETAILS
+ // ------------------------------------------------------------
 
-  const query = new URLSearchParams({
-    phoneNumber: phone,
-  });
+ const getPartnershipAccountDetails = async (
+   phoneNumber
+ ) => {
+   const phone = requireString(
+     phoneNumber,
+     'Phone number'
+   );
 
-  return request({
-    method: 'GET',
-    endpoint:
-      `${ENDPOINTS.accountDetails}?${query.toString()}`,
-  });
-};
-// ------------------------------------------------------------
-// SAVE BANK-ISSUED ACCOUNT NUMBER
-// ------------------------------------------------------------
+   const query = new URLSearchParams({
+     phoneNumber: phone,
+   });
 
-const saveProviderAccountNumber = async ({
-  userId,
-  accountNumber,
-}) => {
-  return saveAlatAccountNumber(
-    userId,
-    accountNumber
-  );
-};
+   return request({
+     method: 'GET',
+     endpoint:
+       `${ENDPOINTS.accountDetails}?${query.toString()}`,
+   });
+ };
 
-module.exports = {
-  getDropdownLists,
-  createTier1WithBVN,
-  createTier1WithNIN,
-  createTier2PartnershipAccount,
-  getPartnershipAccountDetails,
-  saveProviderAccountNumber,
-  AccountOpeningError,
-};
+ // ------------------------------------------------------------
+ // SAVE BANK-ISSUED ACCOUNT NUMBER
+ // ------------------------------------------------------------
+
+ const saveProviderAccountNumber = async ({
+   userId,
+   accountNumber,
+ }) => {
+   return saveAlatAccountNumber({
+     userId,
+     accountNumber,
+   });
+ };
+
+ module.exports = {
+   getDropdownLists,
+   createTier1WithBVN,
+   createTier1WithNIN,
+   createTier2PartnershipAccount,
+   getPartnershipAccountDetails,
+   saveProviderAccountNumber,
+   AccountOpeningError,
+ };
