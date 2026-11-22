@@ -239,18 +239,18 @@ const styles = StyleSheet.create({
   },
 
   successOuter: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 50,
+    height: 50,
+    borderRadius: 33,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 53,
-    height: 53,
-    borderRadius: 27,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
 
   title: {
     color: BLACK,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     textAlign: 'center',
     marginTop: 3,
@@ -332,8 +332,8 @@ const styles = StyleSheet.create({
   /* RECEIPT CARD */
 
   receiptCard: {
-    width: '94%',
-    maxWidth: 370,
+    width: '84%',
+    maxWidth: 300,
     alignSelf: 'center',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
 
   amount: {
     color: GREEN,
-    fontSize: 25,
+    fontSize: 22,
     fontWeight: '900',
     textAlign: 'center',
   },
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
 
   doneButton: {
     flex: 1,
-    height: 44,
+    height: 42,
     borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: 'center',
