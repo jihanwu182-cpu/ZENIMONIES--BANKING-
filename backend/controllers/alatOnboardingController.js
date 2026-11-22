@@ -5,6 +5,10 @@ const {
   getSessionById,
 } = require('../services/alat/onboardingSessionService');
 
+// ============================================================
+// ZENIMONIES — ALAT ONBOARDING CONTROLLER
+// ============================================================
+
 // Create an onboarding session
 const createSession = async (req, res) => {
   try {
@@ -19,9 +23,22 @@ const createSession = async (req, res) => {
 
     const { verificationType } = req.body || {};
 
+    // Validate verification type at controller boundary.
+    const normalizedType =
+      typeof verificationType === 'string'
+        ? verificationType.trim().toUpperCase()
+        : '';
+
+    if (!['BVN', 'NIN'].includes(normalizedType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification type must be BVN or NIN.',
+      });
+    }
+
     const session = await createOnboardingSession({
       userId,
-      verificationType,
+      verificationType: normalizedType,
     });
 
     return res.status(201).json({
@@ -30,9 +47,14 @@ const createSession = async (req, res) => {
       session,
     });
   } catch (error) {
-    return res.status(400).json({
+    console.error(
+      'ALAT onboarding session creation failed:',
+      error?.code || 'UNKNOWN_ERROR'
+    );
+
+    return res.status(500).json({
       success: false,
-      message: error.message || 'Unable to create onboarding session.',
+      message: 'Unable to create onboarding session.',
     });
   }
 };
@@ -56,6 +78,11 @@ const getLatestSession = async (req, res) => {
       session: session || null,
     });
   } catch (error) {
+    console.error(
+      'ALAT latest onboarding session retrieval failed:',
+      error?.code || 'UNKNOWN_ERROR'
+    );
+
     return res.status(500).json({
       success: false,
       message: 'Unable to retrieve onboarding session.',
@@ -67,7 +94,7 @@ const getLatestSession = async (req, res) => {
 const getSession = async (req, res) => {
   try {
     const userId = req.user?.id;
-    const { sessionId } = req.params;
+    const { sessionId } = req.params || {};
 
     if (!userId) {
       return res.status(401).json({
@@ -76,9 +103,21 @@ const getSession = async (req, res) => {
       });
     }
 
+    // Validate UUID format before querying PostgreSQL.
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(sessionId || '')) {
+      return res.status(404).json({
+        success: false,
+        message: 'Onboarding session not found.',
+      });
+    }
+
     const session = await getSessionById(sessionId);
 
-    if (!session || session.user_id !== userId) {
+    // String comparison handles UUID values returned in different representations.
+    if (!session || String(session.user_id) !== String(userId)) {
       return res.status(404).json({
         success: false,
         message: 'Onboarding session not found.',
@@ -90,6 +129,11 @@ const getSession = async (req, res) => {
       session,
     });
   } catch (error) {
+    console.error(
+      'ALAT onboarding session retrieval failed:',
+      error?.code || 'UNKNOWN_ERROR'
+    );
+
     return res.status(500).json({
       success: false,
       message: 'Unable to retrieve onboarding session.',
