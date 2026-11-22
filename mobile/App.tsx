@@ -2147,11 +2147,19 @@ if (
         bankName={externalBankTransferDraft.bankName}
         onBack={() => setScreen('external-bank-review')}
         onConfirm={async (pin) => {
-          Alert.alert(
-            'Transfer Not Yet Connected',
-            'Your PIN screen is ready. External bank transfer processing has not yet been connected.',
-          );
-        }}
+         Alert.alert(
+    'Test Transfer',
+    'PIN accepted. External bank transfer is not connected yet, and no money has been sent.',
+    [
+      {
+        text: 'OK',
+        onPress: () => {
+          setScreen('external-bank-review');
+        },
+      },
+    ],
+  );
+}}
       />
     </SafeAreaView>
   );
