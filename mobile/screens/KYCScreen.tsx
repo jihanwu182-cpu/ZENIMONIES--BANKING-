@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,9 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GREEN = '#07803F';
 const DARK_GREEN = '#056B34';
@@ -16,6 +18,8 @@ const MUTED = '#858B83';
 const BACKGROUND = '#F6F8F3';
 const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
+
+const API_BASE = 'https://zenimonies-banking.onrender.com/api';
 
 type Props = {
   onBack?: () => void;
@@ -40,7 +44,7 @@ type Tier = {
   requirements: string[];
 };
 
-const tiers: Tier[] = [
+const fallbackTiers: Tier[] = [
   {
     number: 1,
     title: 'Identity Verification',
@@ -95,12 +99,181 @@ const formatLevel = (value?: string | number) => {
   return Math.max(0, Math.min(3, Math.floor(parsed)));
 };
 
+const isVerifiedStatus = (value: any) => {
+  if (typeof value === 'boolean') return value;
+
+  const status = String(value ?? '').toLowerCase().trim();
+
+  return [
+    'verified',
+    'approved',
+    'success',
+    'completed',
+    'passed',
+    'true',
+  ].includes(status);
+};
+
+const formatLimit = (value: any, fallback: string) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  if (
+    typeof value === 'string' &&
+    (value.toLowerCase() === 'unlimited' ||
+      value.toLowerCase().includes('unlimited'))
+  ) {
+    return 'Unlimited';
+  }
+
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return String(value);
+  }
+
+  if (numeric === 0) {
+    return fallback;
+  }
+
+  return `₦${numeric.toLocaleString('en-NG')}`;
+};
+
+const getValue = (object: any, keys: string[]) => {
+  for (const key of keys) {
+    if (object?.[key] !== undefined && object?.[key] !== null) {
+      return object[key];
+    }
+  }
+
+  return undefined;
+};
+
 export default function KYCScreen({
   onBack,
   onSelect,
   verificationLevel = 0,
 }: Props) {
-  const currentLevel = formatLevel(verificationLevel);
+  const [currentLevel, setCurrentLevel] = useState(
+    formatLevel(verificationLevel),
+  );
+  const [tiers, setTiers] = useState<Tier[]>(fallbackTiers);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchKycStatus = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setError('');
+
+      const token =
+        (await AsyncStorage.getItem('zenimonies_auth_token')) ||
+        (await AsyncStorage.getItem('zenimonies_token'));
+
+      if (!token) {
+        setError('Your session could not be found. Please log in again.');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/kyc/status`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || data?.error || 'Unable to load verification status.',
+        );
+      }
+
+      // The backend is the source of truth for the verified tier.
+      const kyc = data?.kyc ?? data?.data?.kyc ?? data?.data ?? data;
+      const backendTier = formatLevel(kyc?.tier);
+
+      setCurrentLevel(backendTier);
+
+      const limits = data?.limits ?? data?.data?.limits ?? kyc?.limits ?? {};
+
+      const accountLimits = [
+        getValue(limits, [
+          'account_balance_limit',
+          'balance_limit',
+          'accountLimit',
+          'max_balance',
+        ]),
+        getValue(limits, [
+          'account_balance_limit',
+          'balance_limit',
+          'accountLimit',
+          'max_balance',
+        ]),
+        getValue(limits, [
+          'account_balance_limit',
+          'balance_limit',
+          'accountLimit',
+          'max_balance',
+        ]),
+      ];
+
+      const dailyLimits = [
+        getValue(limits, [
+          'daily_transfer_limit',
+          'daily_limit',
+          'transfer_limit',
+          'dailyTransferLimit',
+        ]),
+        getValue(limits, [
+          'daily_transfer_limit',
+          'daily_limit',
+          'transfer_limit',
+          'dailyTransferLimit',
+        ]),
+        getValue(limits, [
+          'daily_transfer_limit',
+          'daily_limit',
+          'transfer_limit',
+          'dailyTransferLimit',
+        ]),
+      ];
+
+      setTiers(
+        fallbackTiers.map((tier, index) => ({
+          ...tier,
+          accountLimit: formatLimit(
+            accountLimits[index],
+            tier.accountLimit,
+          ),
+          dailyLimit: formatLimit(
+            dailyLimits[index],
+            tier.dailyLimit,
+          ),
+        })),
+      );
+    } catch (err: any) {
+      setError(
+        err?.message || 'Unable to load your verification status.',
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchKycStatus();
+  }, [fetchKycStatus]);
 
   const getTierStatus = (tier: number): TierStatus => {
     if (currentLevel >= tier) {
@@ -119,6 +292,16 @@ export default function KYCScreen({
   const isTierAvailable = (tier: number) =>
     tier <= currentLevel + 1;
 
+  const handleSelectTier = (tierNumber: number) => {
+    onSelect?.(
+      tierNumber === 1
+        ? 'Tier 1 BVN or NIN Verification'
+        : tierNumber === 2
+        ? 'Tier 2 Identity Verification'
+        : 'Tier 3 Proof of Address',
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -130,9 +313,7 @@ export default function KYCScreen({
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>
-          Verification Tiers
-        </Text>
+        <Text style={styles.headerTitle}>Verification Tiers</Text>
 
         <Text style={styles.headerSubtitle}>
           Upgrade your ZENIMONIES account to unlock more
@@ -154,17 +335,45 @@ export default function KYCScreen({
           </Text>
 
           <Text style={styles.currentDescription}>
-            Your current verification level is Tier {currentLevel}.
-            Choose your next eligible tier to view its requirements.
+            Your verified level is retrieved from your ZENIMONIES
+            account. Choose your next eligible tier to view its
+            requirements.
           </Text>
 
           <View style={styles.currentLevelBadge}>
             <Text style={styles.currentLevelText}>
-              {currentLevel === 0
+              {loading
+                ? 'Checking verification status...'
+                : currentLevel === 0
                 ? 'Not verified'
                 : `Current Level: Tier ${currentLevel}`}
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={() => fetchKycStatus(true)}
+            disabled={loading || refreshing}
+            activeOpacity={0.7}
+          >
+            {refreshing ? (
+              <ActivityIndicator color={GREEN} size="small" />
+            ) : (
+              <Text style={styles.refreshText}>↻ Refresh Verification Status</Text>
+            )}
+          </TouchableOpacity>
+
+          {!!error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => fetchKycStatus(true)}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {tiers.map((tier) => {
@@ -213,18 +422,14 @@ export default function KYCScreen({
                       status === 'Locked' && styles.lockedText,
                     ]}
                   >
-                    {status}
+                    {loading ? 'Checking...' : status}
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.tierTitle}>
-                Tier {tier.number}
-              </Text>
+              <Text style={styles.tierTitle}>Tier {tier.number}</Text>
 
-              <Text style={styles.tierSubtitle}>
-                {tier.subtitle}
-              </Text>
+              <Text style={styles.tierSubtitle}>{tier.subtitle}</Text>
 
               <Text style={styles.tierDescription}>
                 {tier.description}
@@ -235,10 +440,7 @@ export default function KYCScreen({
               </Text>
 
               {tier.requirements.map((requirement, index) => (
-                <View
-                  key={index}
-                  style={styles.requirementRow}
-                >
+                <View key={index} style={styles.requirementRow}>
                   <View style={styles.checkCircle}>
                     <Text style={styles.checkText}>✓</Text>
                   </View>
@@ -250,14 +452,10 @@ export default function KYCScreen({
               ))}
 
               <View style={styles.limitsBox}>
-                <Text style={styles.limitsTitle}>
-                  Account Limits
-                </Text>
+                <Text style={styles.limitsTitle}>Account Limits</Text>
 
                 <View style={styles.limitRow}>
-                  <Text style={styles.limitLabel}>
-                    Account limit
-                  </Text>
+                  <Text style={styles.limitLabel}>Account limit</Text>
                   <Text style={styles.limitValue}>
                     {tier.accountLimit}
                   </Text>
@@ -273,33 +471,28 @@ export default function KYCScreen({
                 </View>
               </View>
 
-              {available && !isCurrent && status !== 'Completed' && (
-                <TouchableOpacity
-                  style={styles.upgradeButton}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    onSelect?.(
-                      tier.number === 1
-                        ? 'Tier 1 BVN or NIN Verification'
+              {!loading &&
+                available &&
+                !isCurrent &&
+                status !== 'Completed' && (
+                  <TouchableOpacity
+                    style={styles.upgradeButton}
+                    activeOpacity={0.8}
+                    onPress={() => handleSelectTier(tier.number)}
+                  >
+                    <Text style={styles.upgradeButtonText}>
+                      {tier.number === 1
+                        ? 'Start Tier 1 Verification'
                         : tier.number === 2
-                        ? 'Tier 2 Identity Verification'
-                        : 'Tier 3 Proof of Address',
-                    )
-                  }
-                >
-                  <Text style={styles.upgradeButtonText}>
-                    {tier.number === 1
-                      ? 'Start Tier 1 Verification'
-                      : tier.number === 2
-                      ? 'Upgrade to Tier 2'
-                      : 'Upgrade to Tier 3'}
-                  </Text>
+                        ? 'Upgrade to Tier 2'
+                        : 'Upgrade to Tier 3'}
+                    </Text>
 
-                  <Text style={styles.buttonArrow}>›</Text>
-                </TouchableOpacity>
-              )}
+                    <Text style={styles.buttonArrow}>›</Text>
+                  </TouchableOpacity>
+                )}
 
-              {!available && (
+              {!loading && !available && (
                 <View style={styles.lockedButton}>
                   <Text style={styles.lockedButtonText}>
                     Complete Tier {tier.number - 1} First
@@ -307,10 +500,18 @@ export default function KYCScreen({
                 </View>
               )}
 
-              {isCurrent && (
+              {!loading && isCurrent && (
                 <View style={styles.currentButton}>
                   <Text style={styles.currentButtonText}>
                     Your Current Tier
+                  </Text>
+                </View>
+              )}
+
+              {!loading && status === 'Completed' && (
+                <View style={styles.currentButton}>
+                  <Text style={styles.currentButtonText}>
+                    Tier Completed ✓
                   </Text>
                 </View>
               )}
@@ -421,6 +622,42 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     fontWeight: '800',
     fontSize: 12,
+  },
+
+  refreshButton: {
+    alignSelf: 'flex-start',
+    marginTop: 14,
+    paddingVertical: 7,
+  },
+
+  refreshText: {
+    color: GREEN,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  errorBox: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: '#FFF1F0',
+    borderRadius: 12,
+  },
+
+  errorText: {
+    color: '#B42318',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+
+  retryButton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+
+  retryText: {
+    color: '#B42318',
+    fontWeight: '800',
+    fontSize: 13,
   },
 
   tierCard: {
