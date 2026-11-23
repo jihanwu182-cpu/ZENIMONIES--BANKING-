@@ -208,7 +208,6 @@ export default function ExternalBankTransferSuccessScreen({
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -225,27 +224,27 @@ const styles = StyleSheet.create({
   /* SUCCESS ICON + STARS */
 
   successArea: {
-    height: 38,
-    width: 90,
+    height: 24,
+    width: 60,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginBottom: 2,
+    marginBottom: 1,
   },
 
   successOuter: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -253,9 +252,9 @@ const styles = StyleSheet.create({
 
   checkmark: {
     color: WHITE,
-    fontSize: 15,
+    fontSize: 10,
     fontWeight: '900',
-    lineHeight: 17,
+    lineHeight: 11,
   },
 
   star: {
@@ -308,7 +307,7 @@ const styles = StyleSheet.create({
 
   title: {
     color: BLACK,
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: '900',
     textAlign: 'center',
     marginTop: 0,
@@ -316,32 +315,32 @@ const styles = StyleSheet.create({
 
   subtitle: {
     color: MUTED,
-    fontSize: 7,
+    fontSize: 6,
     fontWeight: '600',
-    lineHeight: 9,
+    lineHeight: 8,
     textAlign: 'center',
     marginTop: 1,
-    marginBottom: 3,
+    marginBottom: 2,
   },
 
   /* RECEIPT CARD */
 
   receiptCard: {
-    width: '72%',
-    maxWidth: 250,
+    width: '60%',
+    maxWidth: 210,
     alignSelf: 'center',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
     borderColor: '#D6EBD2',
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    paddingVertical: 5,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
     alignItems: 'center',
   },
 
   amount: {
     color: GREEN,
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '900',
     textAlign: 'center',
   },
@@ -413,7 +412,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     position: 'relative',
-    marginTop: 3,
+    marginTop: 2,
     paddingTop: 0,
   },
 
@@ -494,25 +493,25 @@ const styles = StyleSheet.create({
   /* BUTTONS */
 
   bottomButtons: {
-    width: '72%',
-    maxWidth: 250,
+    width: '60%',
+    maxWidth: 210,
     flexDirection: 'row',
-    gap: 4,
-    marginTop: 4,
+    gap: 3,
+    marginTop: 3,
     alignSelf: 'center',
   },
 
   shareButton: {
     flex: 1,
-    height: 24,
-    borderRadius: 6,
+    height: 20,
+    borderRadius: 5,
     borderWidth: 1.3,
     borderColor: GREEN,
     backgroundColor: WHITE,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 3,
   },
 
   shareIcon: {
@@ -529,8 +528,8 @@ const styles = StyleSheet.create({
 
   doneButton: {
     flex: 1,
-    height: 24,
-    borderRadius: 6,
+    height: 20,
+    borderRadius: 5,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
