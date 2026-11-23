@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -73,7 +72,7 @@ export default function ExternalBankTransferSuccessScreen({
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content"/>
+      <StatusBar barStyle="dark-content" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -218,16 +217,16 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
+    paddingHorizontal: 8,
+    paddingTop: 0,
+    paddingBottom: 4,
   },
 
   /* SUCCESS ICON + STARS */
 
   successArea: {
-    width: 150,
-    height: 76,
+    height: 38,
+    width: 90,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -235,18 +234,18 @@ const styles = StyleSheet.create({
   },
 
   successOuter: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: '#72C66B',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   successInner: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 21,
+    height: 21,
+    borderRadius: 11,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -254,9 +253,9 @@ const styles = StyleSheet.create({
 
   checkmark: {
     color: WHITE,
-    fontSize: 28,
+    fontSize: 15,
     fontWeight: '900',
-    lineHeight: 33,
+    lineHeight: 17,
   },
 
   star: {
@@ -309,50 +308,50 @@ const styles = StyleSheet.create({
 
   title: {
     color: BLACK,
-    fontSize: 20,
+    fontSize: 12,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 2,
+    marginTop: 0,
   },
 
   subtitle: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: 7,
     fontWeight: '600',
-    lineHeight: 15,
+    lineHeight: 9,
     textAlign: 'center',
-    marginTop: 5,
-    marginBottom: 9,
+    marginTop: 1,
+    marginBottom: 3,
   },
 
   /* RECEIPT CARD */
 
   receiptCard: {
-    width: '92%',
-    maxWidth: 360,
+    width: '72%',
+    maxWidth: 250,
     alignSelf: 'center',
     backgroundColor: '#F5FAF4',
     borderWidth: 1,
     borderColor: '#D6EBD2',
-    borderRadius: 17,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    paddingVertical: 5,
     alignItems: 'center',
   },
 
   amount: {
     color: GREEN,
-    fontSize: 23,
+    fontSize: 12,
     fontWeight: '900',
     textAlign: 'center',
   },
 
   recipientName: {
     color: BLACK,
-    fontSize: 12,
+    fontSize: 7,
     fontWeight: '800',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 1,
   },
 
   /* BANK */
@@ -361,20 +360,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
-    gap: 5,
+    marginTop: 2,
+    gap: 3,
   },
 
   bankLogo: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 
   bankLogoFallback: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -388,23 +387,23 @@ const styles = StyleSheet.create({
 
   bankName: {
     color: DARK_GREEN,
-    fontSize: 11,
+    fontSize: 7,
     fontWeight: '800',
   },
 
   accountNumber: {
     color: MUTED,
-    fontSize: 10,
+    fontSize: 6,
     fontWeight: '600',
-    marginTop: 3,
+    marginTop: 1,
   },
 
   dateText: {
     color: MUTED,
-    fontSize: 10,
+    fontSize: 6,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 1,
   },
 
   /* TIMELINE */
@@ -414,8 +413,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     position: 'relative',
-    marginTop: 10,
-    paddingTop: 2,
+    marginTop: 3,
+    paddingTop: 0,
   },
 
   timelineLine: {
@@ -433,9 +432,9 @@ const styles = StyleSheet.create({
   },
 
   timelineCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -445,26 +444,26 @@ const styles = StyleSheet.create({
 
   timelineCheck: {
     color: WHITE,
-    fontSize: 13,
+    fontSize: 7,
     fontWeight: '900',
-    lineHeight: 15,
+    lineHeight: 8,
   },
 
   timelineLabel: {
     color: BLACK,
-    fontSize: 9,
+    fontSize: 6,
     fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 12,
-    marginTop: 5,
+    lineHeight: 8,
+    marginTop: 2,
   },
 
   timelineTime: {
     color: MUTED,
-    fontSize: 8,
+    fontSize: 5,
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 1,
   },
 
   /* REFERENCE */
@@ -473,40 +472,40 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#D8E3D7',
     width: '100%',
-    marginTop: 10,
+    marginTop: 3,
   },
 
   referenceLabel: {
     color: MUTED,
-    fontSize: 9,
+    fontSize: 6,
     fontWeight: '600',
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 2,
   },
 
   referenceValue: {
     color: BLACK,
-    fontSize: 10,
+    fontSize: 6,
     fontWeight: '900',
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 1,
   },
 
   /* BUTTONS */
 
   bottomButtons: {
-    width: '92%',
-    maxWidth: 360,
+    width: '72%',
+    maxWidth: 250,
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 11,
+    gap: 4,
+    marginTop: 4,
     alignSelf: 'center',
   },
 
   shareButton: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
+    height: 24,
+    borderRadius: 6,
     borderWidth: 1.3,
     borderColor: GREEN,
     backgroundColor: WHITE,
@@ -518,20 +517,20 @@ const styles = StyleSheet.create({
 
   shareIcon: {
     color: GREEN,
-    fontSize: 17,
+    fontSize: 10,
     fontWeight: '900',
   },
 
   shareText: {
     color: GREEN,
-    fontSize: 11,
+    fontSize: 7,
     fontWeight: '900',
   },
 
   doneButton: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
+    height: 24,
+    borderRadius: 6,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
@@ -539,7 +538,7 @@ const styles = StyleSheet.create({
 
   doneText: {
     color: WHITE,
-    fontSize: 13,
+    fontSize: 8,
     fontWeight: '900',
   },
 });
