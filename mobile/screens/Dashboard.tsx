@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 import {
@@ -36,8 +37,7 @@ type DashboardAction =
   | 'cards'
   | 'savings'
   | 'betting'
-  | 'tv'
-  | 'kyc';
+  | 'tv';
 
 type TabName =
   | 'Home'
@@ -199,7 +199,6 @@ export default function Dashboard({
   currency = 'NGN',
   balance,
   verificationLevel,
-  verificationStatus = 'Pending',
   transactions = [],
   refreshing = false,
   onRefresh,
@@ -220,6 +219,16 @@ export default function Dashboard({
     userName.trim().split(/\s+/)[0] || 'Customer';
 
   const GREEN = isDark ? '#20C875' : '#02A339';
+
+  // ====================================================
+  // DYNAMIC VERIFICATION TIER BADGE
+  // ====================================================
+
+  const normalizedLevel = String(verificationLevel || '1')
+    .replace(/tier/gi, '')
+    .trim();
+
+  const tierLabel = `Tier ${normalizedLevel}`;
 
   // ====================================================
   // PROFILE PHOTO UPLOAD
@@ -403,6 +412,20 @@ export default function Dashboard({
               )}
             </TouchableOpacity>
 
+            {/* TIER BADGE BESIDE PROFILE PHOTO */}
+
+            <View style={styles.tierBadge}>
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={11}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.tierBadgeText}>
+                {tierLabel}
+              </Text>
+            </View>
+
             <View style={styles.customerIdentity}>
               <Text style={styles.greeting}>Good day,</Text>
 
@@ -583,45 +606,7 @@ export default function Dashboard({
             </View>
           </View>
 
-          {/* ACCOUNT VERIFICATION */}
-
-          <TouchableOpacity
-            style={styles.verificationCard}
-            onPress={() => handleAction('kyc')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Open account verification"
-          >
-            <View style={styles.verificationIcon}>
-              <MaterialCommunityIcons
-                name="shield-check"
-                size={24}
-                color={colors.primary}
-              />
-            </View>
-
-            <View style={styles.verificationContent}>
-              <Text style={styles.verificationTitle}>
-                Account verification
-              </Text>
-
-              <Text style={styles.verificationDescription}>
-                {verificationLevel
-                  ? `Verification ${verificationLevel}`
-                  : 'Complete your account verification'}
-              </Text>
-
-              <Text style={styles.verificationStatus}>
-                Status: {verificationStatus}
-              </Text>
-            </View>
-
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={27}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
+          {/* ACCOUNT VERIFICATION CARD REMOVED */}
 
           {/* SAVINGS */}
 
@@ -801,7 +786,7 @@ export default function Dashboard({
                   <View style={styles.activeIndicator} />
                 )}
               </TouchableOpacity>
-            );
+          );
           })}
         </View>
       </View>
@@ -924,6 +909,26 @@ const createStyles = (
       backgroundColor: 'rgba(0,0,0,0.4)',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+
+    // TIER BADGE
+
+    tierBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#159B58' : '#02A339',
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+      borderRadius: 8,
+      marginLeft: 7,
+    },
+
+    tierBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 9,
+      fontWeight: '800',
+      marginLeft: 3,
     },
 
     scrollContent: {
@@ -1114,50 +1119,6 @@ const createStyles = (
       fontWeight: '700',
       marginTop: 7,
       textAlign: 'center',
-    },
-
-    verificationCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 14,
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 15,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-
-    verificationIcon: {
-      width: 39,
-      height: 39,
-      borderRadius: 13,
-      backgroundColor: colors.primaryLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-
-    verificationContent: {
-      flex: 1,
-      marginLeft: 11,
-    },
-
-    verificationTitle: {
-      fontSize: 13,
-      fontWeight: '800',
-      color: colors.text,
-    },
-
-    verificationDescription: {
-      color: colors.textSecondary,
-      fontSize: 10,
-      marginTop: 3,
-    },
-
-    verificationStatus: {
-      color: colors.primary,
-      fontSize: 10,
-      fontWeight: '700',
-      marginTop: 3,
     },
 
     savingsCard: {
