@@ -37,7 +37,8 @@ type DashboardAction =
   | 'savings'
   | 'betting'
   | 'tv'
-  | 'kyc':
+  | 'kyc';
+  
 
 type TabName =
   | 'Home'
