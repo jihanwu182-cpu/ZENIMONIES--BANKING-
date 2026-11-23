@@ -47,6 +47,7 @@ import ToBankScreen from './screens/ToBankScreen';
 import ExternalBankTransferReviewScreen from './screens/ExternalBankTransferReviewScreen';
 import ExternalBankTransferPinScreen from './screens/ExternalBankTransferPinScreen';
 import ExternalBankTransferSuccessScreen from './screens/ExternalBankTransferSuccessScreen';
+import KYCScreen from './screens/KYCScreen';
 
 import {
   registerPushNotifications,
@@ -74,6 +75,7 @@ type Screen =
   | 'login'
   | 'register'
   | 'home'
+  | 'kyc'
   | 'add-money'
   | 'profile'
   | 'settings'
@@ -1718,7 +1720,12 @@ const [transferDraft, setTransferDraft] =
   const handleDashboardAction = (
     action: string
   ) => {
-     if (action === 'transfer') {
+    if (action === 'kyc' || action === 'verification') {
+       setScreen('kyc');
+       return;
+      }
+    
+    if (action === 'transfer') {
         setScreen('to-bank');
         return;
   }
@@ -2594,7 +2601,21 @@ if (screen === 'bills' && session) {
       </SafeAreaView>
     );
   }
+// ====================================================
+// CUSTOMER KYC VERIFICATION
+// ====================================================
 
+if (screen === 'kyc' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <KYCScreen
+        onBack={() => setScreen('home')}
+      />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // PERSONAL DASHBOARD
   // ====================================================
