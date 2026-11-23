@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -17,99 +16,99 @@ const BACKGROUND = '#F6F8F3';
 const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
 
-type KYCStatus = 'verified' | 'pending' | 'not_started' | 'rejected';
-
-type KYCItem = {
-  title: string;
-  description: string;
-  status: KYCStatus;
-  icon: string;
-};
-
 type Props = {
   onBack?: () => void;
   onSelect?: (section: string) => void;
 };
 
-const verificationItems: KYCItem[] = [
+type TierCard = {
+  tier: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  requirements: string[];
+  limitInfo: string[];
+  icon: string;
+  status: 'active' | 'upgrade' | 'locked';
+};
+
+const tiers: TierCard[] = [
   {
-    title: 'Personal Information',
-    description: 'Confirm your personal details',
-    status: 'verified',
-    icon: '👤',
+    tier: 1,
+    title: 'Tier 1',
+    subtitle: 'Basic Banking',
+    description:
+      'Your entry-level personal banking account with essential banking access.',
+    requirements: [
+      'Basic account registration',
+      'Personal information',
+      'Basic verification',
+    ],
+    limitInfo: [
+      'Basic account limits apply',
+    ],
+    icon: '①',
+    status: 'active',
   },
   {
-    title: 'BVN Verification',
-    description: 'Verify your Bank Verification Number',
-    status: 'not_started',
-    icon: '🏦',
+    tier: 2,
+    title: 'Tier 2',
+    subtitle: 'Enhanced Banking',
+    description:
+      'Upgrade your account with additional identity verification to unlock higher transaction limits.',
+    requirements: [
+      'Identity verification',
+      'Facial / liveness verification',
+    ],
+    limitInfo: [
+      'Maximum account balance: ₦500,000',
+      'Daily transfer limit: ₦200,000',
+    ],
+    icon: '②',
+    status: 'upgrade',
   },
   {
-    title: 'NIN Verification',
-    description: 'Verify your National Identity Number',
-    status: 'not_started',
-    icon: '🛡️',
-  },
-  {
-    title: 'Identity Verification',
-    description: 'Submit your identity document',
-    status: 'not_started',
-    icon: '🪪',
-  },
-  {
-    title: 'Address Verification',
-    description: 'Verify your residential address',
-    status: 'not_started',
-    icon: '📍',
-  },
-  {
-    title: 'Facial Verification',
-    description: 'Complete your face verification',
-    status: 'not_started',
-    icon: '🤳',
+    tier: 3,
+    title: 'Tier 3',
+    subtitle: 'Full Banking',
+    description:
+      'Complete advanced verification to access the highest personal account tier.',
+    requirements: [
+      'Advanced identity verification',
+      'Additional verification requirements',
+      'Final verification approval',
+    ],
+    limitInfo: [
+      'Higher account limits apply',
+    ],
+    icon: '③',
+    status: 'locked',
   },
 ];
-
-const statusLabel = (status: KYCStatus) => {
-  switch (status) {
-    case 'verified':
-      return 'Verified';
-    case 'pending':
-      return 'Pending';
-    case 'rejected':
-      return 'Rejected';
-    default:
-      return 'Not Started';
-  }
-};
 
 export default function KYCScreen({
   onBack,
   onSelect,
 }: Props) {
-  const completed = verificationItems.filter(
-    item => item.status === 'verified',
-  ).length;
-
-  const progress =
-    (completed / verificationItems.length) * 100;
-
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBack}
+          activeOpacity={0.7}
         >
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>
-          Verification
+          Verification Tiers
         </Text>
 
         <Text style={styles.headerSubtitle}>
-          Complete your verification to unlock more features.
+          Upgrade your ZENIMONIES account to unlock more
+          banking features and higher limits.
         </Text>
       </View>
 
@@ -117,98 +116,177 @@ export default function KYCScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.progressCard}>
-          <View style={styles.progressTop}>
-            <View>
-              <Text style={styles.progressTitle}>
-                Verification Progress
-              </Text>
-              <Text style={styles.progressSubtitle}>
-                {completed} of {verificationItems.length} completed
-              </Text>
-            </View>
-
-            <Text style={styles.progressPercent}>
-              {Math.round(progress)}%
-            </Text>
+        {/* INTRO */}
+        <View style={styles.introCard}>
+          <View style={styles.introIcon}>
+            <Text style={styles.introIconText}>✓</Text>
           </View>
 
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progress}%` },
-              ]}
-            />
-          </View>
+          <Text style={styles.introTitle}>
+            Your Verification Journey
+          </Text>
+
+          <Text style={styles.introDescription}>
+            Choose a verification tier to see its requirements
+            and upgrade your account.
+          </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>
-          Identity & Verification
-        </Text>
+        {/* TIERS */}
+        {tiers.map((tier) => {
+          const isActive = tier.status === 'active';
+          const isLocked = tier.status === 'locked';
 
-        {verificationItems.map((item, index) => (
-          <TouchableOpacity
-            key={item.title}
-            style={styles.kycCard}
-            activeOpacity={0.75}
-            onPress={() => onSelect?.(item.title)}
-          >
-            <View style={styles.cardTop}>
-              <View style={styles.iconContainer}>
-                <Text style={styles.cardIcon}>
-                  {item.icon}
-                </Text>
+          const badgeText = isActive
+            ? 'Current Tier'
+            : isLocked
+            ? 'Locked'
+            : 'Upgrade Available';
+
+          const buttonText = isActive
+            ? 'Current Tier'
+            : isLocked
+            ? 'Complete Tier 2 First'
+            : 'Upgrade to Tier 2';
+
+          return (
+            <View
+              key={tier.tier}
+              style={[
+                styles.tierCard,
+                isActive && styles.activeTierCard,
+                isLocked && styles.lockedTierCard,
+              ]}
+            >
+              {/* TOP */}
+              <View style={styles.tierTop}>
+                <View
+                  style={[
+                    styles.tierIcon,
+                    isActive && styles.activeTierIcon,
+                    isLocked && styles.lockedTierIcon,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tierIconText,
+                      isActive && styles.activeTierIconText,
+                      isLocked && styles.lockedTierIconText,
+                    ]}
+                  >
+                    {tier.icon}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.tierBadge,
+                    isActive && styles.activeBadge,
+                    isLocked && styles.lockedBadge,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tierBadgeText,
+                      isActive && styles.activeBadgeText,
+                      isLocked && styles.lockedBadgeText,
+                    ]}
+                  >
+                    {badgeText}
+                  </Text>
+                </View>
               </View>
 
-              <View
+              {/* TITLE */}
+              <Text style={styles.tierTitle}>
+                {tier.title}
+              </Text>
+
+              <Text style={styles.tierSubtitle}>
+                {tier.subtitle}
+              </Text>
+
+              <Text style={styles.tierDescription}>
+                {tier.description}
+              </Text>
+
+              {/* REQUIREMENTS */}
+              <View style={styles.detailsSection}>
+                <Text style={styles.detailsHeading}>
+                  Verification Requirements
+                </Text>
+
+                {tier.requirements.map((requirement, index) => (
+                  <View
+                    key={`${tier.tier}-requirement-${index}`}
+                    style={styles.detailRow}
+                  >
+                    <View style={styles.bullet}>
+                      <Text style={styles.bulletText}>✓</Text>
+                    </View>
+
+                    <Text style={styles.detailText}>
+                      {requirement}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* LIMITS */}
+              <View style={styles.limitsBox}>
+                <Text style={styles.limitsHeading}>
+                  Account Limits
+                </Text>
+
+                {tier.limitInfo.map((limit, index) => (
+                  <Text
+                    key={`${tier.tier}-limit-${index}`}
+                    style={styles.limitText}
+                  >
+                    • {limit}
+                  </Text>
+                ))}
+              </View>
+
+              {/* ACTION */}
+              <TouchableOpacity
                 style={[
-                  styles.statusBadge,
-                  item.status === 'verified' && styles.verifiedBadge,
-                  item.status === 'pending' && styles.pendingBadge,
-                  item.status === 'rejected' && styles.rejectedBadge,
+                  styles.tierButton,
+                  isActive && styles.activeTierButton,
+                  isLocked && styles.lockedTierButton,
                 ]}
+                activeOpacity={0.8}
+                disabled={isActive || isLocked}
+                onPress={() => onSelect?.(`Tier ${tier.tier}`)}
               >
                 <Text
                   style={[
-                    styles.statusText,
-                    item.status === 'verified' && styles.verifiedText,
-                    item.status === 'pending' && styles.pendingText,
-                    item.status === 'rejected' && styles.rejectedText,
+                    styles.tierButtonText,
+                    isActive && styles.activeTierButtonText,
+                    isLocked && styles.lockedTierButtonText,
                   ]}
                 >
-                  {statusLabel(item.status)}
+                  {buttonText}
                 </Text>
-              </View>
+
+                {!isActive && !isLocked && (
+                  <Text style={styles.buttonArrow}>›</Text>
+                )}
+              </TouchableOpacity>
             </View>
+          );
+        })}
 
-            <Text style={styles.cardTitle}>
-              {item.title}
-            </Text>
+        {/* FOOTER */}
+        <View style={styles.footer}>
+          <Text style={styles.footerBrand}>
+            ZENIMONIES
+          </Text>
 
-            <Text style={styles.cardDescription}>
-              {item.description}
-            </Text>
-
-            <View style={styles.cardBottom}>
-              <Text style={styles.actionText}>
-                {item.status === 'verified'
-                  ? 'Completed'
-                  : item.status === 'pending'
-                  ? 'Under review'
-                  : item.status === 'rejected'
-                  ? 'Resubmit verification'
-                  : 'Verify now'}
-              </Text>
-
-              <Text style={styles.arrow}>
-                ›
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-
-        <View style={styles.footerSpace} />
+          <Text style={styles.footerText}>
+            Secure banking. Progressive access.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -224,7 +302,7 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 22,
+    paddingBottom: 24,
   },
 
   backButton: {
@@ -241,177 +319,284 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: 25,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '900',
     color: BLACK,
   },
 
   headerSubtitle: {
     fontSize: 13,
     color: MUTED,
-    marginTop: 6,
+    marginTop: 7,
+    lineHeight: 20,
   },
 
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingTop: 18,
+    paddingBottom: 30,
   },
 
-  progressCard: {
+  introCard: {
     backgroundColor: WHITE,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 22,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
     borderColor: BORDER,
+    marginBottom: 20,
   },
 
-  progressTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  introIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: '#E8F5EC',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
 
-  progressTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: BLACK,
-  },
-
-  progressSubtitle: {
-    fontSize: 12,
-    color: MUTED,
-    marginTop: 4,
-  },
-
-  progressPercent: {
-    fontSize: 19,
-    fontWeight: '800',
+  introIconText: {
+    fontSize: 22,
+    fontWeight: '900',
     color: GREEN,
   },
 
-  progressTrack: {
-    height: 7,
-    backgroundColor: '#EDF1E7',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: 14,
-  },
-
-  progressFill: {
-    height: '100%',
-    backgroundColor: GREEN,
-    borderRadius: 10,
-  },
-
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+  introTitle: {
+    fontSize: 17,
+    fontWeight: '900',
     color: BLACK,
-    marginBottom: 12,
   },
 
-  kycCard: {
+  introDescription: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: MUTED,
+    marginTop: 6,
+  },
+
+  tierCard: {
     backgroundColor: WHITE,
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,
   },
 
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+  activeTierCard: {
+    borderColor: '#B8DFC7',
+    borderWidth: 1.5,
   },
 
-  iconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+  lockedTierCard: {
+    opacity: 0.85,
+  },
+
+  tierTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+
+  tierIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
     backgroundColor: '#F2F6E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  cardIcon: {
-    fontSize: 20,
+  activeTierIcon: {
+    backgroundColor: GREEN,
   },
 
-  statusBadge: {
+  lockedTierIcon: {
     backgroundColor: '#F0F2EF',
-    borderRadius: 20,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
   },
 
-  verifiedBadge: {
-    backgroundColor: '#E7F5E3',
+  tierIconText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: GREEN,
   },
 
-  pendingBadge: {
-    backgroundColor: '#FFF3D8',
+  activeTierIconText: {
+    color: WHITE,
   },
 
-  rejectedBadge: {
-    backgroundColor: '#FDE8E8',
-  },
-
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
+  lockedTierIconText: {
     color: MUTED,
   },
 
-  verifiedText: {
+  tierBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 30,
+    backgroundColor: '#EDF1E9',
+  },
+
+  activeBadge: {
+    backgroundColor: '#E4F4E6',
+  },
+
+  lockedBadge: {
+    backgroundColor: '#F0F2EF',
+  },
+
+  tierBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: MUTED,
+  },
+
+  activeBadgeText: {
     color: DARK_GREEN,
   },
 
-  pendingText: {
-    color: '#B77900',
+  lockedBadgeText: {
+    color: MUTED,
   },
 
-  rejectedText: {
-    color: '#C62828',
-  },
-
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+  tierTitle: {
+    fontSize: 23,
+    fontWeight: '900',
     color: BLACK,
   },
 
-  cardDescription: {
-    fontSize: 12,
-    color: MUTED,
-    marginTop: 5,
+  tierSubtitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: GREEN,
+    marginTop: 4,
   },
 
-  cardBottom: {
+  tierDescription: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: MUTED,
+    marginTop: 10,
+  },
+
+  detailsSection: {
+    marginTop: 20,
+  },
+
+  detailsHeading: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: BLACK,
+    marginBottom: 10,
+  },
+
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 13,
-    paddingTop: 11,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
+    marginBottom: 9,
   },
 
-  actionText: {
+  bullet: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E8F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 9,
+  },
+
+  bulletText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: GREEN,
+  },
+
+  detailText: {
+    flex: 1,
     fontSize: 12,
-    fontWeight: '700',
-    color: GREEN,
+    color: BLACK,
+    lineHeight: 18,
   },
 
-  arrow: {
-    fontSize: 23,
-    color: GREEN,
+  limitsBox: {
+    backgroundColor: '#F6F8F3',
+    borderRadius: 12,
+    padding: 13,
+    marginTop: 12,
   },
 
-  footerSpace: {
-    height: 15,
+  limitsHeading: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: BLACK,
+    marginBottom: 8,
+  },
+
+  limitText: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: MUTED,
+    marginBottom: 3,
+  },
+
+  tierButton: {
+    backgroundColor: GREEN,
+    borderRadius: 13,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 17,
+  },
+
+  activeTierButton: {
+    backgroundColor: '#E8F5EC',
+  },
+
+  lockedTierButton: {
+    backgroundColor: '#F0F2EF',
+  },
+
+  tierButtonText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: WHITE,
+  },
+
+  activeTierButtonText: {
+    color: DARK_GREEN,
+  },
+
+  lockedTierButtonText: {
+    color: MUTED,
+  },
+
+  buttonArrow: {
+    color: WHITE,
+    fontSize: 24,
+    fontWeight: '800',
+    marginLeft: 8,
+    lineHeight: 24,
+  },
+
+  footer: {
+    alignItems: 'center',
+    paddingVertical: 22,
+  },
+
+  footerBrand: {
+    color: GREEN,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+
+  footerText: {
+    color: MUTED,
+    fontSize: 11,
+    marginTop: 5,
   },
 });
