@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  ActivityIndicator,
 } from 'react-native';
 
 const GREEN = '#07803F';
@@ -30,7 +29,7 @@ type Props = {
 
 type TierStatus =
   | 'Current Tier'
-  | 'Completed'
+  | 'Verified'
   | 'Upgrade Available'
   | 'Locked';
 
@@ -39,7 +38,6 @@ type Tier = {
   subtitle: string;
   accountLimit: string;
   dailyLimit: string;
-  requirements: string[];
 };
 
 const fallbackTiers: Tier[] = [
@@ -48,34 +46,18 @@ const fallbackTiers: Tier[] = [
     subtitle: 'Basic Banking',
     accountLimit: '₦300,000',
     dailyLimit: '₦50,000',
-    requirements: [
-      'Basic account registration',
-      'Personal information',
-      'BVN or NIN verification',
-    ],
   },
   {
     number: 2,
     subtitle: 'Enhanced Banking',
     accountLimit: '₦500,000',
     dailyLimit: '₦200,000',
-    requirements: [
-      'Verified BVN from Tier 1',
-      'Identity document verification',
-      'Identity verification approval',
-    ],
   },
   {
     number: 3,
     subtitle: 'Full Banking',
     accountLimit: 'Unlimited',
     dailyLimit: '₦5,000,000',
-    requirements: [
-      'Completed Tier 2 verification',
-      'Approved proof of address',
-      'Selfie and liveness verification',
-      'Final Tier 3 approval',
-    ],
   },
 ];
 
@@ -99,66 +81,55 @@ export default function KYCScreen({
     formatLevel(verificationLevel),
   );
 
-  const [tiers] = useState<Tier[]>(fallbackTiers);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchKycStatus = useCallback(
-    async (isRefresh = false) => {
-      try {
-        if (isRefresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+  const fetchKycStatus = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        setError('');
-
-        if (!token) {
-          setError('Your session could not be found. Please log in again.');
-          return;
-        }
-
-        const response = await fetch(`${API_BASE}/kyc/status`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data?.message ||
-              data?.error ||
-              'Unable to load verification status.',
-          );
-        }
-
-        // Backend remains the source of truth for the verified tier.
-        const kyc =
-          data?.kyc ??
-          data?.data?.kyc ??
-          data?.data ??
-          data;
-
-        const backendTier = formatLevel(kyc?.tier);
-
-        setCurrentLevel(backendTier);
-      } catch (err: any) {
-        setError(
-          err?.message || 'Unable to load verification status.',
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+      if (!token) {
+        setError('Your session could not be found. Please log in again.');
+        return;
       }
-    },
-    [token],
-  );
+
+      const response = await fetch(`${API_BASE}/kyc/status`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            'Unable to load verification status.',
+        );
+      }
+
+      // Backend remains the source of truth for the verified tier.
+      const kyc =
+        data?.kyc ??
+        data?.data?.kyc ??
+        data?.data ??
+        data;
+
+      const backendTier = formatLevel(kyc?.tier);
+
+      setCurrentLevel(backendTier);
+    } catch (err: any) {
+      setError(
+        err?.message || 'Unable to load verification status.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     fetchKycStatus();
@@ -166,7 +137,7 @@ export default function KYCScreen({
 
   const getTierStatus = (tier: number): TierStatus => {
     if (currentLevel >= tier) {
-      return tier === currentLevel ? 'Current Tier' : 'Completed';
+      return tier === currentLevel ? 'Current Tier' : 'Verified';
     }
 
     if (tier === currentLevel + 1) {
@@ -199,6 +170,7 @@ export default function KYCScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -208,75 +180,35 @@ export default function KYCScreen({
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Verification Tiers</Text>
+        <Text style={styles.headerTitle}>KYC</Text>
 
         <Text style={styles.headerSubtitle}>
           Upgrade your account for higher limits and more features.
         </Text>
       </View>
 
+      {/* KYC TIERS */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* CURRENT VERIFICATION */}
-        <View style={styles.currentCard}>
-          <View style={styles.currentIcon}>
-            <Text style={styles.currentIconText}>✓</Text>
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              onPress={fetchKycStatus}
+              style={styles.retryButton}
+            >
+              <Text style={styles.retryText}>Try Again</Text>
+            </TouchableOpacity>
           </View>
+        )}
 
-          <Text style={styles.currentTitle}>
-            Your Verification Journey
-          </Text>
-
-          <Text style={styles.currentDescription}>
-            View your verification level and upgrade your account.
-          </Text>
-
-          <View style={styles.currentLevelBadge}>
-            <Text style={styles.currentLevelText}>
-              {loading
-                ? 'Checking verification status...'
-                : currentLevel === 0
-                ? 'Not verified'
-                : `Current Level: Tier ${currentLevel}`}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={() => fetchKycStatus(true)}
-            disabled={loading || refreshing}
-            activeOpacity={0.7}
-          >
-            {refreshing ? (
-              <ActivityIndicator color={GREEN} size="small" />
-            ) : (
-              <Text style={styles.refreshText}>
-                ↻ Refresh Status
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {!!error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-
-              <TouchableOpacity
-                onPress={() => fetchKycStatus(true)}
-                style={styles.retryButton}
-              >
-                <Text style={styles.retryText}>Try Again</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* VERIFICATION TIERS */}
-        {tiers.map((tier) => {
+        {fallbackTiers.map((tier) => {
           const status = getTierStatus(tier.number);
           const available = isTierAvailable(tier.number);
           const isCurrent = status === 'Current Tier';
+          const isVerified = status === 'Verified';
 
           return (
             <View
@@ -284,19 +216,23 @@ export default function KYCScreen({
               style={[
                 styles.tierCard,
                 isCurrent && styles.currentTierCard,
+                isVerified && styles.verifiedTierCard,
               ]}
             >
+              {/* TIER NUMBER AND STATUS */}
               <View style={styles.cardTop}>
                 <View
                   style={[
                     styles.tierIcon,
                     isCurrent && styles.currentTierIcon,
+                    isVerified && styles.verifiedTierIcon,
                   ]}
                 >
                   <Text
                     style={[
                       styles.tierIconText,
                       isCurrent && styles.currentTierIconText,
+                      isVerified && styles.verifiedTierIconText,
                     ]}
                   >
                     {tier.number}
@@ -307,7 +243,7 @@ export default function KYCScreen({
                   style={[
                     styles.statusBadge,
                     isCurrent && styles.currentBadge,
-                    status === 'Completed' && styles.completedBadge,
+                    isVerified && styles.completedBadge,
                     status === 'Locked' && styles.lockedBadge,
                   ]}
                 >
@@ -315,7 +251,7 @@ export default function KYCScreen({
                     style={[
                       styles.statusText,
                       isCurrent && styles.currentBadgeText,
-                      status === 'Completed' && styles.completedText,
+                      isVerified && styles.completedText,
                       status === 'Locked' && styles.lockedText,
                     ]}
                   >
@@ -324,6 +260,7 @@ export default function KYCScreen({
                 </View>
               </View>
 
+              {/* TIER NAME */}
               <Text style={styles.tierTitle}>
                 Tier {tier.number}
               </Text>
@@ -331,22 +268,6 @@ export default function KYCScreen({
               <Text style={styles.tierSubtitle}>
                 {tier.subtitle}
               </Text>
-
-              <Text style={styles.requirementsTitle}>
-                Verification Requirements
-              </Text>
-
-              {tier.requirements.map((requirement, index) => (
-                <View key={index} style={styles.requirementRow}>
-                  <View style={styles.checkCircle}>
-                    <Text style={styles.checkText}>✓</Text>
-                  </View>
-
-                  <Text style={styles.requirementText}>
-                    {requirement}
-                  </Text>
-                </View>
-              ))}
 
               {/* ACCOUNT LIMITS */}
               <View style={styles.limitsBox}>
@@ -379,7 +300,7 @@ export default function KYCScreen({
               {!loading &&
                 available &&
                 !isCurrent &&
-                status !== 'Completed' && (
+                !isVerified && (
                   <TouchableOpacity
                     style={styles.upgradeButton}
                     activeOpacity={0.8}
@@ -397,6 +318,7 @@ export default function KYCScreen({
                   </TouchableOpacity>
                 )}
 
+              {/* LOCKED */}
               {!loading && !available && (
                 <View style={styles.lockedButton}>
                   <Text style={styles.lockedButtonText}>
@@ -405,18 +327,20 @@ export default function KYCScreen({
                 </View>
               )}
 
+              {/* CURRENT TIER */}
               {!loading && isCurrent && (
                 <View style={styles.currentButton}>
                   <Text style={styles.currentButtonText}>
-                    Your Current Tier
+                    Current Tier ✓
                   </Text>
                 </View>
               )}
 
-              {!loading && status === 'Completed' && (
+              {/* VERIFIED TIER */}
+              {!loading && isVerified && (
                 <View style={styles.currentButton}>
                   <Text style={styles.currentButtonText}>
-                    Tier Completed ✓
+                    Verified ✓
                   </Text>
                 </View>
               )}
@@ -476,73 +400,8 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  currentCard: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-
-  currentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: '#E8F5EC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-
-  currentIconText: {
-    color: GREEN,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-
-  currentTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: BLACK,
-  },
-
-  currentDescription: {
-    fontSize: 14,
-    color: MUTED,
-    lineHeight: 23,
-    marginTop: 8,
-  },
-
-  currentLevelBadge: {
-    backgroundColor: '#E8F5EC',
-    alignSelf: 'flex-start',
-    borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-    marginTop: 15,
-  },
-
-  currentLevelText: {
-    color: DARK_GREEN,
-    fontWeight: '800',
-    fontSize: 12,
-  },
-
-  refreshButton: {
-    alignSelf: 'flex-start',
-    marginTop: 14,
-    paddingVertical: 7,
-  },
-
-  refreshText: {
-    color: GREEN,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-
   errorBox: {
-    marginTop: 14,
+    marginBottom: 16,
     padding: 12,
     backgroundColor: '#FFF1F0',
     borderRadius: 12,
@@ -579,6 +438,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
 
+  verifiedTierCard: {
+    borderColor: BORDER,
+  },
+
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -599,6 +462,10 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
   },
 
+  verifiedTierIcon: {
+    backgroundColor: '#E8F5EC',
+  },
+
   tierIconText: {
     fontSize: 24,
     fontWeight: '900',
@@ -607,6 +474,10 @@ const styles = StyleSheet.create({
 
   currentTierIconText: {
     color: WHITE,
+  },
+
+  verifiedTierIconText: {
+    color: GREEN,
   },
 
   statusBadge: {
@@ -657,42 +528,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: GREEN,
     marginTop: 5,
-  },
-
-  requirementsTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: BLACK,
-    marginBottom: 13,
-  },
-
-  requirementRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-
-  checkCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E8F5EC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-
-  checkText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: GREEN,
-  },
-
-  requirementText: {
-    flex: 1,
-    fontSize: 14,
-    color: BLACK,
-    lineHeight: 20,
   },
 
   limitsBox: {
