@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -19,80 +20,107 @@ const BORDER = '#E9EDE5';
 type Props = {
   onBack?: () => void;
   onSelect?: (section: string) => void;
+  verificationLevel?: string | number;
+  verificationStatus?: string;
 };
 
-type TierCard = {
-  tier: number;
+type TierStatus =
+  | 'Current Tier'
+  | 'Completed'
+  | 'Upgrade Available'
+  | 'Locked';
+
+type Tier = {
+  number: number;
   title: string;
   subtitle: string;
   description: string;
+  accountLimit: string;
+  dailyLimit: string;
   requirements: string[];
-  limitInfo: string[];
-  icon: string;
-  status: 'active' | 'upgrade' | 'locked';
 };
 
-const tiers: TierCard[] = [
+const tiers: Tier[] = [
   {
-    tier: 1,
-    title: 'Tier 1',
+    number: 1,
+    title: 'Identity Verification',
     subtitle: 'Basic Banking',
     description:
-      'Your entry-level personal banking account with essential banking access.',
+      'Complete Tier 1 using either your BVN or your NIN. You only need one successfully verified option.',
+    accountLimit: '₦300,000',
+    dailyLimit: '₦50,000',
     requirements: [
       'Basic account registration',
       'Personal information',
-      'Basic verification',
+      'BVN or NIN verification',
     ],
-    limitInfo: [
-      'Basic account limits apply',
-    ],
-    icon: '①',
-    status: 'active',
   },
   {
-    tier: 2,
-    title: 'Tier 2',
+    number: 2,
+    title: 'Identity Verification',
     subtitle: 'Enhanced Banking',
     description:
-      'Upgrade your account with additional identity verification to unlock higher transaction limits.',
+      'Complete your identity verification securely using the approved verification process.',
+    accountLimit: '₦500,000',
+    dailyLimit: '₦200,000',
     requirements: [
-      'Identity verification',
-      'Facial / liveness verification',
+      'Verified BVN from Tier 1',
+      'Identity document verification',
+      'Identity verification approval',
     ],
-    limitInfo: [
-      'Maximum account balance: ₦500,000',
-      'Daily transfer limit: ₦200,000',
-    ],
-    icon: '②',
-    status: 'upgrade',
   },
   {
-    tier: 3,
-    title: 'Tier 3',
+    number: 3,
+    title: 'Proof of Address',
     subtitle: 'Full Banking',
     description:
-      'Complete advanced verification to access the highest personal account tier.',
+      'Submit an approved proof of address and complete selfie/liveness verification to upgrade to Tier 3.',
+    accountLimit: 'Unlimited',
+    dailyLimit: '₦5,000,000',
     requirements: [
-      'Advanced identity verification',
-      'Additional verification requirements',
-      'Final verification approval',
+      'Completed Tier 2 verification',
+      'Approved proof of address',
+      'Selfie and liveness verification',
+      'Final Tier 3 approval',
     ],
-    limitInfo: [
-      'Higher account limits apply',
-    ],
-    icon: '③',
-    status: 'locked',
   },
 ];
+
+const formatLevel = (value?: string | number) => {
+  const parsed = Number(
+    String(value ?? '0').replace(/tier/gi, '').trim(),
+  );
+
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(3, Math.floor(parsed)));
+};
 
 export default function KYCScreen({
   onBack,
   onSelect,
+  verificationLevel = 0,
 }: Props) {
+  const currentLevel = formatLevel(verificationLevel);
+
+  const getTierStatus = (tier: number): TierStatus => {
+    if (currentLevel >= tier) {
+      return tier === currentLevel
+        ? 'Current Tier'
+        : 'Completed';
+    }
+
+    if (tier === currentLevel + 1) {
+      return 'Upgrade Available';
+    }
+
+    return 'Locked';
+  };
+
+  const isTierAvailable = (tier: number) =>
+    tier <= currentLevel + 1;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -116,90 +144,82 @@ export default function KYCScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* INTRO */}
-        <View style={styles.introCard}>
-          <View style={styles.introIcon}>
-            <Text style={styles.introIconText}>✓</Text>
+        <View style={styles.currentCard}>
+          <View style={styles.currentIcon}>
+            <Text style={styles.currentIconText}>✓</Text>
           </View>
 
-          <Text style={styles.introTitle}>
+          <Text style={styles.currentTitle}>
             Your Verification Journey
           </Text>
 
-          <Text style={styles.introDescription}>
-            Choose a verification tier to see its requirements
-            and upgrade your account.
+          <Text style={styles.currentDescription}>
+            Your current verification level is Tier {currentLevel}.
+            Choose your next eligible tier to view its requirements.
           </Text>
+
+          <View style={styles.currentLevelBadge}>
+            <Text style={styles.currentLevelText}>
+              {currentLevel === 0
+                ? 'Not verified'
+                : `Current Level: Tier ${currentLevel}`}
+            </Text>
+          </View>
         </View>
 
-        {/* TIERS */}
         {tiers.map((tier) => {
-          const isActive = tier.status === 'active';
-          const isLocked = tier.status === 'locked';
-
-          const badgeText = isActive
-            ? 'Current Tier'
-            : isLocked
-            ? 'Locked'
-            : 'Upgrade Available';
-
-          const buttonText = isActive
-            ? 'Current Tier'
-            : isLocked
-            ? 'Complete Tier 2 First'
-            : 'Upgrade to Tier 2';
+          const status = getTierStatus(tier.number);
+          const available = isTierAvailable(tier.number);
+          const isCurrent = status === 'Current Tier';
 
           return (
             <View
-              key={tier.tier}
+              key={tier.number}
               style={[
                 styles.tierCard,
-                isActive && styles.activeTierCard,
-                isLocked && styles.lockedTierCard,
+                isCurrent && styles.currentTierCard,
               ]}
             >
-              {/* TOP */}
-              <View style={styles.tierTop}>
+              <View style={styles.cardTop}>
                 <View
                   style={[
                     styles.tierIcon,
-                    isActive && styles.activeTierIcon,
-                    isLocked && styles.lockedTierIcon,
+                    isCurrent && styles.currentTierIcon,
                   ]}
                 >
                   <Text
                     style={[
                       styles.tierIconText,
-                      isActive && styles.activeTierIconText,
-                      isLocked && styles.lockedTierIconText,
+                      isCurrent && styles.currentTierIconText,
                     ]}
                   >
-                    {tier.icon}
+                    {tier.number}
                   </Text>
                 </View>
 
                 <View
                   style={[
-                    styles.tierBadge,
-                    isActive && styles.activeBadge,
-                    isLocked && styles.lockedBadge,
+                    styles.statusBadge,
+                    isCurrent && styles.currentBadge,
+                    status === 'Completed' && styles.completedBadge,
+                    status === 'Locked' && styles.lockedBadge,
                   ]}
                 >
                   <Text
                     style={[
-                      styles.tierBadgeText,
-                      isActive && styles.activeBadgeText,
-                      isLocked && styles.lockedBadgeText,
+                      styles.statusText,
+                      isCurrent && styles.currentBadgeText,
+                      status === 'Completed' && styles.completedText,
+                      status === 'Locked' && styles.lockedText,
                     ]}
                   >
-                    {badgeText}
+                    {status}
                   </Text>
                 </View>
               </View>
 
-              {/* TITLE */}
               <Text style={styles.tierTitle}>
-                {tier.title}
+                Tier {tier.number}
               </Text>
 
               <Text style={styles.tierSubtitle}>
@@ -210,83 +230,95 @@ export default function KYCScreen({
                 {tier.description}
               </Text>
 
-              {/* REQUIREMENTS */}
-              <View style={styles.detailsSection}>
-                <Text style={styles.detailsHeading}>
-                  Verification Requirements
-                </Text>
+              <Text style={styles.requirementsTitle}>
+                Verification Requirements
+              </Text>
 
-                {tier.requirements.map((requirement, index) => (
-                  <View
-                    key={`${tier.tier}-requirement-${index}`}
-                    style={styles.detailRow}
-                  >
-                    <View style={styles.bullet}>
-                      <Text style={styles.bulletText}>✓</Text>
-                    </View>
-
-                    <Text style={styles.detailText}>
-                      {requirement}
-                    </Text>
+              {tier.requirements.map((requirement, index) => (
+                <View
+                  key={index}
+                  style={styles.requirementRow}
+                >
+                  <View style={styles.checkCircle}>
+                    <Text style={styles.checkText}>✓</Text>
                   </View>
-                ))}
-              </View>
 
-              {/* LIMITS */}
+                  <Text style={styles.requirementText}>
+                    {requirement}
+                  </Text>
+                </View>
+              ))}
+
               <View style={styles.limitsBox}>
-                <Text style={styles.limitsHeading}>
+                <Text style={styles.limitsTitle}>
                   Account Limits
                 </Text>
 
-                {tier.limitInfo.map((limit, index) => (
-                  <Text
-                    key={`${tier.tier}-limit-${index}`}
-                    style={styles.limitText}
-                  >
-                    • {limit}
+                <View style={styles.limitRow}>
+                  <Text style={styles.limitLabel}>
+                    Account limit
                   </Text>
-                ))}
+                  <Text style={styles.limitValue}>
+                    {tier.accountLimit}
+                  </Text>
+                </View>
+
+                <View style={styles.limitRow}>
+                  <Text style={styles.limitLabel}>
+                    Daily transfer limit
+                  </Text>
+                  <Text style={styles.limitValue}>
+                    {tier.dailyLimit}
+                  </Text>
+                </View>
               </View>
 
-              {/* ACTION */}
-              <TouchableOpacity
-                style={[
-                  styles.tierButton,
-                  isActive && styles.activeTierButton,
-                  isLocked && styles.lockedTierButton,
-                ]}
-                activeOpacity={0.8}
-                disabled={isActive || isLocked}
-                onPress={() => onSelect?.(`Tier ${tier.tier}`)}
-              >
-                <Text
-                  style={[
-                    styles.tierButtonText,
-                    isActive && styles.activeTierButtonText,
-                    isLocked && styles.lockedTierButtonText,
-                  ]}
+              {available && !isCurrent && status !== 'Completed' && (
+                <TouchableOpacity
+                  style={styles.upgradeButton}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    onSelect?.(
+                      tier.number === 1
+                        ? 'Tier 1 BVN or NIN Verification'
+                        : tier.number === 2
+                        ? 'Tier 2 Identity Verification'
+                        : 'Tier 3 Proof of Address',
+                    )
+                  }
                 >
-                  {buttonText}
-                </Text>
+                  <Text style={styles.upgradeButtonText}>
+                    {tier.number === 1
+                      ? 'Start Tier 1 Verification'
+                      : tier.number === 2
+                      ? 'Upgrade to Tier 2'
+                      : 'Upgrade to Tier 3'}
+                  </Text>
 
-                {!isActive && !isLocked && (
                   <Text style={styles.buttonArrow}>›</Text>
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+
+              {!available && (
+                <View style={styles.lockedButton}>
+                  <Text style={styles.lockedButtonText}>
+                    Complete Tier {tier.number - 1} First
+                  </Text>
+                </View>
+              )}
+
+              {isCurrent && (
+                <View style={styles.currentButton}>
+                  <Text style={styles.currentButtonText}>
+                    Your Current Tier
+                  </Text>
+                </View>
+              )}
             </View>
           );
         })}
 
-        {/* FOOTER */}
-        <View style={styles.footer}>
-          <Text style={styles.footerBrand}>
-            ZENIMONIES
-          </Text>
-
-          <Text style={styles.footerText}>
-            Secure banking. Progressive access.
-          </Text>
-        </View>
+        <View style={styles.footerSpace} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -295,308 +327,327 @@ export default function KYCScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor: WHITE,
   },
 
   header: {
     backgroundColor: WHITE,
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 24,
   },
 
   backButton: {
-    width: 40,
-    height: 38,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     marginBottom: 12,
   },
 
   backText: {
-    fontSize: 36,
+    fontSize: 40,
     color: BLACK,
-    lineHeight: 40,
+    lineHeight: 44,
   },
 
   headerTitle: {
-    fontSize: 26,
+    fontSize: 27,
     fontWeight: '900',
     color: BLACK,
   },
 
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 22,
     color: MUTED,
-    marginTop: 7,
-    lineHeight: 20,
+    marginTop: 8,
   },
 
   scrollContent: {
+    backgroundColor: BACKGROUND,
     paddingHorizontal: 16,
     paddingTop: 18,
-    paddingBottom: 30,
+    paddingBottom: 24,
   },
 
-  introCard: {
+  currentCard: {
     backgroundColor: WHITE,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: BORDER,
-    marginBottom: 20,
   },
 
-  introIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
+  currentIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     backgroundColor: '#E8F5EC',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
 
-  introIconText: {
-    fontSize: 22,
-    fontWeight: '900',
+  currentIconText: {
     color: GREEN,
+    fontSize: 28,
+    fontWeight: '900',
   },
 
-  introTitle: {
-    fontSize: 17,
+  currentTitle: {
+    fontSize: 20,
     fontWeight: '900',
     color: BLACK,
   },
 
-  introDescription: {
-    fontSize: 12,
-    lineHeight: 19,
+  currentDescription: {
+    fontSize: 14,
     color: MUTED,
-    marginTop: 6,
+    lineHeight: 23,
+    marginTop: 8,
+  },
+
+  currentLevelBadge: {
+    backgroundColor: '#E8F5EC',
+    alignSelf: 'flex-start',
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    marginTop: 15,
+  },
+
+  currentLevelText: {
+    color: DARK_GREEN,
+    fontWeight: '800',
+    fontSize: 12,
   },
 
   tierCard: {
     backgroundColor: WHITE,
     borderRadius: 20,
-    padding: 18,
+    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,
   },
 
-  activeTierCard: {
-    borderColor: '#B8DFC7',
-    borderWidth: 1.5,
+  currentTierCard: {
+    borderColor: '#B8DFC8',
+    borderWidth: 2,
   },
 
-  lockedTierCard: {
-    opacity: 0.85,
-  },
-
-  tierTop: {
+  cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
 
   tierIcon: {
     width: 54,
     height: 54,
     borderRadius: 17,
-    backgroundColor: '#F2F6E9',
+    backgroundColor: '#F0F3F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  activeTierIcon: {
+  currentTierIcon: {
     backgroundColor: GREEN,
   },
 
-  lockedTierIcon: {
-    backgroundColor: '#F0F2EF',
-  },
-
   tierIconText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
-    color: GREEN,
-  },
-
-  activeTierIconText: {
-    color: WHITE,
-  },
-
-  lockedTierIconText: {
     color: MUTED,
   },
 
-  tierBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 30,
-    backgroundColor: '#EDF1E9',
+  currentTierIconText: {
+    color: WHITE,
   },
 
-  activeBadge: {
-    backgroundColor: '#E4F4E6',
+  statusBadge: {
+    borderRadius: 22,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    backgroundColor: '#F0F2EF',
+  },
+
+  currentBadge: {
+    backgroundColor: '#E5F4E7',
+  },
+
+  completedBadge: {
+    backgroundColor: '#E8F5EC',
   },
 
   lockedBadge: {
     backgroundColor: '#F0F2EF',
   },
 
-  tierBadgeText: {
-    fontSize: 10,
+  statusText: {
+    fontSize: 11,
     fontWeight: '800',
     color: MUTED,
   },
 
-  activeBadgeText: {
+  currentBadgeText: {
     color: DARK_GREEN,
   },
 
-  lockedBadgeText: {
+  completedText: {
+    color: DARK_GREEN,
+  },
+
+  lockedText: {
     color: MUTED,
   },
 
   tierTitle: {
-    fontSize: 23,
+    fontSize: 28,
     fontWeight: '900',
     color: BLACK,
   },
 
   tierSubtitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: GREEN,
-    marginTop: 4,
+    marginTop: 5,
   },
 
   tierDescription: {
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: 14,
     color: MUTED,
-    marginTop: 10,
+    lineHeight: 23,
+    marginTop: 16,
+    marginBottom: 22,
   },
 
-  detailsSection: {
-    marginTop: 20,
-  },
-
-  detailsHeading: {
-    fontSize: 13,
+  requirementsTitle: {
+    fontSize: 16,
     fontWeight: '900',
     color: BLACK,
-    marginBottom: 10,
+    marginBottom: 13,
   },
 
-  detailRow: {
+  requirementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 9,
+    marginBottom: 12,
   },
 
-  bullet: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  checkCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#E8F5EC',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 9,
+    marginRight: 11,
   },
 
-  bulletText: {
-    fontSize: 11,
+  checkText: {
+    fontSize: 15,
     fontWeight: '900',
     color: GREEN,
   },
 
-  detailText: {
+  requirementText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 14,
     color: BLACK,
-    lineHeight: 18,
+    lineHeight: 20,
   },
 
   limitsBox: {
-    backgroundColor: '#F6F8F3',
-    borderRadius: 12,
-    padding: 13,
-    marginTop: 12,
+    backgroundColor: BACKGROUND,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 20,
   },
 
-  limitsHeading: {
-    fontSize: 12,
+  limitsTitle: {
+    fontSize: 16,
     fontWeight: '900',
     color: BLACK,
-    marginBottom: 8,
+    marginBottom: 12,
   },
 
-  limitText: {
-    fontSize: 12,
-    lineHeight: 19,
+  limitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 9,
+  },
+
+  limitLabel: {
+    fontSize: 13,
     color: MUTED,
-    marginBottom: 3,
+    flex: 1,
   },
 
-  tierButton: {
-    backgroundColor: GREEN,
-    borderRadius: 13,
-    paddingVertical: 14,
+  limitValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: BLACK,
+    marginLeft: 8,
+  },
+
+  upgradeButton: {
+    backgroundColor: DARK_GREEN,
+    borderRadius: 15,
+    paddingVertical: 17,
     paddingHorizontal: 16,
+    marginTop: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 17,
   },
 
-  activeTierButton: {
-    backgroundColor: '#E8F5EC',
-  },
-
-  lockedTierButton: {
-    backgroundColor: '#F0F2EF',
-  },
-
-  tierButtonText: {
-    fontSize: 13,
-    fontWeight: '900',
+  upgradeButtonText: {
     color: WHITE,
-  },
-
-  activeTierButtonText: {
-    color: DARK_GREEN,
-  },
-
-  lockedTierButtonText: {
-    color: MUTED,
+    fontSize: 15,
+    fontWeight: '900',
   },
 
   buttonArrow: {
     color: WHITE,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    marginLeft: 8,
-    lineHeight: 24,
+    marginLeft: 10,
   },
 
-  footer: {
+  lockedButton: {
+    backgroundColor: '#F0F2EF',
+    borderRadius: 15,
+    paddingVertical: 17,
+    marginTop: 18,
     alignItems: 'center',
-    paddingVertical: 22,
   },
 
-  footerBrand: {
-    color: GREEN,
+  lockedButtonText: {
+    color: MUTED,
     fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 2,
   },
 
-  footerText: {
-    color: MUTED,
-    fontSize: 11,
-    marginTop: 5,
+  currentButton: {
+    backgroundColor: '#E8F5EC',
+    borderRadius: 15,
+    paddingVertical: 17,
+    marginTop: 18,
+    alignItems: 'center',
+  },
+
+  currentButtonText: {
+    color: DARK_GREEN,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  footerSpace: {
+    height: 10,
   },
 });
