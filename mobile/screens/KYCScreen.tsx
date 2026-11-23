@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -7,15 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 
 const GREEN = '#07803F';
 const DARK_GREEN = '#056B34';
 const BLACK = '#172018';
 const MUTED = '#858B83';
-const BACKGROUND = '#F6F8F3';
+const BACKGROUND = '#F5F7F4';
 const WHITE = '#FFFFFF';
-const BORDER = '#E9EDE5';
+const BORDER = '#E6EBE5';
 
 const API_BASE = 'https://zenimonies-banking.onrender.com/api';
 
@@ -27,12 +27,6 @@ type Props = {
   verificationStatus?: string;
 };
 
-type TierStatus =
-  | 'Current Tier'
-  | 'Verified'
-  | 'Upgrade Available'
-  | 'Locked';
-
 type Tier = {
   number: number;
   subtitle: string;
@@ -40,7 +34,7 @@ type Tier = {
   dailyLimit: string;
 };
 
-const fallbackTiers: Tier[] = [
+const tiers: Tier[] = [
   {
     number: 1,
     subtitle: 'Basic Banking',
@@ -82,102 +76,108 @@ export default function KYCScreen({
   );
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchKycStatus = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
+  const fetchKycStatus = useCallback(
+    async (isRefresh = false) => {
+      try {
+        if (isRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
 
-      if (!token) {
-        setError('Your session could not be found. Please log in again.');
-        return;
-      }
+        setError('');
 
-      const response = await fetch(`${API_BASE}/kyc/status`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
+        if (!token) {
+          setError('Session expired. Please log in again.');
+          return;
+        }
 
-      const data = await response.json();
+        const response = await fetch(`${API_BASE}/kyc/status`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
 
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
-            'Unable to load verification status.',
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              'Unable to retrieve KYC status.',
+          );
+        }
+
+        const kyc =
+          data?.kyc ??
+          data?.data?.kyc ??
+          data?.data ??
+          data;
+
+        setCurrentLevel(formatLevel(kyc?.tier));
+      } catch (err: any) {
+        setError(
+          err?.message || 'Unable to load your KYC status.',
         );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      // Backend remains the source of truth for the verified tier.
-      const kyc =
-        data?.kyc ??
-        data?.data?.kyc ??
-        data?.data ??
-        data;
-
-      const backendTier = formatLevel(kyc?.tier);
-
-      setCurrentLevel(backendTier);
-    } catch (err: any) {
-      setError(
-        err?.message || 'Unable to load verification status.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+    },
+    [token],
+  );
 
   useEffect(() => {
     fetchKycStatus();
   }, [fetchKycStatus]);
 
-  const getTierStatus = (tier: number): TierStatus => {
-    if (currentLevel >= tier) {
-      return tier === currentLevel ? 'Current Tier' : 'Verified';
-    }
+  const handleSelectTier = (tierNumber: number) => {
+    const section =
+      tierNumber === 1
+        ? 'Tier 1 BVN or NIN Verification'
+        : tierNumber === 2
+        ? 'Tier 2 Identity Verification'
+        : 'Tier 3 Proof of Address';
 
-    if (tier === currentLevel + 1) {
-      return 'Upgrade Available';
-    }
+    onSelect?.(section);
+  };
 
+  const getStatus = (tierNumber: number) => {
+    if (tierNumber < currentLevel) return 'Verified';
+    if (tierNumber === currentLevel && currentLevel > 0)
+      return 'Current Tier';
+    if (tierNumber === currentLevel + 1)
+      return 'Available';
     return 'Locked';
   };
 
-  const isTierAvailable = (tier: number) =>
-    tier <= currentLevel + 1;
-
-  const handleSelectTier = (tierNumber: number) => {
-    if (!onSelect) return;
-
-    switch (tierNumber) {
-      case 1:
-        onSelect('Tier 1 BVN or NIN Verification');
-        break;
-      case 2:
-        onSelect('Tier 2 Identity Verification');
-        break;
-      case 3:
-        onSelect('Tier 3 Proof of Address');
-        break;
-      default:
-        break;
+  const getStatusStyle = (status: string) => {
+    if (status === 'Verified' || status === 'Current Tier') {
+      return styles.verifiedBadge;
     }
+
+    if (status === 'Available') {
+      return styles.availableBadge;
+    }
+
+    return styles.lockedBadge;
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* HEADER */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backButton}
           onPress={onBack}
+          style={styles.backButton}
           activeOpacity={0.7}
         >
-          <Text style={styles.backText}>‹</Text>
+          <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>KYC</Text>
@@ -187,28 +187,72 @@ export default function KYCScreen({
         </Text>
       </View>
 
-      {/* KYC TIERS */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {!!error && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              onPress={fetchKycStatus}
-              style={styles.retryButton}
-            >
-              <Text style={styles.retryText}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Account verification summary */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTop}>
+            <View style={styles.summaryIcon}>
+              <Text style={styles.summaryIconText}>✓</Text>
+            </View>
 
-        {fallbackTiers.map((tier) => {
-          const status = getTierStatus(tier.number);
-          const available = isTierAvailable(tier.number);
+            <View style={styles.summaryInfo}>
+              <Text style={styles.summaryLabel}>
+                ACCOUNT VERIFICATION
+              </Text>
+
+              <Text style={styles.summaryLevel}>
+                {loading
+                  ? 'Checking status...'
+                  : currentLevel > 0
+                  ? `Tier ${currentLevel}`
+                  : 'Not verified'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={() => fetchKycStatus(true)}
+            disabled={loading || refreshing}
+            activeOpacity={0.7}
+          >
+            {refreshing ? (
+              <ActivityIndicator color={GREEN} size="small" />
+            ) : (
+              <>
+                <Text style={styles.refreshIcon}>↻</Text>
+                <Text style={styles.refreshText}>
+                  Refresh status
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {!!error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => fetchKycStatus(true)}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* KYC Tier Cards */}
+        {tiers.map((tier) => {
+          const status = getStatus(tier.number);
           const isCurrent = status === 'Current Tier';
           const isVerified = status === 'Verified';
+          const isAvailable = status === 'Available';
+          const isLocked = status === 'Locked';
 
           return (
             <View
@@ -216,23 +260,25 @@ export default function KYCScreen({
               style={[
                 styles.tierCard,
                 isCurrent && styles.currentTierCard,
-                isVerified && styles.verifiedTierCard,
+                isAvailable && styles.availableTierCard,
               ]}
             >
-              {/* TIER NUMBER AND STATUS */}
-              <View style={styles.cardTop}>
+              {/* Tier header */}
+              <View style={styles.tierHeader}>
                 <View
                   style={[
-                    styles.tierIcon,
-                    isCurrent && styles.currentTierIcon,
-                    isVerified && styles.verifiedTierIcon,
+                    styles.tierNumberBox,
+                    (isCurrent || isVerified) &&
+                      styles.activeTierNumberBox,
+                    isAvailable && styles.availableTierNumberBox,
                   ]}
                 >
                   <Text
                     style={[
-                      styles.tierIconText,
-                      isCurrent && styles.currentTierIconText,
-                      isVerified && styles.verifiedTierIconText,
+                      styles.tierNumber,
+                      (isCurrent || isVerified) &&
+                        styles.activeTierNumber,
+                      isAvailable && styles.availableTierNumber,
                     ]}
                   >
                     {tier.number}
@@ -242,25 +288,23 @@ export default function KYCScreen({
                 <View
                   style={[
                     styles.statusBadge,
-                    isCurrent && styles.currentBadge,
-                    isVerified && styles.completedBadge,
-                    status === 'Locked' && styles.lockedBadge,
+                    getStatusStyle(status),
                   ]}
                 >
                   <Text
                     style={[
-                      styles.statusText,
-                      isCurrent && styles.currentBadgeText,
-                      isVerified && styles.completedText,
-                      status === 'Locked' && styles.lockedText,
+                      styles.statusBadgeText,
+                      (isCurrent || isVerified) &&
+                        styles.verifiedBadgeText,
+                      isAvailable && styles.availableBadgeText,
                     ]}
                   >
-                    {loading ? 'Checking...' : status}
+                    {loading ? '...' : status}
                   </Text>
                 </View>
               </View>
 
-              {/* TIER NAME */}
+              {/* Tier title */}
               <Text style={styles.tierTitle}>
                 Tier {tier.number}
               </Text>
@@ -269,10 +313,10 @@ export default function KYCScreen({
                 {tier.subtitle}
               </Text>
 
-              {/* ACCOUNT LIMITS */}
+              {/* Limits */}
               <View style={styles.limitsBox}>
-                <Text style={styles.limitsTitle}>
-                  Account Limits
+                <Text style={styles.limitsHeading}>
+                  Account limits
                 </Text>
 
                 <View style={styles.limitRow}>
@@ -287,7 +331,7 @@ export default function KYCScreen({
 
                 <View style={styles.limitRow}>
                   <Text style={styles.limitLabel}>
-                    Daily transfer limit
+                    Daily transfer
                   </Text>
 
                   <Text style={styles.limitValue}>
@@ -296,51 +340,35 @@ export default function KYCScreen({
                 </View>
               </View>
 
-              {/* UPGRADE BUTTON */}
-              {!loading &&
-                available &&
-                !isCurrent &&
-                !isVerified && (
-                  <TouchableOpacity
-                    style={styles.upgradeButton}
-                    activeOpacity={0.8}
-                    onPress={() => handleSelectTier(tier.number)}
-                  >
-                    <Text style={styles.upgradeButtonText}>
-                      {tier.number === 1
-                        ? 'Start Tier 1 Verification'
-                        : tier.number === 2
-                        ? 'Upgrade to Tier 2'
-                        : 'Upgrade to Tier 3'}
-                    </Text>
-
-                    <Text style={styles.buttonArrow}>›</Text>
-                  </TouchableOpacity>
-                )}
-
-              {/* LOCKED */}
-              {!loading && !available && (
-                <View style={styles.lockedButton}>
-                  <Text style={styles.lockedButtonText}>
-                    Complete Tier {tier.number - 1} First
+              {/* Verified */}
+              {!loading && (isCurrent || isVerified) && (
+                <View style={styles.verifiedFooter}>
+                  <Text style={styles.verifiedFooterText}>
+                    ✓ {isCurrent ? 'Current Tier' : 'Verified'}
                   </Text>
                 </View>
               )}
 
-              {/* CURRENT TIER */}
-              {!loading && isCurrent && (
-                <View style={styles.currentButton}>
-                  <Text style={styles.currentButtonText}>
-                    Current Tier ✓
+              {/* Upgrade button */}
+              {!loading && isAvailable && (
+                <TouchableOpacity
+                  style={styles.upgradeButton}
+                  activeOpacity={0.85}
+                  onPress={() => handleSelectTier(tier.number)}
+                >
+                  <Text style={styles.upgradeButtonText}>
+                    Upgrade to Tier {tier.number}
                   </Text>
-                </View>
+
+                  <Text style={styles.upgradeArrow}>›</Text>
+                </TouchableOpacity>
               )}
 
-              {/* VERIFIED TIER */}
-              {!loading && isVerified && (
-                <View style={styles.currentButton}>
-                  <Text style={styles.currentButtonText}>
-                    Verified ✓
+              {/* Locked */}
+              {!loading && isLocked && (
+                <View style={styles.lockedFooter}>
+                  <Text style={styles.lockedFooterText}>
+                    Complete Tier {tier.number - 1} first
                   </Text>
                 </View>
               )}
@@ -348,7 +376,7 @@ export default function KYCScreen({
           );
         })}
 
-        <View style={styles.footerSpace} />
+        <View style={styles.bottomSpace} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -360,73 +388,152 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
+  /* HEADER */
   header: {
     backgroundColor: WHITE,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 25,
   },
 
   backButton: {
     width: 42,
     height: 42,
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
 
-  backText: {
-    fontSize: 40,
+  backIcon: {
+    fontSize: 42,
+    lineHeight: 46,
     color: BLACK,
-    lineHeight: 44,
   },
 
   headerTitle: {
-    fontSize: 27,
+    fontSize: 32,
     fontWeight: '900',
     color: BLACK,
+    letterSpacing: -0.8,
   },
 
   headerSubtitle: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 23,
     color: MUTED,
-    marginTop: 8,
+    marginTop: 10,
+    maxWidth: 340,
   },
 
+  /* PAGE */
   scrollContent: {
     backgroundColor: BACKGROUND,
     paddingHorizontal: 16,
     paddingTop: 18,
-    paddingBottom: 24,
+    paddingBottom: 30,
+  },
+
+  /* SUMMARY */
+  summaryCard: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+
+  summaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  summaryIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#E8F5ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+
+  summaryIconText: {
+    color: GREEN,
+    fontSize: 28,
+    fontWeight: '900',
+  },
+
+  summaryInfo: {
+    flex: 1,
+  },
+
+  summaryLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    color: MUTED,
+  },
+
+  summaryLevel: {
+    fontSize: 21,
+    fontWeight: '900',
+    color: BLACK,
+    marginTop: 4,
+  },
+
+  summaryDivider: {
+    height: 1,
+    backgroundColor: BORDER,
+    marginTop: 18,
+  },
+
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingTop: 15,
+  },
+
+  refreshIcon: {
+    fontSize: 19,
+    color: GREEN,
+    fontWeight: '900',
+    marginRight: 8,
+  },
+
+  refreshText: {
+    fontSize: 13,
+    color: GREEN,
+    fontWeight: '800',
   },
 
   errorBox: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: '#FFF1F0',
+    backgroundColor: '#FFF2F0',
     borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
   },
 
   errorText: {
     color: '#B42318',
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 19,
   },
 
   retryButton: {
-    alignSelf: 'flex-start',
     marginTop: 8,
+    alignSelf: 'flex-start',
   },
 
   retryText: {
     color: '#B42318',
-    fontWeight: '800',
-    fontSize: 13,
+    fontWeight: '900',
   },
 
+  /* TIER CARD */
   tierCard: {
     backgroundColor: WHITE,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
@@ -434,141 +541,159 @@ const styles = StyleSheet.create({
   },
 
   currentTierCard: {
-    borderColor: '#B8DFC8',
-    borderWidth: 2,
+    borderColor: '#C7E3D0',
+    borderWidth: 1.5,
   },
 
-  verifiedTierCard: {
-    borderColor: BORDER,
+  availableTierCard: {
+    borderColor: '#A5D5B6',
+    borderWidth: 1.5,
   },
 
-  cardTop: {
+  tierHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
 
-  tierIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
+  tierNumberBox: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
     backgroundColor: '#F0F3F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  currentTierIcon: {
+  activeTierNumberBox: {
+    backgroundColor: '#E8F5ED',
+  },
+
+  availableTierNumberBox: {
     backgroundColor: GREEN,
   },
 
-  verifiedTierIcon: {
-    backgroundColor: '#E8F5EC',
-  },
-
-  tierIconText: {
-    fontSize: 24,
+  tierNumber: {
+    fontSize: 25,
     fontWeight: '900',
     color: MUTED,
   },
 
-  currentTierIconText: {
-    color: WHITE,
-  },
-
-  verifiedTierIconText: {
+  activeTierNumber: {
     color: GREEN,
   },
 
+  availableTierNumber: {
+    color: WHITE,
+  },
+
+  /* STATUS */
   statusBadge: {
-    borderRadius: 22,
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-    backgroundColor: '#F0F2EF',
+    borderRadius: 30,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
 
-  currentBadge: {
-    backgroundColor: '#E5F4E7',
+  verifiedBadge: {
+    backgroundColor: '#E8F5ED',
   },
 
-  completedBadge: {
-    backgroundColor: '#E8F5EC',
+  availableBadge: {
+    backgroundColor: '#E8F5ED',
   },
 
   lockedBadge: {
     backgroundColor: '#F0F2EF',
   },
 
-  statusText: {
-    fontSize: 11,
+  statusBadgeText: {
+    fontSize: 12,
     fontWeight: '800',
     color: MUTED,
   },
 
-  currentBadgeText: {
+  verifiedBadgeText: {
     color: DARK_GREEN,
   },
 
-  completedText: {
+  availableBadgeText: {
     color: DARK_GREEN,
   },
 
-  lockedText: {
-    color: MUTED,
-  },
-
+  /* TITLES */
   tierTitle: {
-    fontSize: 28,
+    fontSize: 29,
     fontWeight: '900',
     color: BLACK,
+    letterSpacing: -0.5,
   },
 
   tierSubtitle: {
     fontSize: 17,
-    fontWeight: '900',
+    fontWeight: '800',
     color: GREEN,
-    marginTop: 5,
+    marginTop: 4,
   },
 
+  /* LIMITS */
   limitsBox: {
-    backgroundColor: BACKGROUND,
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 20,
+    backgroundColor: '#F5F7F3',
+    borderRadius: 17,
+    paddingHorizontal: 16,
+    paddingVertical: 17,
+    marginTop: 22,
   },
 
-  limitsTitle: {
+  limitsHeading: {
     fontSize: 16,
     fontWeight: '900',
     color: BLACK,
-    marginBottom: 12,
+    marginBottom: 8,
   },
 
   limitRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 9,
+    justifyContent: 'space-between',
+    paddingVertical: 11,
   },
 
   limitLabel: {
-    fontSize: 13,
+    fontSize: 14,
     color: MUTED,
     flex: 1,
   },
 
   limitValue: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
     color: BLACK,
     marginLeft: 8,
   },
 
-  upgradeButton: {
-    backgroundColor: DARK_GREEN,
+  /* VERIFIED FOOTER */
+  verifiedFooter: {
+    backgroundColor: '#E8F5ED',
     borderRadius: 15,
     paddingVertical: 17,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+
+  verifiedFooterText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: DARK_GREEN,
+  },
+
+  /* UPGRADE */
+  upgradeButton: {
+    backgroundColor: DARK_GREEN,
+    borderRadius: 16,
+    minHeight: 58,
+    paddingHorizontal: 18,
     marginTop: 18,
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,42 +706,29 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  buttonArrow: {
+  upgradeArrow: {
     color: WHITE,
-    fontSize: 26,
-    fontWeight: '800',
-    marginLeft: 10,
+    fontSize: 27,
+    fontWeight: '700',
+    marginLeft: 12,
   },
 
-  lockedButton: {
+  /* LOCKED */
+  lockedFooter: {
     backgroundColor: '#F0F2EF',
     borderRadius: 15,
     paddingVertical: 17,
-    marginTop: 18,
     alignItems: 'center',
+    marginTop: 18,
   },
 
-  lockedButtonText: {
+  lockedFooterText: {
     color: MUTED,
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
 
-  currentButton: {
-    backgroundColor: '#E8F5EC',
-    borderRadius: 15,
-    paddingVertical: 17,
-    marginTop: 18,
-    alignItems: 'center',
-  },
-
-  currentButtonText: {
-    color: DARK_GREEN,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-
-  footerSpace: {
+  bottomSpace: {
     height: 10,
   },
 });
