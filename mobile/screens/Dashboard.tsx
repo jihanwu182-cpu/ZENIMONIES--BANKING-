@@ -38,6 +38,7 @@ type DashboardAction =
   | 'savings'
   | 'betting'
   | 'tv';
+  | 'kyc'
 
 type TabName =
   | 'Home'
@@ -589,14 +590,18 @@ export default function Dashboard({
 
           {/* ACCOUNT VERIFICATION */}
 
-          <View style={styles.verificationCard}>
-            <View style={styles.verificationIcon}>
-              <MaterialCommunityIcons
-                name="shield-check"
-                size={24}
-                color={colors.primary}
-              />
-            </View>
+          <TouchableOpacity
+  onPress={() => handleAction('kyc')}
+  activeOpacity={0.7}
+  accessibilityRole="button"
+  accessibilityLabel="Open account verification"
+>
+  <MaterialCommunityIcons
+    name="chevron-right"
+    size={27}
+    color={colors.primary}
+  />
+</TouchableOpacity>
 
             <View style={styles.verificationContent}>
               <Text style={styles.verificationTitle}>
