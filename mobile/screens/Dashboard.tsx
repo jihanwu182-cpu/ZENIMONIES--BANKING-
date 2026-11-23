@@ -381,115 +381,84 @@ export default function Dashboard({
       <View style={styles.container}>
         {/* HEADER */}
 
-        <View style={styles.header}>
-          <View style={styles.headerIdentity}>
-            <TouchableOpacity
-              style={styles.logoCircle}
-              onPress={handlePhotoUpload}
-              activeOpacity={0.8}
-              disabled={photoLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Upload or change profile photo"
-            >
-              {profilePhotoUri ? (
-                <Image
-                  source={{ uri: profilePhotoUri }}
-                  style={styles.profilePhoto}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.logoText}>Z</Text>
-              )}
-
-              {photoLoading && (
-                <View style={styles.photoLoadingOverlay}>
-                  <MaterialCommunityIcons
-                    name="loading"
-                    size={19}
-                    color="#FFFFFF"
-                  />
-                </View>
-              )}
-            </TouchableOpacity>
-
-           <View style={styles.headerIdentity}>
-  {/* PROFILE PHOTO + TIER BADGE */}
-  <View style={styles.profileColumn}>
-    <TouchableOpacity
-      style={styles.logoCircle}
-      onPress={handlePhotoUpload}
-      activeOpacity={0.8}
-      disabled={photoLoading}
-      accessibilityRole="button"
-      accessibilityLabel="Upload or change profile photo"
-    >
-      {profilePhotoUri ? (
-        <Image
-          source={{ uri: profilePhotoUri }}
-          style={styles.profilePhoto}
-          resizeMode="cover"
-        />
-      ) : (
-        <Text style={styles.logoText}>Z</Text>
-      )}
-
-      {photoLoading && (
-        <View style={styles.photoLoadingOverlay}>
-          <MaterialCommunityIcons
-            name="loading"
-            size={19}
-            color="#FFFFFF"
+<View style={styles.header}>
+  <View style={styles.headerIdentity}>
+    {/* PROFILE PHOTO + TIER */}
+    <View style={styles.profileColumn}>
+      <TouchableOpacity
+        style={styles.logoCircle}
+        onPress={handlePhotoUpload}
+        activeOpacity={0.8}
+        disabled={photoLoading}
+        accessibilityRole="button"
+        accessibilityLabel="Upload or change profile photo"
+      >
+        {profilePhotoUri ? (
+          <Image
+            source={{ uri: profilePhotoUri }}
+            style={styles.profilePhoto}
+            resizeMode="cover"
           />
-        </View>
-      )}
-    </TouchableOpacity>
+        ) : (
+          <Text style={styles.logoText}>Z</Text>
+        )}
 
-    {/* TIER BADGE UNDER PHOTO */}
-    <View style={styles.tierBadge}>
-      <MaterialCommunityIcons
-        name="shield-check"
-        size={11}
-        color="#FFFFFF"
-      />
-      <Text style={styles.tierBadgeText}>
-        {tierLabel}
+        {photoLoading && (
+          <View style={styles.photoLoadingOverlay}>
+            <MaterialCommunityIcons
+              name="loading"
+              size={19}
+              color="#FFFFFF"
+            />
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.tierBadge}>
+        <MaterialCommunityIcons
+          name="shield-check"
+          size={11}
+          color="#FFFFFF"
+        />
+        <Text style={styles.tierBadgeText}>
+          {tierLabel}
+        </Text>
+      </View>
+    </View>
+
+    {/* CUSTOMER INFORMATION */}
+    <View style={styles.customerIdentity}>
+      <Text style={styles.greeting}>Good day,</Text>
+
+      <Text
+        style={styles.customerName}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {displayName}
+      </Text>
+
+      <Text style={styles.brandCaption}>
+        DIGITAL BANKING
       </Text>
     </View>
   </View>
 
-  {/* CUSTOMER INFORMATION */}
-  <View style={styles.customerIdentity}>
-    <Text style={styles.greeting}>Good day,</Text>
-
-    <Text
-      style={styles.customerName}
-      numberOfLines={1}
-      ellipsizeMode="tail"
-    >
-      {displayName}
-    </Text>
-
-    <Text style={styles.brandCaption}>
-      DIGITAL BANKING
-    </Text>
-  </View>
+  {/* NOTIFICATIONS */}
+  <TouchableOpacity
+    style={styles.notificationButton}
+    onPress={() => handleNavigate('Notifications')}
+    accessibilityRole="button"
+    accessibilityLabel="Open notifications"
+  >
+    <MaterialCommunityIcons
+      name="bell-outline"
+      size={23}
+      color={colors.text}
+    />
+    <View style={styles.notificationDot} />
+  </TouchableOpacity>
 </View>
-
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => handleNavigate('Notifications')}
-            accessibilityRole="button"
-            accessibilityLabel="Open notifications"
-          >
-            <MaterialCommunityIcons
-              name="bell-outline"
-              size={23}
-              color={colors.text}
-            />
-
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
-        </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
