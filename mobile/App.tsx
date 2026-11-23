@@ -1830,7 +1830,10 @@ const [transferDraft, setTransferDraft] =
       setScreen('settings');
       return;
     }
-
+   if (tab === 'KYC') {
+      setScreen('kyc');
+    return;
+   } 
     Alert.alert(
       tab,
       `${tab} screen will be connected in the next development stage.`
