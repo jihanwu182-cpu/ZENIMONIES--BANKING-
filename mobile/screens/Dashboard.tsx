@@ -412,36 +412,68 @@ export default function Dashboard({
               )}
             </TouchableOpacity>
 
-            {/* TIER BADGE BESIDE PROFILE PHOTO */}
+           <View style={styles.headerIdentity}>
+  {/* PROFILE PHOTO + TIER BADGE */}
+  <View style={styles.profileColumn}>
+    <TouchableOpacity
+      style={styles.logoCircle}
+      onPress={handlePhotoUpload}
+      activeOpacity={0.8}
+      disabled={photoLoading}
+      accessibilityRole="button"
+      accessibilityLabel="Upload or change profile photo"
+    >
+      {profilePhotoUri ? (
+        <Image
+          source={{ uri: profilePhotoUri }}
+          style={styles.profilePhoto}
+          resizeMode="cover"
+        />
+      ) : (
+        <Text style={styles.logoText}>Z</Text>
+      )}
 
-            <View style={styles.tierBadge}>
-              <MaterialCommunityIcons
-                name="shield-check"
-                size={11}
-                color="#FFFFFF"
-              />
+      {photoLoading && (
+        <View style={styles.photoLoadingOverlay}>
+          <MaterialCommunityIcons
+            name="loading"
+            size={19}
+            color="#FFFFFF"
+          />
+        </View>
+      )}
+    </TouchableOpacity>
 
-              <Text style={styles.tierBadgeText}>
-                {tierLabel}
-              </Text>
-            </View>
+    {/* TIER BADGE UNDER PHOTO */}
+    <View style={styles.tierBadge}>
+      <MaterialCommunityIcons
+        name="shield-check"
+        size={11}
+        color="#FFFFFF"
+      />
+      <Text style={styles.tierBadgeText}>
+        {tierLabel}
+      </Text>
+    </View>
+  </View>
 
-            <View style={styles.customerIdentity}>
-              <Text style={styles.greeting}>Good day,</Text>
+  {/* CUSTOMER INFORMATION */}
+  <View style={styles.customerIdentity}>
+    <Text style={styles.greeting}>Good day,</Text>
 
-              <Text
-                style={styles.customerName}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {displayName}
-              </Text>
+    <Text
+      style={styles.customerName}
+      numberOfLines={1}
+      ellipsizeMode="tail"
+    >
+      {displayName}
+    </Text>
 
-              <Text style={styles.brandCaption}>
-                DIGITAL BANKING
-              </Text>
-            </View>
-          </View>
+    <Text style={styles.brandCaption}>
+      DIGITAL BANKING
+    </Text>
+  </View>
+</View>
 
           <TouchableOpacity
             style={styles.notificationButton}
