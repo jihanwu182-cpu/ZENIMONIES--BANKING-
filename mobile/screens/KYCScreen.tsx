@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -35,9 +36,7 @@ type TierStatus =
 
 type Tier = {
   number: number;
-  title: string;
   subtitle: string;
-  description: string;
   accountLimit: string;
   dailyLimit: string;
   requirements: string[];
@@ -46,10 +45,7 @@ type Tier = {
 const fallbackTiers: Tier[] = [
   {
     number: 1,
-    title: 'Identity Verification',
     subtitle: 'Basic Banking',
-    description:
-      'Complete Tier 1 using either your BVN or your NIN. You only need one successfully verified option.',
     accountLimit: '₦300,000',
     dailyLimit: '₦50,000',
     requirements: [
@@ -60,10 +56,7 @@ const fallbackTiers: Tier[] = [
   },
   {
     number: 2,
-    title: 'Identity Verification',
     subtitle: 'Enhanced Banking',
-    description:
-      'Complete your identity verification securely using the approved verification process.',
     accountLimit: '₦500,000',
     dailyLimit: '₦200,000',
     requirements: [
@@ -74,10 +67,7 @@ const fallbackTiers: Tier[] = [
   },
   {
     number: 3,
-    title: 'Proof of Address',
     subtitle: 'Full Banking',
-    description:
-      'Submit an approved proof of address and complete selfie/liveness verification to upgrade to Tier 3.',
     accountLimit: 'Unlimited',
     dailyLimit: '₦5,000,000',
     requirements: [
@@ -109,7 +99,7 @@ export default function KYCScreen({
     formatLevel(verificationLevel),
   );
 
-  const [tiers, setTiers] = useState<Tier[]>(fallbackTiers);
+  const [tiers] = useState<Tier[]>(fallbackTiers);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -126,9 +116,7 @@ export default function KYCScreen({
         setError('');
 
         if (!token) {
-          setError(
-            'Your session could not be found. Please log in again.',
-          );
+          setError('Your session could not be found. Please log in again.');
           return;
         }
 
@@ -150,7 +138,7 @@ export default function KYCScreen({
           );
         }
 
-        // Backend is the source of truth for the verified tier.
+        // Backend remains the source of truth for the verified tier.
         const kyc =
           data?.kyc ??
           data?.data?.kyc ??
@@ -160,14 +148,9 @@ export default function KYCScreen({
         const backendTier = formatLevel(kyc?.tier);
 
         setCurrentLevel(backendTier);
-
-        // Retain approved display limits until the exact backend
-        // limits response structure is confirmed.
-        setTiers(fallbackTiers);
       } catch (err: any) {
         setError(
-          err?.message ||
-            'Unable to load your verification status.',
+          err?.message || 'Unable to load verification status.',
         );
       } finally {
         setLoading(false);
@@ -183,9 +166,7 @@ export default function KYCScreen({
 
   const getTierStatus = (tier: number): TierStatus => {
     if (currentLevel >= tier) {
-      return tier === currentLevel
-        ? 'Current Tier'
-        : 'Completed';
+      return tier === currentLevel ? 'Current Tier' : 'Completed';
     }
 
     if (tier === currentLevel + 1) {
@@ -199,13 +180,21 @@ export default function KYCScreen({
     tier <= currentLevel + 1;
 
   const handleSelectTier = (tierNumber: number) => {
-    onSelect?.(
-      tierNumber === 1
-        ? 'Tier 1 BVN or NIN Verification'
-        : tierNumber === 2
-        ? 'Tier 2 Identity Verification'
-        : 'Tier 3 Proof of Address',
-    );
+    if (!onSelect) return;
+
+    switch (tierNumber) {
+      case 1:
+        onSelect('Tier 1 BVN or NIN Verification');
+        break;
+      case 2:
+        onSelect('Tier 2 Identity Verification');
+        break;
+      case 3:
+        onSelect('Tier 3 Proof of Address');
+        break;
+      default:
+        break;
+    }
   };
 
   return (
@@ -222,8 +211,7 @@ export default function KYCScreen({
         <Text style={styles.headerTitle}>Verification Tiers</Text>
 
         <Text style={styles.headerSubtitle}>
-          Upgrade your ZENIMONIES account to unlock more
-          banking features and higher limits.
+          Upgrade your account for higher limits and more features.
         </Text>
       </View>
 
@@ -231,6 +219,7 @@ export default function KYCScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* CURRENT VERIFICATION */}
         <View style={styles.currentCard}>
           <View style={styles.currentIcon}>
             <Text style={styles.currentIconText}>✓</Text>
@@ -241,9 +230,7 @@ export default function KYCScreen({
           </Text>
 
           <Text style={styles.currentDescription}>
-            Your verified level is retrieved from your ZENIMONIES
-            account. Choose your next eligible tier to view its
-            requirements.
+            View your verification level and upgrade your account.
           </Text>
 
           <View style={styles.currentLevelBadge}>
@@ -266,7 +253,7 @@ export default function KYCScreen({
               <ActivityIndicator color={GREEN} size="small" />
             ) : (
               <Text style={styles.refreshText}>
-                ↻ Refresh Verification Status
+                ↻ Refresh Status
               </Text>
             )}
           </TouchableOpacity>
@@ -285,6 +272,7 @@ export default function KYCScreen({
           )}
         </View>
 
+        {/* VERIFICATION TIERS */}
         {tiers.map((tier) => {
           const status = getTierStatus(tier.number);
           const available = isTierAvailable(tier.number);
@@ -344,10 +332,6 @@ export default function KYCScreen({
                 {tier.subtitle}
               </Text>
 
-              <Text style={styles.tierDescription}>
-                {tier.description}
-              </Text>
-
               <Text style={styles.requirementsTitle}>
                 Verification Requirements
               </Text>
@@ -364,6 +348,7 @@ export default function KYCScreen({
                 </View>
               ))}
 
+              {/* ACCOUNT LIMITS */}
               <View style={styles.limitsBox}>
                 <Text style={styles.limitsTitle}>
                   Account Limits
@@ -390,6 +375,7 @@ export default function KYCScreen({
                 </View>
               </View>
 
+              {/* UPGRADE BUTTON */}
               {!loading &&
                 available &&
                 !isCurrent &&
@@ -671,14 +657,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: GREEN,
     marginTop: 5,
-  },
-
-  tierDescription: {
-    fontSize: 14,
-    color: MUTED,
-    lineHeight: 23,
-    marginTop: 16,
-    marginBottom: 22,
   },
 
   requirementsTitle: {
