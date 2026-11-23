@@ -857,17 +857,22 @@ const createStyles = (
       borderBottomColor: colors.border,
     },
 
-    headerIdentity: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginRight: 12,
-    },
+  headerIdentity: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginRight: 12,
+},
 
-    customerIdentity: {
-      flex: 1,
-      marginLeft: 10,
-    },
+profileColumn: {
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+customerIdentity: {
+  flex: 1,
+  marginLeft: 10,
+},
 
     greeting: {
       fontSize: 11,
