@@ -2613,9 +2613,10 @@ if (screen === 'kyc' && session) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      <KYCScreen
-        onBack={() => setScreen('home')}
-      />
+   <KYCScreen
+     token={session.token}
+     onBack={() => setScreen('home')}
+   />
     </SafeAreaView>
   );
 }
