@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 import {
@@ -46,7 +45,8 @@ type TabName =
   | 'Wallet'
   | 'Profile'
   | 'Settings'
-  | 'Notifications';
+  | 'Notifications'
+  | 'KYC';
 
 type Transaction = {
   id: string;
@@ -381,84 +381,91 @@ export default function Dashboard({
       <View style={styles.container}>
         {/* HEADER */}
 
-<View style={styles.header}>
-  <View style={styles.headerIdentity}>
-    {/* PROFILE PHOTO + TIER */}
-    <View style={styles.profileColumn}>
-      <TouchableOpacity
-        style={styles.logoCircle}
-        onPress={handlePhotoUpload}
-        activeOpacity={0.8}
-        disabled={photoLoading}
-        accessibilityRole="button"
-        accessibilityLabel="Upload or change profile photo"
-      >
-        {profilePhotoUri ? (
-          <Image
-            source={{ uri: profilePhotoUri }}
-            style={styles.profilePhoto}
-            resizeMode="cover"
-          />
-        ) : (
-          <Text style={styles.logoText}>Z</Text>
-        )}
+        <View style={styles.header}>
+          <View style={styles.headerIdentity}>
+            {/* PROFILE PHOTO + TIER */}
+            <View style={styles.profileColumn}>
+              <TouchableOpacity
+                style={styles.logoCircle}
+                onPress={handlePhotoUpload}
+                activeOpacity={0.8}
+                disabled={photoLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Upload or change profile photo"
+              >
+                {profilePhotoUri ? (
+                  <Image
+                    source={{ uri: profilePhotoUri }}
+                    style={styles.profilePhoto}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.logoText}>Z</Text>
+                )}
 
-        {photoLoading && (
-          <View style={styles.photoLoadingOverlay}>
-            <MaterialCommunityIcons
-              name="loading"
-              size={19}
-              color="#FFFFFF"
-            />
+                {photoLoading && (
+                  <View style={styles.photoLoadingOverlay}>
+                    <MaterialCommunityIcons
+                      name="loading"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* CLICKABLE TIER BADGE — OPENS KYC DIRECTLY */}
+              <TouchableOpacity
+                style={styles.tierBadge}
+                onPress={() => handleNavigate('KYC')}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Open KYC verification, ${tierLabel}`}
+              >
+                <MaterialCommunityIcons
+                  name="shield-check"
+                  size={11}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.tierBadgeText}>
+                  {tierLabel}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* CUSTOMER INFORMATION */}
+            <View style={styles.customerIdentity}>
+              <Text style={styles.greeting}>Good day,</Text>
+
+              <Text
+                style={styles.customerName}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {displayName}
+              </Text>
+
+              <Text style={styles.brandCaption}>
+                DIGITAL BANKING
+              </Text>
+            </View>
           </View>
-        )}
-      </TouchableOpacity>
 
-      <View style={styles.tierBadge}>
-        <MaterialCommunityIcons
-          name="shield-check"
-          size={11}
-          color="#FFFFFF"
-        />
-        <Text style={styles.tierBadgeText}>
-          {tierLabel}
-        </Text>
-      </View>
-    </View>
-
-    {/* CUSTOMER INFORMATION */}
-    <View style={styles.customerIdentity}>
-      <Text style={styles.greeting}>Good day,</Text>
-
-      <Text
-        style={styles.customerName}
-        numberOfLines={1}
-        ellipsizeMode="tail"
-      >
-        {displayName}
-      </Text>
-
-      <Text style={styles.brandCaption}>
-        DIGITAL BANKING
-      </Text>
-    </View>
-  </View>
-
-  {/* NOTIFICATIONS */}
-  <TouchableOpacity
-    style={styles.notificationButton}
-    onPress={() => handleNavigate('Notifications')}
-    accessibilityRole="button"
-    accessibilityLabel="Open notifications"
-  >
-    <MaterialCommunityIcons
-      name="bell-outline"
-      size={23}
-      color={colors.text}
-    />
-    <View style={styles.notificationDot} />
-  </TouchableOpacity>
-</View>
+          {/* NOTIFICATIONS */}
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => handleNavigate('Notifications')}
+            accessibilityRole="button"
+            accessibilityLabel="Open notifications"
+          >
+            <MaterialCommunityIcons
+              name="bell-outline"
+              size={23}
+              color={colors.text}
+            />
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+        </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -787,7 +794,7 @@ export default function Dashboard({
                   <View style={styles.activeIndicator} />
                 )}
               </TouchableOpacity>
-          );
+            );
           })}
         </View>
       </View>
@@ -826,22 +833,22 @@ const createStyles = (
       borderBottomColor: colors.border,
     },
 
-  headerIdentity: {
-  flex: 1,
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginRight: 12,
-},
+    headerIdentity: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginRight: 12,
+    },
 
-profileColumn: {
-  alignItems: 'center',
-  justifyContent: 'center',
-},
+    profileColumn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-customerIdentity: {
-  flex: 1,
-  marginLeft: 10,
-},
+    customerIdentity: {
+      flex: 1,
+      marginLeft: 10,
+    },
 
     greeting: {
       fontSize: 11,
@@ -927,7 +934,7 @@ customerIdentity: {
       paddingHorizontal: 7,
       paddingVertical: 4,
       borderRadius: 8,
-      marginLeft: 7,
+      marginTop: 5,
     },
 
     tierBadgeText: {
