@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -9,7 +8,6 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GREEN = '#07803F';
 const DARK_GREEN = '#056B34';
@@ -22,6 +20,7 @@ const BORDER = '#E9EDE5';
 const API_BASE = 'https://zenimonies-banking.onrender.com/api';
 
 type Props = {
+  token: string;
   onBack?: () => void;
   onSelect?: (section: string) => void;
   verificationLevel?: string | number;
@@ -96,61 +95,12 @@ const formatLevel = (value?: string | number) => {
   );
 
   if (!Number.isFinite(parsed)) return 0;
+
   return Math.max(0, Math.min(3, Math.floor(parsed)));
 };
 
-const isVerifiedStatus = (value: any) => {
-  if (typeof value === 'boolean') return value;
-
-  const status = String(value ?? '').toLowerCase().trim();
-
-  return [
-    'verified',
-    'approved',
-    'success',
-    'completed',
-    'passed',
-    'true',
-  ].includes(status);
-};
-
-const formatLimit = (value: any, fallback: string) => {
-  if (value === undefined || value === null || value === '') {
-    return fallback;
-  }
-
-  if (
-    typeof value === 'string' &&
-    (value.toLowerCase() === 'unlimited' ||
-      value.toLowerCase().includes('unlimited'))
-  ) {
-    return 'Unlimited';
-  }
-
-  const numeric = Number(value);
-
-  if (!Number.isFinite(numeric)) {
-    return String(value);
-  }
-
-  if (numeric === 0) {
-    return fallback;
-  }
-
-  return `₦${numeric.toLocaleString('en-NG')}`;
-};
-
-const getValue = (object: any, keys: string[]) => {
-  for (const key of keys) {
-    if (object?.[key] !== undefined && object?.[key] !== null) {
-      return object[key];
-    }
-  }
-
-  return undefined;
-};
-
 export default function KYCScreen({
+  token,
   onBack,
   onSelect,
   verificationLevel = 0,
@@ -158,118 +108,74 @@ export default function KYCScreen({
   const [currentLevel, setCurrentLevel] = useState(
     formatLevel(verificationLevel),
   );
+
   const [tiers, setTiers] = useState<Tier[]>(fallbackTiers);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchKycStatus = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+  const fetchKycStatus = useCallback(
+    async (isRefresh = false) => {
+      try {
+        if (isRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
 
-      setError('');
+        setError('');
 
-      const token =
-        (await AsyncStorage.getItem('zenimonies_auth_token')) ||
-        (await AsyncStorage.getItem('zenimonies_token'));
+        if (!token) {
+          setError(
+            'Your session could not be found. Please log in again.',
+          );
+          return;
+        }
 
-      if (!token) {
-        setError('Your session could not be found. Please log in again.');
-        return;
-      }
+        const response = await fetch(`${API_BASE}/kyc/status`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
 
-      const response = await fetch(`${API_BASE}/kyc/status`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
+        const data = await response.json();
 
-      const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              data?.error ||
+              'Unable to load verification status.',
+          );
+        }
 
-      if (!response.ok) {
-        throw new Error(
-          data?.message || data?.error || 'Unable to load verification status.',
+        // Backend is the source of truth for the verified tier.
+        const kyc =
+          data?.kyc ??
+          data?.data?.kyc ??
+          data?.data ??
+          data;
+
+        const backendTier = formatLevel(kyc?.tier);
+
+        setCurrentLevel(backendTier);
+
+        // Retain approved display limits until the exact backend
+        // limits response structure is confirmed.
+        setTiers(fallbackTiers);
+      } catch (err: any) {
+        setError(
+          err?.message ||
+            'Unable to load your verification status.',
         );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      // The backend is the source of truth for the verified tier.
-      const kyc = data?.kyc ?? data?.data?.kyc ?? data?.data ?? data;
-      const backendTier = formatLevel(kyc?.tier);
-
-      setCurrentLevel(backendTier);
-
-      const limits = data?.limits ?? data?.data?.limits ?? kyc?.limits ?? {};
-
-      const accountLimits = [
-        getValue(limits, [
-          'account_balance_limit',
-          'balance_limit',
-          'accountLimit',
-          'max_balance',
-        ]),
-        getValue(limits, [
-          'account_balance_limit',
-          'balance_limit',
-          'accountLimit',
-          'max_balance',
-        ]),
-        getValue(limits, [
-          'account_balance_limit',
-          'balance_limit',
-          'accountLimit',
-          'max_balance',
-        ]),
-      ];
-
-      const dailyLimits = [
-        getValue(limits, [
-          'daily_transfer_limit',
-          'daily_limit',
-          'transfer_limit',
-          'dailyTransferLimit',
-        ]),
-        getValue(limits, [
-          'daily_transfer_limit',
-          'daily_limit',
-          'transfer_limit',
-          'dailyTransferLimit',
-        ]),
-        getValue(limits, [
-          'daily_transfer_limit',
-          'daily_limit',
-          'transfer_limit',
-          'dailyTransferLimit',
-        ]),
-      ];
-
-      setTiers(
-        fallbackTiers.map((tier, index) => ({
-          ...tier,
-          accountLimit: formatLimit(
-            accountLimits[index],
-            tier.accountLimit,
-          ),
-          dailyLimit: formatLimit(
-            dailyLimits[index],
-            tier.dailyLimit,
-          ),
-        })),
-      );
-    } catch (err: any) {
-      setError(
-        err?.message || 'Unable to load your verification status.',
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    },
+    [token],
+  );
 
   useEffect(() => {
     fetchKycStatus();
@@ -359,13 +265,16 @@ export default function KYCScreen({
             {refreshing ? (
               <ActivityIndicator color={GREEN} size="small" />
             ) : (
-              <Text style={styles.refreshText}>↻ Refresh Verification Status</Text>
+              <Text style={styles.refreshText}>
+                ↻ Refresh Verification Status
+              </Text>
             )}
           </TouchableOpacity>
 
           {!!error && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
+
               <TouchableOpacity
                 onPress={() => fetchKycStatus(true)}
                 style={styles.retryButton}
@@ -427,9 +336,13 @@ export default function KYCScreen({
                 </View>
               </View>
 
-              <Text style={styles.tierTitle}>Tier {tier.number}</Text>
+              <Text style={styles.tierTitle}>
+                Tier {tier.number}
+              </Text>
 
-              <Text style={styles.tierSubtitle}>{tier.subtitle}</Text>
+              <Text style={styles.tierSubtitle}>
+                {tier.subtitle}
+              </Text>
 
               <Text style={styles.tierDescription}>
                 {tier.description}
@@ -452,10 +365,15 @@ export default function KYCScreen({
               ))}
 
               <View style={styles.limitsBox}>
-                <Text style={styles.limitsTitle}>Account Limits</Text>
+                <Text style={styles.limitsTitle}>
+                  Account Limits
+                </Text>
 
                 <View style={styles.limitRow}>
-                  <Text style={styles.limitLabel}>Account limit</Text>
+                  <Text style={styles.limitLabel}>
+                    Account limit
+                  </Text>
+
                   <Text style={styles.limitValue}>
                     {tier.accountLimit}
                   </Text>
@@ -465,6 +383,7 @@ export default function KYCScreen({
                   <Text style={styles.limitLabel}>
                     Daily transfer limit
                   </Text>
+
                   <Text style={styles.limitValue}>
                     {tier.dailyLimit}
                   </Text>
