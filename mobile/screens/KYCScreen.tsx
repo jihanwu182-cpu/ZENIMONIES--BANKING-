@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 
 const GREEN = '#07803F';
-const DARK_GREEN = '#527900';
+const DARK_GREEN = '#056B34';
 const BLACK = '#172018';
 const MUTED = '#858B83';
 const BACKGROUND = '#F6F8F3';
