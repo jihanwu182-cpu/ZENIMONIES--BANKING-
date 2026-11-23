@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 import {
@@ -37,8 +36,8 @@ type DashboardAction =
   | 'cards'
   | 'savings'
   | 'betting'
-  | 'tv';
-  | 'kyc'
+  | 'tv'
+  | 'kyc';
 
 type TabName =
   | 'Home'
@@ -82,8 +81,6 @@ type IconName =
 
 // ======================================================
 // STATIC DASHBOARD DATA
-// Kept outside the component to avoid recreating arrays
-// on every render.
 // ======================================================
 
 const quickActions: {
@@ -101,11 +98,11 @@ const quickActions: {
     icon: 'bank-outline',
     action: 'transfer',
   },
-{
-  title: 'Send to\nZENIMONIES',
-  icon: 'send',
-  action: 'internal-transfer',
-},
+  {
+    title: 'Send to\nZENIMONIES',
+    icon: 'send',
+    action: 'internal-transfer',
+  },
   {
     title: 'Withdraw',
     icon: 'arrow-down',
@@ -311,8 +308,6 @@ export default function Dashboard({
         );
       }
 
-      // Display the permanent database-stored image
-      // returned by the backend.
       onProfilePhotoChange?.(data.profile_photo);
 
       Alert.alert(
@@ -591,17 +586,19 @@ export default function Dashboard({
           {/* ACCOUNT VERIFICATION */}
 
           <TouchableOpacity
-  onPress={() => handleAction('kyc')}
-  activeOpacity={0.7}
-  accessibilityRole="button"
-  accessibilityLabel="Open account verification"
->
-  <MaterialCommunityIcons
-    name="chevron-right"
-    size={27}
-    color={colors.primary}
-  />
-</TouchableOpacity>
+            style={styles.verificationCard}
+            onPress={() => handleAction('kyc')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Open account verification"
+          >
+            <View style={styles.verificationIcon}>
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={24}
+                color={colors.primary}
+              />
+            </View>
 
             <View style={styles.verificationContent}>
               <Text style={styles.verificationTitle}>
@@ -619,21 +616,12 @@ export default function Dashboard({
               </Text>
             </View>
 
-            <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  'Verification',
-                  'Your KYC verification screen will open here.'
-                )
-              }
-            >
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={27}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={27}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
 
           {/* SAVINGS */}
 
@@ -780,8 +768,7 @@ export default function Dashboard({
 
         <View style={styles.bottomNavigation}>
           {navigation.map((item) => {
-            const active =
-              item.title === 'Home';
+            const active = item.title === 'Home';
 
             return (
               <TouchableOpacity
