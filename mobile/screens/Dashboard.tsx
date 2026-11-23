@@ -36,7 +36,8 @@ type DashboardAction =
   | 'cards'
   | 'savings'
   | 'betting'
-  | 'tv';
+  | 'tv'
+  | 'kyc':
 
 type TabName =
   | 'Home'
@@ -417,7 +418,7 @@ export default function Dashboard({
               {/* CLICKABLE TIER BADGE — OPENS KYC DIRECTLY */}
               <TouchableOpacity
                 style={styles.tierBadge}
-                onPress={() => handleNavigate('KYC')}
+                onPress={() => handleAction('kyc')}
                 activeOpacity={0.75}
                 accessibilityRole="button"
                 accessibilityLabel={`Open KYC verification, ${tierLabel}`}
