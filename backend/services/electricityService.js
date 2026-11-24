@@ -384,7 +384,7 @@ async function purchaseElectricity({
     billersCode,
     variation_code: normalizedMeterType,
     amount: purchaseAmount,
-    phone: b
+    phone: normalizedPhone,
   });
 
   return {
