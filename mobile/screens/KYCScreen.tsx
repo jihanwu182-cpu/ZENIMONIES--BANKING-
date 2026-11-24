@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   paddingHorizontal: 15,
   paddingTop: 13,
   paddingBottom: 12,
-  marginBottom: 13,
+  marginBottom: 16,
 },
 
 brandText: {
