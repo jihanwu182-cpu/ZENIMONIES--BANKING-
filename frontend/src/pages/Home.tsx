@@ -3,55 +3,48 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const GREEN = '#07803F';
-const DARK_GREEN = '#056B34';
-const BLACK = '#172018';
+const DARK = '#17251C';
 const MUTED = '#68736B';
-const LIGHT = '#F5F8F5';
 const WHITE = '#FFFFFF';
-const BORDER = '#E6ECE7';
+const BORDER = '#E8EDE9';
+const LIGHT = '#F8FAF8';
 
 const services = [
   {
-    number: '01',
+    icon: '↗',
     title: 'Bank Transfers',
     description:
-      'Send money with a simple, convenient banking experience.',
-    icon: '↗',
+      'Convenient money transfers for everyday personal and business banking activities.',
   },
   {
-    number: '02',
+    icon: '▤',
     title: 'Airtime & Data',
     description:
-      'Purchase airtime and mobile data through one convenient platform.',
-    icon: '▤',
+      'Purchase airtime and mobile data through the ZENIMONIES platform.',
   },
   {
-    number: '03',
+    icon: '▣',
     title: 'Bill Payments',
     description:
       'Pay supported electricity and television subscription bills.',
-    icon: '▣',
   },
   {
-    number: '04',
+    icon: '◉',
     title: 'Personal Banking',
     description:
       'Access everyday banking services through your personal account.',
-    icon: '◉',
   },
   {
-    number: '05',
+    icon: '▥',
     title: 'Business Banking',
     description:
-      'Banking tools designed to support business financial activities.',
-    icon: '▥',
+      'Digital banking services designed for business financial activities.',
   },
   {
-    number: '06',
+    icon: '▦',
     title: 'POS Services',
     description:
-      'Business POS services designed to support in-person payments.',
-    icon: '▦',
+      'POS services designed to support business and in-person payments.',
   },
 ];
 
@@ -63,11 +56,15 @@ const Home: React.FC = () => {
           box-sizing: border-box;
         }
 
+        html {
+          scroll-behavior: smooth;
+        }
+
         .zen-home {
           width: 100%;
           min-height: 100vh;
           background: ${WHITE};
-          color: ${BLACK};
+          color: ${DARK};
           font-family: Inter, -apple-system, BlinkMacSystemFont,
             "Segoe UI", sans-serif;
           overflow: hidden;
@@ -78,11 +75,13 @@ const Home: React.FC = () => {
           margin: 0 auto;
         }
 
+        /* HEADER */
+
         .zen-header {
           position: sticky;
           top: 0;
           z-index: 100;
-          background: rgba(255,255,255,0.96);
+          background: rgba(255,255,255,.97);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid ${BORDER};
         }
@@ -92,18 +91,18 @@ const Home: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 28px;
+          gap: 25px;
         }
 
         .zen-logo {
           display: inline-flex;
           align-items: center;
           gap: 10px;
-          text-decoration: none;
-          color: ${DARK_GREEN};
-          font-size: 23px;
+          color: ${DARK};
+          font-size: 22px;
           font-weight: 850;
           letter-spacing: -1px;
+          text-decoration: none;
         }
 
         .zen-logo-mark {
@@ -111,9 +110,9 @@ const Home: React.FC = () => {
           height: 38px;
           display: grid;
           place-items: center;
-          border-radius: 12px;
-          background: ${GREEN};
-          color: white;
+          border-radius: 11px;
+          background: #EAF4EC;
+          color: ${GREEN};
           font-size: 22px;
           font-weight: 900;
         }
@@ -125,10 +124,10 @@ const Home: React.FC = () => {
         }
 
         .zen-nav-links a {
-          color: #435047;
+          color: #47534A;
           text-decoration: none;
-          font-size: 14px;
-          font-weight: 600;
+          font-size: 13px;
+          font-weight: 650;
           transition: color .2s ease;
         }
 
@@ -137,22 +136,21 @@ const Home: React.FC = () => {
         }
 
         .zen-nav-contact {
-          color: white !important;
-          background: ${GREEN};
-          padding: 12px 19px;
-          border-radius: 9px;
+          padding: 11px 18px;
+          border: 1px solid ${GREEN};
+          border-radius: 7px;
+          color: ${GREEN} !important;
         }
 
         .zen-nav-contact:hover {
-          background: ${DARK_GREEN};
+          background: #F2F8F3;
         }
 
+        /* HERO */
+
         .zen-hero {
-          position: relative;
-          background:
-            radial-gradient(circle at 85% 20%, rgba(120,169,0,.15), transparent 30%),
-            linear-gradient(135deg, #F5FAF5 0%, #FFFFFF 55%, #EDF7EE 100%);
-          padding: 100px 0 90px;
+          padding: 95px 0 85px;
+          background: ${WHITE};
         }
 
         .zen-hero-grid {
@@ -167,13 +165,9 @@ const Home: React.FC = () => {
           align-items: center;
           gap: 9px;
           color: ${GREEN};
-          background: #E8F4EB;
-          border: 1px solid #D7EBDD;
-          border-radius: 30px;
-          padding: 9px 14px;
           font-size: 12px;
           font-weight: 800;
-          letter-spacing: 1px;
+          letter-spacing: 1.4px;
           text-transform: uppercase;
         }
 
@@ -186,9 +180,9 @@ const Home: React.FC = () => {
 
         .zen-hero h1 {
           max-width: 650px;
-          margin: 25px 0 22px;
-          font-size: clamp(42px, 5.5vw, 68px);
-          line-height: 1.08;
+          margin: 24px 0 22px;
+          font-size: clamp(42px, 5.3vw, 66px);
+          line-height: 1.09;
           letter-spacing: -3px;
           font-weight: 850;
         }
@@ -199,27 +193,27 @@ const Home: React.FC = () => {
 
         .zen-hero-description {
           max-width: 550px;
-          color: ${MUTED};
-          font-size: 17px;
-          line-height: 1.8;
           margin: 0;
+          color: ${MUTED};
+          font-size: 16px;
+          line-height: 1.9;
         }
 
         .zen-hero-actions {
           display: flex;
           flex-wrap: wrap;
-          gap: 14px;
-          margin-top: 34px;
+          gap: 13px;
+          margin-top: 32px;
         }
 
         .zen-button {
-          min-height: 49px;
+          min-height: 48px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 0 22px;
-          border-radius: 9px;
-          font-size: 14px;
+          padding: 0 21px;
+          border-radius: 7px;
+          font-size: 13px;
           font-weight: 750;
           text-decoration: none;
           transition: all .2s ease;
@@ -232,13 +226,13 @@ const Home: React.FC = () => {
         }
 
         .zen-button-primary:hover {
-          background: ${DARK_GREEN};
+          background: #056B34;
           transform: translateY(-2px);
         }
 
         .zen-button-secondary {
           background: white;
-          color: ${BLACK};
+          color: ${DARK};
           border: 1px solid ${BORDER};
         }
 
@@ -248,27 +242,19 @@ const Home: React.FC = () => {
         }
 
         .zen-hero-note {
-          margin-top: 25px;
-          color: #7A857D;
+          margin-top: 24px;
+          color: #879189;
           font-size: 12px;
-          line-height: 1.6;
         }
+
+        /* PHONE MOCKUP */
 
         .zen-visual {
           position: relative;
-          min-height: 430px;
+          min-height: 420px;
           display: flex;
           align-items: center;
           justify-content: center;
-        }
-
-        .zen-visual-glow {
-          position: absolute;
-          width: 330px;
-          height: 330px;
-          border-radius: 50%;
-          background: #DCEEDD;
-          filter: blur(2px);
         }
 
         .zen-phone {
@@ -276,127 +262,131 @@ const Home: React.FC = () => {
           z-index: 2;
           width: 260px;
           min-height: 390px;
-          padding: 16px;
-          background: #17251C;
-          border: 7px solid #25372B;
-          border-radius: 35px;
-          box-shadow: 0 35px 70px rgba(24,65,38,.22);
-          transform: rotate(-5deg);
+          padding: 15px;
+          background: #FFFFFF;
+          border: 7px solid #27342B;
+          border-radius: 34px;
+          box-shadow: 0 25px 65px rgba(20,40,25,.13);
+          transform: rotate(-4deg);
         }
 
         .zen-phone-screen {
           min-height: 350px;
-          background: #F7FAF7;
-          border-radius: 23px;
-          padding: 20px 15px;
+          padding: 20px 14px;
+          background: #FFFFFF;
+          border-radius: 20px;
           overflow: hidden;
         }
 
         .zen-phone-top {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          color: ${DARK_GREEN};
-          font-size: 13px;
+          justify-content: space-between;
+          color: ${GREEN};
+          font-size: 12px;
           font-weight: 850;
         }
 
         .zen-phone-greeting {
-          margin-top: 30px;
-          font-size: 12px;
+          margin-top: 28px;
           color: ${MUTED};
+          font-size: 11px;
         }
 
-        .zen-phone-balance {
-          margin-top: 12px;
-          padding: 18px;
-          color: white;
-          background: linear-gradient(135deg, ${GREEN}, #0A5F32);
-          border-radius: 15px;
+        .zen-phone-account {
+          margin-top: 13px;
+          padding: 17px;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
+          background: ${LIGHT};
         }
 
-        .zen-phone-balance small {
-          opacity: .8;
-          font-size: 10px;
+        .zen-phone-account small {
+          color: ${MUTED};
+          font-size: 9px;
         }
 
-        .zen-phone-balance strong {
+        .zen-phone-account strong {
           display: block;
-          margin-top: 8px;
-          font-size: 22px;
-          letter-spacing: -.5px;
+          margin-top: 9px;
+          color: ${DARK};
+          font-size: 18px;
         }
 
         .zen-phone-label {
-          margin-top: 23px;
-          font-size: 12px;
+          margin-top: 22px;
+          font-size: 11px;
           font-weight: 800;
         }
 
         .zen-phone-actions {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 7px;
+          gap: 6px;
           margin-top: 13px;
         }
 
         .zen-phone-action {
           text-align: center;
-          font-size: 9px;
-          color: #58645B;
+          color: ${MUTED};
+          font-size: 8px;
         }
 
         .zen-phone-action span {
-          width: 37px;
-          height: 37px;
+          width: 35px;
+          height: 35px;
           display: grid;
           place-items: center;
           margin: 0 auto 6px;
-          border-radius: 11px;
-          background: #E7F2E8;
+          background: #F0F5F1;
           color: ${GREEN};
-          font-size: 17px;
+          border-radius: 10px;
+          font-size: 16px;
           font-weight: 800;
         }
 
-        .zen-phone-transaction {
+        .zen-phone-row {
           display: flex;
           justify-content: space-between;
-          align-items: center;
           padding: 11px 0;
           border-bottom: 1px solid ${BORDER};
-          font-size: 10px;
+          font-size: 9px;
         }
 
-        .zen-phone-transaction strong {
-          color: ${DARK_GREEN};
+        .zen-phone-row span:last-child {
+          color: ${GREEN};
         }
 
         .zen-floating-card {
           position: absolute;
           z-index: 3;
-          right: -5px;
-          bottom: 45px;
-          padding: 16px 19px;
+          right: -4px;
+          bottom: 38px;
+          padding: 16px 18px;
           background: white;
           border: 1px solid ${BORDER};
-          border-radius: 14px;
-          box-shadow: 0 15px 35px rgba(20,50,30,.10);
+          border-radius: 10px;
+          box-shadow: 0 12px 30px rgba(20,40,25,.08);
         }
 
         .zen-floating-card strong {
           display: block;
           color: ${GREEN};
-          font-size: 14px;
+          font-size: 13px;
         }
 
         .zen-floating-card span {
+          display: block;
+          margin-top: 5px;
           color: ${MUTED};
-          font-size: 11px;
+          font-size: 10px;
         }
 
+        /* GENERAL SECTIONS */
+
         .zen-section {
-          padding: 88px 0;
+          padding: 85px 0;
+          background: white;
         }
 
         .zen-section-light {
@@ -404,14 +394,14 @@ const Home: React.FC = () => {
         }
 
         .zen-section-heading {
-          max-width: 680px;
-          margin: 0 auto 48px;
+          max-width: 690px;
+          margin: 0 auto 45px;
           text-align: center;
         }
 
         .zen-section-kicker {
           color: ${GREEN};
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 850;
           letter-spacing: 1.5px;
           text-transform: uppercase;
@@ -419,7 +409,7 @@ const Home: React.FC = () => {
 
         .zen-section-heading h2 {
           margin: 15px 0;
-          font-size: clamp(30px, 4vw, 43px);
+          font-size: clamp(29px, 4vw, 42px);
           line-height: 1.2;
           letter-spacing: -1.5px;
         }
@@ -427,111 +417,115 @@ const Home: React.FC = () => {
         .zen-section-heading p {
           margin: 0;
           color: ${MUTED};
-          font-size: 15px;
-          line-height: 1.8;
+          font-size: 14px;
+          line-height: 1.9;
         }
+
+        /* ABOUT INTRODUCTION */
 
         .zen-intro-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 70px;
           align-items: center;
+          gap: 70px;
         }
 
         .zen-intro-copy h2 {
           margin: 14px 0 20px;
-          font-size: 39px;
+          font-size: 38px;
           line-height: 1.2;
           letter-spacing: -1.5px;
         }
 
         .zen-intro-copy p {
           color: ${MUTED};
+          font-size: 14px;
           line-height: 1.9;
-          font-size: 15px;
         }
 
-        .zen-intro-panel {
-          padding: 36px;
+        .zen-intro-visual {
+          min-height: 270px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 35px;
           background: white;
           border: 1px solid ${BORDER};
-          border-radius: 20px;
-          box-shadow: 0 15px 40px rgba(25,60,35,.05);
+          border-radius: 13px;
         }
 
-        .zen-intro-panel-mark {
-          width: 52px;
-          height: 52px;
+        .zen-intro-visual-mark {
+          width: 48px;
+          height: 48px;
           display: grid;
           place-items: center;
-          color: white;
-          background: ${GREEN};
-          border-radius: 15px;
-          font-size: 25px;
+          background: #EEF5EF;
+          color: ${GREEN};
+          border-radius: 12px;
+          font-size: 24px;
           font-weight: 900;
         }
 
-        .zen-intro-panel h3 {
+        .zen-intro-visual h3 {
           margin: 22px 0 10px;
-          font-size: 22px;
+          font-size: 21px;
         }
 
-        .zen-intro-panel p {
-          color: ${MUTED};
-          line-height: 1.8;
-          font-size: 14px;
-        }
-
-        .zen-services-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-        }
-
-        .zen-service-card {
-          padding: 28px;
-          background: white;
-          border: 1px solid ${BORDER};
-          border-radius: 16px;
-          transition: all .25s ease;
-        }
-
-        .zen-service-card:hover {
-          transform: translateY(-5px);
-          border-color: #B9DCC2;
-          box-shadow: 0 18px 40px rgba(20,70,35,.07);
-        }
-
-        .zen-service-number {
-          color: #A5B1A8;
-          font-size: 12px;
-          font-weight: 800;
-        }
-
-        .zen-service-icon {
-          width: 49px;
-          height: 49px;
-          display: grid;
-          place-items: center;
-          margin: 20px 0;
-          color: ${GREEN};
-          background: #EAF5EC;
-          border-radius: 13px;
-          font-size: 23px;
-          font-weight: 800;
-        }
-
-        .zen-service-card h3 {
-          margin: 0 0 10px;
-          font-size: 18px;
-        }
-
-        .zen-service-card p {
+        .zen-intro-visual p {
           margin: 0;
           color: ${MUTED};
           font-size: 13px;
           line-height: 1.8;
         }
+
+        /* SERVICES */
+
+        .zen-services-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 18px;
+        }
+
+        .zen-service-card {
+          padding: 27px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 11px;
+          transition: all .2s ease;
+        }
+
+        .zen-service-card:hover {
+          border-color: #B9D8C0;
+          box-shadow: 0 12px 30px rgba(20,50,30,.05);
+          transform: translateY(-3px);
+        }
+
+        .zen-service-icon {
+          width: 43px;
+          height: 43px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 20px;
+          color: ${GREEN};
+          background: #F0F6F1;
+          border-radius: 10px;
+          font-size: 20px;
+          font-weight: 800;
+        }
+
+        .zen-service-card h3 {
+          margin: 0 0 10px;
+          font-size: 16px;
+        }
+
+        .zen-service-card p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 12px;
+          line-height: 1.8;
+        }
+
+        /* BANKING SOLUTIONS */
 
         .zen-banking-grid {
           display: grid;
@@ -540,98 +534,83 @@ const Home: React.FC = () => {
         }
 
         .zen-banking-card {
-          position: relative;
-          overflow: hidden;
-          min-height: 300px;
-          padding: 38px;
-          border-radius: 20px;
-          background: ${GREEN};
-          color: white;
-        }
-
-        .zen-banking-card.business {
-          background: #172B1E;
+          min-height: 275px;
+          padding: 35px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
         }
 
         .zen-banking-card small {
-          color: rgba(255,255,255,.72);
-          font-weight: 800;
+          color: ${GREEN};
+          font-size: 11px;
+          font-weight: 850;
           letter-spacing: 1px;
           text-transform: uppercase;
         }
 
         .zen-banking-card h3 {
-          max-width: 360px;
-          margin: 22px 0 14px;
-          font-size: 30px;
-          line-height: 1.2;
-          letter-spacing: -1px;
+          max-width: 370px;
+          margin: 20px 0 13px;
+          font-size: 27px;
+          line-height: 1.25;
+          letter-spacing: -.7px;
         }
 
         .zen-banking-card p {
           max-width: 390px;
-          color: rgba(255,255,255,.8);
-          font-size: 14px;
-          line-height: 1.8;
-        }
-
-        .zen-banking-card a {
-          display: inline-flex;
-          margin-top: 20px;
-          color: white;
-          font-weight: 800;
-          font-size: 13px;
-          text-decoration: none;
-          border-bottom: 1px solid rgba(255,255,255,.7);
-          padding-bottom: 5px;
-        }
-
-        .zen-banking-decoration {
-          position: absolute;
-          width: 180px;
-          height: 180px;
-          right: -55px;
-          bottom: -65px;
-          border: 1px solid rgba(255,255,255,.18);
-          border-radius: 50%;
-        }
-
-        .zen-banking-decoration::after {
-          content: '';
-          position: absolute;
-          inset: 22px;
-          border: 1px solid rgba(255,255,255,.18);
-          border-radius: 50%;
-        }
-
-        .zen-security-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 25px;
-        }
-
-        .zen-security-item {
-          padding: 28px;
-          border-left: 3px solid ${GREEN};
-          background: white;
-        }
-
-        .zen-security-item h3 {
-          margin: 0 0 10px;
-          font-size: 17px;
-        }
-
-        .zen-security-item p {
-          margin: 0;
           color: ${MUTED};
           font-size: 13px;
           line-height: 1.8;
         }
 
+        .zen-banking-card a {
+          display: inline-block;
+          margin-top: 16px;
+          color: ${GREEN};
+          font-size: 12px;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        .zen-banking-card a:hover {
+          text-decoration: underline;
+        }
+
+        /* SECURITY */
+
+        .zen-security-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+        }
+
+        .zen-security-item {
+          padding: 26px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 10px;
+        }
+
+        .zen-security-item h3 {
+          margin: 0 0 11px;
+          font-size: 16px;
+        }
+
+        .zen-security-item p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 12px;
+          line-height: 1.9;
+        }
+
+        /* CONTACT */
+
         .zen-contact {
-          background: linear-gradient(120deg, #087A3D, #075D31);
-          color: white;
           padding: 65px 0;
+          background: white;
+          border-top: 1px solid ${BORDER};
+          border-bottom: 1px solid ${BORDER};
         }
 
         .zen-contact-inner {
@@ -644,84 +623,87 @@ const Home: React.FC = () => {
         .zen-contact h2 {
           max-width: 620px;
           margin: 0 0 12px;
-          font-size: 35px;
-          line-height: 1.2;
+          font-size: 32px;
+          line-height: 1.25;
           letter-spacing: -1px;
         }
 
         .zen-contact p {
           margin: 0;
-          color: rgba(255,255,255,.8);
-          font-size: 14px;
-          line-height: 1.7;
+          color: ${MUTED};
+          font-size: 13px;
+          line-height: 1.8;
         }
 
         .zen-contact a {
           flex-shrink: 0;
-          padding: 15px 22px;
-          background: white;
-          color: ${DARK_GREEN};
-          border-radius: 9px;
+          padding: 13px 20px;
+          border: 1px solid ${GREEN};
+          border-radius: 7px;
+          color: ${GREEN};
+          font-size: 12px;
           font-weight: 800;
-          font-size: 13px;
           text-decoration: none;
         }
 
+        .zen-contact a:hover {
+          background: #F2F8F3;
+        }
+
+        /* FOOTER */
+
         .zen-footer {
-          padding: 65px 0 25px;
-          background: #13251A;
-          color: white;
+          padding: 60px 0 24px;
+          background: #FFFFFF;
         }
 
         .zen-footer-grid {
           display: grid;
           grid-template-columns: 1.5fr 1fr 1fr 1fr;
-          gap: 45px;
-          padding-bottom: 45px;
-        }
-
-        .zen-footer-brand .zen-logo {
-          color: white;
+          gap: 40px;
+          padding-bottom: 40px;
         }
 
         .zen-footer-brand p {
           max-width: 290px;
-          color: #AAB8AD;
-          font-size: 13px;
+          color: ${MUTED};
+          font-size: 12px;
           line-height: 1.9;
         }
 
         .zen-footer-column h4 {
-          margin: 0 0 19px;
+          margin: 0 0 18px;
           font-size: 13px;
         }
 
         .zen-footer-column a {
           display: block;
           margin: 12px 0;
-          color: #AAB8AD;
+          color: ${MUTED};
+          font-size: 11px;
           text-decoration: none;
-          font-size: 12px;
         }
 
         .zen-footer-column a:hover {
-          color: white;
+          color: ${GREEN};
         }
 
         .zen-footer-bottom {
           display: flex;
           justify-content: space-between;
           gap: 20px;
-          padding-top: 23px;
-          border-top: 1px solid rgba(255,255,255,.12);
-          color: #AAB8AD;
-          font-size: 11px;
+          padding-top: 22px;
+          border-top: 1px solid ${BORDER};
+          color: #89938C;
+          font-size: 10px;
         }
+
+        /* RESPONSIVE */
 
         @media (max-width: 900px) {
           .zen-hero-grid {
             grid-template-columns: 1fr;
-            gap: 30px;
+            gap: 25px;
           }
 
           .zen-hero-content {
@@ -736,10 +718,6 @@ const Home: React.FC = () => {
             justify-content: center;
           }
 
-          .zen-visual {
-            min-height: 390px;
-          }
-
           .zen-services-grid {
             grid-template-columns: repeat(2, 1fr);
           }
@@ -751,7 +729,7 @@ const Home: React.FC = () => {
 
         @media (max-width: 650px) {
           .zen-container {
-            width: min(100% - 32px, 1180px);
+            width: calc(100% - 32px);
           }
 
           .zen-nav {
@@ -759,7 +737,7 @@ const Home: React.FC = () => {
           }
 
           .zen-logo {
-            font-size: 20px;
+            font-size: 19px;
           }
 
           .zen-logo-mark {
@@ -768,33 +746,33 @@ const Home: React.FC = () => {
           }
 
           .zen-nav-links {
-            gap: 14px;
+            gap: 12px;
           }
 
           .zen-nav-links a {
-            font-size: 12px;
+            font-size: 11px;
           }
 
           .zen-nav-links a:nth-child(2),
-          .zen-nav-links a:nth-child(3) {
+          .zen-nav-links a:nth-child(4) {
             display: none;
           }
 
           .zen-nav-contact {
-            padding: 10px 12px;
+            padding: 9px 12px;
           }
 
           .zen-hero {
-            padding: 70px 0 55px;
+            padding: 65px 0 55px;
           }
 
           .zen-hero h1 {
-            font-size: 43px;
+            font-size: 42px;
             letter-spacing: -2px;
           }
 
           .zen-hero-description {
-            font-size: 15px;
+            font-size: 14px;
           }
 
           .zen-visual {
@@ -810,11 +788,6 @@ const Home: React.FC = () => {
             min-height: 325px;
           }
 
-          .zen-floating-card {
-            right: -3px;
-            bottom: 25px;
-          }
-
           .zen-section {
             padding: 65px 0;
           }
@@ -826,28 +799,16 @@ const Home: React.FC = () => {
           }
 
           .zen-intro-copy h2 {
-            font-size: 32px;
+            font-size: 31px;
           }
 
-          .zen-intro-panel {
-            padding: 27px;
-          }
-
-          .zen-services-grid {
-            grid-template-columns: 1fr;
-          }
-
+          .zen-services-grid,
           .zen-security-grid {
             grid-template-columns: 1fr;
           }
 
           .zen-banking-card {
-            min-height: 280px;
             padding: 28px;
-          }
-
-          .zen-banking-card h3 {
-            font-size: 26px;
           }
 
           .zen-contact-inner {
@@ -856,7 +817,7 @@ const Home: React.FC = () => {
           }
 
           .zen-contact h2 {
-            font-size: 29px;
+            font-size: 27px;
           }
 
           .zen-footer-grid {
@@ -870,16 +831,8 @@ const Home: React.FC = () => {
         }
 
         @media (max-width: 390px) {
-          .zen-nav-links {
-            gap: 8px;
-          }
-
-          .zen-nav-links a {
-            font-size: 11px;
-          }
-
           .zen-hero h1 {
-            font-size: 37px;
+            font-size: 36px;
           }
 
           .zen-footer-grid {
@@ -930,7 +883,10 @@ const Home: React.FC = () => {
               </p>
 
               <div className="zen-hero-actions">
-                <Link to="/about" className="zen-button zen-button-primary">
+                <Link
+                  to="/about"
+                  className="zen-button zen-button-primary"
+                >
                   Discover ZENIMONIES
                 </Link>
 
@@ -947,10 +903,7 @@ const Home: React.FC = () => {
               </p>
             </div>
 
-            {/* Decorative banking interface illustration */}
             <div className="zen-visual">
-              <div className="zen-visual-glow" />
-
               <div className="zen-phone">
                 <div className="zen-phone-screen">
                   <div className="zen-phone-top">
@@ -962,10 +915,9 @@ const Home: React.FC = () => {
                     Welcome to your banking experience
                   </div>
 
-                  <div className="zen-phone-balance">
+                  <div className="zen-phone-account">
                     <small>ACCOUNT OVERVIEW</small>
                     <strong>NGN Account</strong>
-                    <small>Manage your finances</small>
                   </div>
 
                   <div className="zen-phone-label">
@@ -995,19 +947,19 @@ const Home: React.FC = () => {
                     Banking services
                   </div>
 
-                  <div className="zen-phone-transaction">
+                  <div className="zen-phone-row">
                     <span>Payments</span>
-                    <strong>›</strong>
+                    <span>›</span>
                   </div>
 
-                  <div className="zen-phone-transaction">
+                  <div className="zen-phone-row">
                     <span>Account services</span>
-                    <strong>›</strong>
+                    <span>›</span>
                   </div>
 
-                  <div className="zen-phone-transaction">
+                  <div className="zen-phone-row">
                     <span>Business banking</span>
-                    <strong>›</strong>
+                    <span>›</span>
                   </div>
                 </div>
               </div>
@@ -1020,7 +972,7 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        {/* INTRODUCTION */}
+        {/* COMPANY INTRODUCTION */}
         <section className="zen-section">
           <div className="zen-container zen-intro-grid">
             <div className="zen-intro-copy">
@@ -1052,10 +1004,12 @@ const Home: React.FC = () => {
               </Link>
             </div>
 
-            <div className="zen-intro-panel">
-              <div className="zen-intro-panel-mark">Z</div>
+            <div className="zen-intro-visual">
+              <div className="zen-intro-visual-mark">Z</div>
 
-              <h3>One platform. Everyday financial services.</h3>
+              <h3>
+                One platform. Everyday financial services.
+              </h3>
 
               <p>
                 Explore banking and payment services through the
@@ -1067,7 +1021,10 @@ const Home: React.FC = () => {
         </section>
 
         {/* SERVICES */}
-        <section className="zen-section zen-section-light" id="services">
+        <section
+          className="zen-section zen-section-light"
+          id="services"
+        >
           <div className="zen-container">
             <div className="zen-section-heading">
               <span className="zen-section-kicker">
@@ -1079,18 +1036,17 @@ const Home: React.FC = () => {
               </h2>
 
               <p>
-                Discover the services available through the ZENIMONIES
-                platform.
+                Discover the services available through the
+                ZENIMONIES platform.
               </p>
             </div>
 
             <div className="zen-services-grid">
               {services.map((service) => (
-                <article className="zen-service-card" key={service.number}>
-                  <span className="zen-service-number">
-                    {service.number}
-                  </span>
-
+                <article
+                  className="zen-service-card"
+                  key={service.title}
+                >
                   <div className="zen-service-icon">
                     {service.icon}
                   </div>
@@ -1138,11 +1094,9 @@ const Home: React.FC = () => {
                 <Link to="/about">
                   Explore personal banking →
                 </Link>
-
-                <div className="zen-banking-decoration" />
               </article>
 
-              <article className="zen-banking-card business">
+              <article className="zen-banking-card">
                 <small>Business banking</small>
 
                 <h3>
@@ -1157,8 +1111,6 @@ const Home: React.FC = () => {
                 <Link to="/about">
                   Explore business banking →
                 </Link>
-
-                <div className="zen-banking-decoration" />
               </article>
             </div>
           </div>
@@ -1282,7 +1234,9 @@ const Home: React.FC = () => {
               © {new Date().getFullYear()} ZENIMONIES. All rights reserved.
             </span>
 
-            <span>Digital banking and payment services in Nigeria.</span>
+            <span>
+              Digital banking and payment services in Nigeria.
+            </span>
           </div>
         </div>
       </footer>
