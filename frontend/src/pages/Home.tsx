@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -296,142 +295,74 @@ const Home: React.FC = () => {
           font-size: 11px;
         }
 
-        /* PRODUCT MOCKUP */
+        /* CUSTOMER DASHBOARD PREVIEW */
 
         .zen-visual {
           position: relative;
-          min-height: 390px;
+          min-height: 570px;
           display: flex;
           align-items: center;
           justify-content: center;
-          background:
-            radial-gradient(ellipse at center, #F3F7F3 0%, #FFFFFF 70%);
-          border-radius: 20px;
+          padding: 22px;
+          background: #FAFCFA;
+          border: 1px solid ${BORDER};
+          border-radius: 18px;
         }
 
-        .zen-phone {
+        .zen-dashboard-preview {
           position: relative;
           z-index: 2;
-          width: 250px;
-          padding: 13px;
-          background: #19251D;
-          border: 5px solid #27362B;
-          border-radius: 31px;
-          box-shadow: 0 25px 55px rgba(20,45,28,.15);
-          transform: rotate(-3deg);
+          width: 100%;
+          max-width: 440px;
+          padding: 20px;
+          background: #FFFFFF;
+          border: 1px solid ${BORDER};
+          border-radius: 15px;
+          box-shadow: 0 22px 55px rgba(20,45,28,.09);
         }
 
-        .zen-phone-screen {
-          min-height: 330px;
-          padding: 18px 13px;
-          background: white;
-          border-radius: 20px;
-          overflow: hidden;
-        }
-
-        .zen-phone-top {
+        .zen-dashboard-header,
+        .zen-dashboard-user,
+        .zen-dashboard-balance-top,
+        .zen-dashboard-section-title,
+        .zen-dashboard-service-row,
+        .zen-dashboard-bottom-nav {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          color: ${GREEN};
-          font-size: 11px;
-          font-weight: 850;
-        }
-
-        .zen-phone-greeting {
-          margin-top: 23px;
-          color: ${MUTED};
-          font-size: 10px;
-        }
-
-        .zen-phone-account {
-          margin-top: 12px;
-          padding: 16px;
-          background: #F7F9F7;
-          border: 1px solid ${BORDER};
-          border-radius: 11px;
-        }
-
-        .zen-phone-account small {
-          color: ${MUTED};
-          font-size: 9px;
-        }
-
-        .zen-phone-account strong {
-          display: block;
-          margin-top: 8px;
-          font-size: 18px;
-          color: ${DARK};
-        }
-
-        .zen-phone-label {
-          margin-top: 20px;
-          font-size: 10px;
-          font-weight: 800;
-        }
-
-        .zen-phone-actions {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 5px;
-          margin-top: 12px;
-        }
-
-        .zen-phone-action {
-          text-align: center;
-          color: ${MUTED};
-          font-size: 8px;
-        }
-
-        .zen-phone-action span {
-          width: 34px;
-          height: 34px;
-          display: grid;
-          place-items: center;
-          margin: 0 auto 6px;
-          background: #F0F5F1;
-          color: ${GREEN};
-          border-radius: 9px;
-          font-size: 15px;
-          font-weight: 800;
-        }
-
-        .zen-phone-row {
-          display: flex;
           justify-content: space-between;
-          padding: 10px 0;
-          border-bottom: 1px solid ${BORDER};
-          font-size: 9px;
         }
 
-        .zen-phone-row span:last-child {
-          color: ${GREEN};
-        }
-
-        .zen-floating-note {
-          position: absolute;
-          z-index: 3;
-          right: 5px;
-          bottom: 38px;
-          padding: 13px 16px;
-          background: white;
-          border: 1px solid ${BORDER};
-          border-radius: 9px;
-          box-shadow: 0 10px 28px rgba(20,40,25,.08);
-        }
-
-        .zen-floating-note strong {
-          display: block;
-          color: ${GREEN};
-          font-size: 12px;
-        }
-
-        .zen-floating-note span {
-          display: block;
-          margin-top: 4px;
-          color: ${MUTED};
-          font-size: 9px;
-        }
+        .zen-dashboard-header { padding-bottom: 16px; border-bottom: 1px solid ${BORDER}; }
+        .zen-dashboard-brand { color: ${DARK}; font-size: 13px; font-weight: 900; letter-spacing: -.4px; }
+        .zen-dashboard-header-actions { display: flex; gap: 8px; }
+        .zen-dashboard-header-actions span { width: 29px; height: 29px; display: grid; place-items: center; border: 1px solid ${BORDER}; border-radius: 50%; color: ${DARK}; font-size: 12px; }
+        .zen-dashboard-user { justify-content: flex-start; gap: 10px; margin: 17px 0; }
+        .zen-dashboard-avatar { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #EDF5EF; color: ${GREEN}; font-size: 13px; font-weight: 850; }
+        .zen-dashboard-user small { display: block; color: ${MUTED}; font-size: 9px; }
+        .zen-dashboard-user strong { display: block; margin-top: 3px; color: ${DARK}; font-size: 12px; }
+        .zen-dashboard-balance { padding: 17px; color: #fff; background: linear-gradient(125deg, #176D3C, #0A8745); border-radius: 11px; }
+        .zen-dashboard-balance-top { color: rgba(255,255,255,.85); font-size: 9px; }
+        .zen-dashboard-balance strong { display: block; margin: 13px 0 12px; font-size: 23px; letter-spacing: .5px; }
+        .zen-dashboard-balance-foot { display: flex; justify-content: space-between; color: rgba(255,255,255,.86); font-size: 9px; }
+        .zen-dashboard-verification { display: flex; align-items: center; gap: 9px; margin-top: 11px; padding: 10px; border: 1px solid #E8EEE9; border-radius: 8px; background: #FBFCFB; }
+        .zen-dashboard-verification-icon { width: 25px; height: 25px; display: grid; place-items: center; flex: 0 0 25px; border-radius: 50%; background: #EDF5EF; color: ${GREEN}; font-size: 12px; font-weight: 900; }
+        .zen-dashboard-verification span:nth-child(2) { flex: 1; }
+        .zen-dashboard-verification strong { display: block; color: ${DARK}; font-size: 9px; }
+        .zen-dashboard-verification small { display: block; margin-top: 3px; color: ${MUTED}; font-size: 7px; }
+        .zen-dashboard-verification b { color: ${GREEN}; font-size: 16px; }
+        .zen-dashboard-section-title { margin: 19px 0 11px; color: ${DARK}; font-size: 11px; font-weight: 850; }
+        .zen-dashboard-actions { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 5px; }
+        .zen-dashboard-action { text-align: center; color: #59645C; font-size: 8px; line-height: 1.35; }
+        .zen-dashboard-action span { width: 32px; height: 32px; display: grid; place-items: center; margin: 0 auto 5px; background: #F0F5F1; color: ${GREEN}; border-radius: 9px; font-size: 14px; font-weight: 800; }
+        .zen-dashboard-service-row { padding: 9px 0; border-bottom: 1px solid ${BORDER}; color: #4D5A51; font-size: 9px; }
+        .zen-dashboard-service-row span:last-child { color: ${GREEN}; font-size: 13px; }
+        .zen-dashboard-transactions { padding: 13px 10px; text-align: center; background: #FAFCFA; border: 1px solid ${BORDER}; border-radius: 8px; }
+        .zen-dashboard-transactions strong { display: block; color: ${DARK}; font-size: 10px; }
+        .zen-dashboard-transactions span { display: block; margin-top: 4px; color: ${MUTED}; font-size: 8px; }
+        .zen-dashboard-bottom-nav { margin-top: 15px; padding-top: 12px; border-top: 1px solid ${BORDER}; }
+        .zen-dashboard-bottom-nav span { color: #7A857D; font-size: 8px; text-align: center; }
+        .zen-dashboard-bottom-nav span:first-child { color: ${GREEN}; font-weight: 850; }
+        .zen-preview-caption { position: absolute; right: 18px; bottom: 14px; color: #8A948D; font-size: 9px; letter-spacing: .2px; }
 
         /* INTRODUCTION */
 
@@ -840,28 +771,34 @@ const Home: React.FC = () => {
           }
 
           .zen-visual {
-            min-height: 300px;
+            min-height: auto;
+            display: block;
+            padding: 12px;
             border-radius: 12px;
           }
 
-          .zen-phone {
-            width: 215px;
-            padding: 11px;
-          }
-
-          .zen-phone-screen {
-            min-height: 300px;
-            padding: 15px 11px;
-          }
-
-          .zen-phone-account {
+          .zen-dashboard-preview {
             padding: 13px;
           }
 
-          .zen-floating-note {
-            right: 0;
-            bottom: 20px;
-            padding: 10px 12px;
+          .zen-dashboard-balance {
+            padding: 14px;
+          }
+
+          .zen-dashboard-balance strong {
+            font-size: 20px;
+          }
+
+          .zen-dashboard-action span {
+            width: 27px;
+            height: 27px;
+          }
+
+          .zen-preview-caption {
+            position: static;
+            display: block;
+            margin-top: 9px;
+            text-align: center;
           }
 
           .zen-section {
@@ -1003,9 +940,10 @@ const Home: React.FC = () => {
             <a href="#services">Services</a>
             <Link to="/about">About Us</Link>
             <a href="#security">Security</a>
-            <a href="#contact" className="zen-nav-contact">
-              Contact
-            </a>
+            <Link to="/login">Sign in</Link>
+            <Link to="/register" className="zen-nav-contact">
+              Open an account
+            </Link>
           </nav>
 
           <details className="zen-mobile-menu">
@@ -1016,6 +954,8 @@ const Home: React.FC = () => {
               <Link to="/about">About Us</Link>
               <a href="#security">Security</a>
               <a href="#contact">Contact</a>
+              <Link to="/login">Sign in</Link>
+              <Link to="/register">Open an account</Link>
             </nav>
           </details>
         </div>
@@ -1043,10 +983,10 @@ const Home: React.FC = () => {
 
               <div className="zen-hero-actions">
                 <Link
-                  to="/about"
+                  to="/register"
                   className="zen-button zen-button-primary"
                 >
-                  Discover ZENIMONIES
+                  Get started
                 </Link>
 
                 <a
@@ -1062,72 +1002,90 @@ const Home: React.FC = () => {
               </p>
             </div>
 
-            {/* BANKING APP PRESENTATION */}
-            <div className="zen-visual">
-              <div className="zen-phone">
-                <div className="zen-phone-screen">
-                  <div className="zen-phone-top">
-                    <span>ZENIMONIES</span>
-                    <span>•••</span>
-                  </div>
-
-                  <div className="zen-phone-greeting">
-                    Your banking experience
-                  </div>
-
-                  <div className="zen-phone-account">
-                    <small>ACCOUNT OVERVIEW</small>
-                    <strong>NGN Account</strong>
-                  </div>
-
-                  <div className="zen-phone-label">
-                    Quick Services
-                  </div>
-
-                  <div className="zen-phone-actions">
-                    <div className="zen-phone-action">
-                      <span>↗</span>
-                      Transfer
-                    </div>
-                    <div className="zen-phone-action">
-                      <span>＋</span>
-                      Add money
-                    </div>
-                    <div className="zen-phone-action">
-                      <span>▤</span>
-                      Airtime
-                    </div>
-                    <div className="zen-phone-action">
-                      <span>▣</span>
-                      Bills
-                    </div>
-                  </div>
-
-                  <div className="zen-phone-label">
-                    Banking services
-                  </div>
-
-                  <div className="zen-phone-row">
-                    <span>Payments</span>
-                    <span>›</span>
-                  </div>
-
-                  <div className="zen-phone-row">
-                    <span>Account services</span>
-                    <span>›</span>
-                  </div>
-
-                  <div className="zen-phone-row">
-                    <span>Business banking</span>
-                    <span>›</span>
+            {/* ILLUSTRATIVE CUSTOMER DASHBOARD — NO LIVE CUSTOMER DATA */}
+            <div className="zen-visual" aria-label="Illustrative ZENIMONIES customer dashboard preview">
+              <div className="zen-dashboard-preview">
+                <div className="zen-dashboard-header">
+                  <span className="zen-dashboard-brand">ZENIMONIES</span>
+                  <div className="zen-dashboard-header-actions" aria-hidden="true">
+                    <span>♧</span>
+                    <span>?</span>
                   </div>
                 </div>
-              </div>
 
-              <div className="zen-floating-note">
-                <strong>ZENIMONIES</strong>
-                <span>Banking and payments</span>
+                <div className="zen-dashboard-user">
+                  <span className="zen-dashboard-avatar">C</span>
+                  <div>
+                    <small>Welcome back,</small>
+                    <strong>Customer</strong>
+                  </div>
+                </div>
+
+                <div className="zen-dashboard-balance">
+                  <div className="zen-dashboard-balance-top">
+                    <span>Available balance</span>
+                    <span>•••</span>
+                  </div>
+                  <strong>₦ ••••••</strong>
+                  <div className="zen-dashboard-balance-foot">
+                    <span>Personal account</span>
+                    <span>NGN</span>
+                  </div>
+                </div>
+
+                <div className="zen-dashboard-verification">
+                  <span className="zen-dashboard-verification-icon">✓</span>
+                  <span>
+                    <strong>Account verification</strong>
+                    <small>Complete verification to access eligible features</small>
+                  </span>
+                  <b>›</b>
+                </div>
+
+                <div className="zen-dashboard-section-title">
+                  <span>Quick Actions</span>
+                  <span>View all</span>
+                </div>
+                <div className="zen-dashboard-actions">
+                  <div className="zen-dashboard-action"><span>＋</span>Add Money</div>
+                  <div className="zen-dashboard-action"><span>↗</span>To Bank</div>
+                  <div className="zen-dashboard-action"><span>⇄</span>Send</div>
+                  <div className="zen-dashboard-action"><span>▤</span>Airtime</div>
+                  <div className="zen-dashboard-action"><span>▦</span>Data</div>
+                  <div className="zen-dashboard-action"><span>◎</span>Betting</div>
+                  <div className="zen-dashboard-action"><span>▣</span>TV</div>
+                  <div className="zen-dashboard-action"><span>ϟ</span>Bills</div>
+                  <div className="zen-dashboard-action"><span>◇</span>Savings</div>
+                  <div className="zen-dashboard-action"><span>•••</span>More</div>
+                </div>
+
+                <div className="zen-dashboard-section-title">
+                  <span>More Services</span>
+                  <span> </span>
+                </div>
+                <div className="zen-dashboard-service-row"><span>Transactions</span><span>›</span></div>
+                <div className="zen-dashboard-service-row"><span>Wallet</span><span>›</span></div>
+                <div className="zen-dashboard-service-row"><span>Cards</span><span>›</span></div>
+                <div className="zen-dashboard-service-row"><span>Settings</span><span>›</span></div>
+
+                <div className="zen-dashboard-section-title">
+                  <span>Recent Transactions</span>
+                  <span>See all</span>
+                </div>
+                <div className="zen-dashboard-transactions">
+                  <strong>No transactions yet</strong>
+                  <span>Your transactions will appear here.</span>
+                </div>
+
+                <div className="zen-dashboard-bottom-nav">
+                  <span>⌂<br />Home</span>
+                  <span>↔<br />Transactions</span>
+                  <span>▣<br />Cards</span>
+                  <span>◫<br />Wallet</span>
+                  <span>○<br />Profile</span>
+                </div>
               </div>
+              <span className="zen-preview-caption">Illustrative dashboard preview</span>
             </div>
           </div>
         </section>
