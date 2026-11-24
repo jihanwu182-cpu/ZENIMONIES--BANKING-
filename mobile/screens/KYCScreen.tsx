@@ -443,7 +443,8 @@ const styles = StyleSheet.create({
   paddingTop: 18,
   paddingBottom: 14,
   marginBottom: 16,
-},
+  marginHorizontal: 12:
+ },
 
 brandText: {
   color: '#DDF3E5',
