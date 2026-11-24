@@ -1,51 +1,23 @@
-const crypto = require('crypto');
-const axios = require('axios');
+
 const pool = require('../config/database');
 
-/**
- * ============================================================
- * ZENIMONIES — ELECTRICITY CONTROLLER
- * Version: 2026-10-03-v8
- *
- * Electricity payments through Sogo.
- *
- * IMPORTANT:
- * - Uses existing bill_payments table.
- * - Does NOT require provider_webhook_response.
- * - Supports Sogo asynchronous transactions.
- * - Attempts a Sogo transaction lookup when token/units are
- *   missing from the initial purchase response.
- * - Sandbox transaction lookup is intentionally skipped.
- * ============================================================
- */
+const {
+  verifyElectricityMeter: verifyVTPassMeter,
+  purchaseElectricity: purchaseVTPassElectricity,
+  generateElectricityRequestId,
+} = require('../services/electricityService');
 
-const SOGO_API_BASE_URL =
-  process.env.SOGO_API_BASE_URL ||
-  'https://sandbox.sogo.africa/v1';
-
-const SOGO_API_KEY =
-  process.env.SOGO_API_KEY;
-
-const SOGO_DISCO_SLUGS = {
-  APLE: 'abedc',
-  AEDC: 'aedc',
-  BEDC: 'bedc',
-  EKEDC: 'ekedc',
-  EEDC: 'eedc',
-  IBEDC: 'ibedc',
-  IKEDC: 'ikedc',
-  JED: 'jed',
-  KAEDCO: 'kaedco',
-  KEDCO: 'kedco',
-  PHEDC: 'phed',
-  YEDC: 'yedc',
-};
-
-/**
- * ============================================================
- * GENERIC VALUE HELPER
- * ============================================================
- */
+// ============================================================
+// ZENIMONIES — ELECTRICITY CONTROLLER
+// VTPASS INTEGRATION
+//
+// - VTPass meter verification
+// - VTPass electricity purchase
+// - Saves provider request ID before purchase
+// - Preserves existing bill_payments and transactions tables
+// - Keeps uncertain transactions pending
+// - Refunds confirmed failures exactly once
+// ============================================================
 
 const firstValue = (...values) => {
   for (const value of values) {
@@ -61,329 +33,305 @@ const firstValue = (...values) => {
   return null;
 };
 
-/**
- * ============================================================
- * EXTRACT ELECTRICITY TOKEN
- * ============================================================
- */
-
-const extractElectricityToken = (payload) => {
-  return firstValue(
-    payload?.token,
-    payload?.electricity_token,
-    payload?.token_code,
-    payload?.prepaid_token,
-    payload?.pin,
-
-    payload?.data?.token,
-    payload?.data?.electricity_token,
-    payload?.data?.token_code,
-    payload?.data?.prepaid_token,
-    payload?.data?.pin,
-
-    payload?.data?.details?.token,
-    payload?.data?.details?.electricity_token,
-    payload?.data?.details?.token_code,
-    payload?.data?.details?.prepaid_token,
-    payload?.data?.details?.prepaid_token_code,
-
-    payload?.data?.receipt?.token,
-    payload?.data?.receipt?.electricity_token,
-    payload?.data?.receipt?.prepaid_token,
-
-    payload?.transaction?.token,
-    payload?.transaction?.electricity_token,
-    payload?.transaction?.token_code,
-    payload?.transaction?.prepaid_token,
-    payload?.transaction?.pin,
-
-    payload?.transaction?.details?.token,
-    payload?.transaction?.details?.electricity_token,
-    payload?.transaction?.details?.token_code,
-    payload?.transaction?.details?.prepaid_token,
-
-    payload?.object?.token,
-    payload?.object?.electricity_token,
-    payload?.object?.prepaid_token,
-
-    payload?.metadata?.token,
-    payload?.metadata?.electricity_token,
-    payload?.metadata?.prepaid_token,
-
-    payload?.data?.metadata?.token,
-    payload?.data?.metadata?.electricity_token,
-    payload?.data?.metadata?.prepaid_token,
-
-    payload?.delivery?.token,
-    payload?.delivery?.electricity_token,
-    payload?.delivery?.prepaid_token,
-
-    payload?.data?.delivery?.token,
-    payload?.data?.delivery?.electricity_token,
-    payload?.data?.delivery?.prepaid_token
-  );
-};
-
-/**
- * ============================================================
- * EXTRACT ELECTRICITY UNITS / KWH
- * ============================================================
- */
-
-const extractUnits = (payload) => {
-  return firstValue(
-    payload?.units,
-    payload?.unit,
-    payload?.kwh,
-
-    payload?.data?.units,
-    payload?.data?.unit,
-    payload?.data?.kwh,
-
-    payload?.data?.details?.units,
-    payload?.data?.details?.unit,
-    payload?.data?.details?.kwh,
-
-    payload?.transaction?.units,
-    payload?.transaction?.unit,
-    payload?.transaction?.kwh,
-
-    payload?.transaction?.details?.units,
-    payload?.transaction?.details?.unit,
-    payload?.transaction?.details?.kwh,
-
-    payload?.object?.units,
-    payload?.object?.unit,
-    payload?.object?.kwh,
-
-    payload?.metadata?.units,
-    payload?.metadata?.unit,
-    payload?.metadata?.kwh,
-
-    payload?.data?.metadata?.units,
-    payload?.data?.metadata?.unit,
-    payload?.data?.metadata?.kwh,
-
-    payload?.delivery?.units,
-    payload?.delivery?.unit,
-    payload?.delivery?.kwh,
-
-    payload?.data?.delivery?.units,
-    payload?.data?.delivery?.unit,
-    payload?.data?.delivery?.kwh
-  );
-};
-
-/**
- * ============================================================
- * EXTRACT PROVIDER DATA
- * ============================================================
- */
-
-const extractProviderData = (response) => {
-  if (!response) {
-    return {};
-  }
-
-  return (
-    response?.data?.transaction ||
-    response?.data?.data ||
-    response?.data?.object ||
-    response?.data ||
-    response?.transaction ||
-    response?.object ||
-    response
-  );
-};
-
-/**
- * ============================================================
- * EXTRACT PROVIDER STATUS
- * ============================================================
- */
-
-const extractProviderStatus = (
-  providerData,
-  rawResponse
-) => {
-  const rawStatus = firstValue(
-    providerData?.status,
-    rawResponse?.status,
-    rawResponse?.data?.status
-  );
-
-  if (
-    rawStatus &&
-    typeof rawStatus === 'object'
-  ) {
-    return String(
-      firstValue(
-        rawStatus?.value,
-        rawStatus?.status,
-        ''
-      )
-    )
-      .trim()
-      .toLowerCase();
-  }
-
-  return String(
-    rawStatus || ''
-  )
+const getProviderStatus = (result) => {
+  const code = String(result?.code || '');
+  const status = String(result?.status || '')
     .trim()
     .toLowerCase();
-};
 
-/**
- * ============================================================
- * EXTRACT PROVIDER REFERENCE
- * ============================================================
- */
-
-const extractProviderReference = (
-  providerData,
-  rawResponse
-) => {
-  return firstValue(
-    providerData?.reference,
-    providerData?.provider_reference,
-    providerData?.providerReference,
-
-    rawResponse?.reference,
-    rawResponse?.provider_reference,
-    rawResponse?.providerReference,
-
-    rawResponse?.data?.reference,
-    rawResponse?.data?.provider_reference,
-    rawResponse?.data?.providerReference,
-
-    rawResponse?.transaction?.reference,
-    rawResponse?.transaction?.provider_reference,
-
-    rawResponse?.object?.reference
-  );
-};
-
-/**
- * ============================================================
- * EXTRACT PROVIDER MESSAGE
- * ============================================================
- */
-
-const extractProviderMessage = (
-  providerData,
-  rawResponse
-) => {
-  return firstValue(
-    rawResponse?.message,
-    rawResponse?.data?.message,
-
-    providerData?.message,
-
-    rawResponse?.description,
-    rawResponse?.data?.description,
-    providerData?.description
-  );
-};
-
-/**
- * ============================================================
- * SOGO TRANSACTION LOOKUP
- *
- * Used when the initial purchase response does not contain
- * sensitive delivery information such as electricity token.
- *
- * Sandbox is intentionally skipped because sandbox transaction
- * records may not be available through the transaction lookup.
- * ============================================================
- */
-
-const fetchSogoTransaction = async (
-  providerReference
-) => {
-  if (!providerReference) {
-    return null;
+  // VTPass confirms delivery only with code 000
+  // and transaction status delivered.
+  if (code === '000' && status === 'delivered') {
+    return 'completed';
   }
 
-  const baseUrl =
-    String(
-      SOGO_API_BASE_URL || ''
-    ).trim();
-
-  /**
-   * Do not attempt transaction lookup against Sandbox.
-   */
   if (
-    baseUrl
-      .toLowerCase()
-      .includes('sandbox.sogo.africa')
+    code === '016' ||
+    code === '091' ||
+    code === '040'
   ) {
-    console.log(
-      'ℹ️ Sogo transaction lookup skipped in Sandbox'
-    );
-
-    return null;
+    return 'failed';
   }
 
-  if (!SOGO_API_KEY) {
-    console.warn(
-      '⚠️ SOGO_API_KEY missing; cannot perform transaction lookup'
+  // All unclear responses remain pending.
+  return 'pending';
+};
+
+const getProviderMessage = (result) =>
+  firstValue(
+    result?.responseDescription,
+    result?.rawResponse?.response_description,
+    result?.rawResponse?.message
+  );
+
+const getProviderReference = (result) =>
+  firstValue(
+    result?.providerTransactionId,
+    result?.rawResponse?.content?.transactions?.transactionId
+  );
+
+const safeJson = (value) => {
+  try {
+    return JSON.stringify(value || {});
+  } catch (_) {
+    return JSON.stringify({
+      message: 'Provider response could not be serialized',
+    });
+  }
+};
+
+// ============================================================
+// SAVE PROVIDER RESPONSE
+// ============================================================
+
+const saveProviderResponse = async ({
+  billId,
+  reference,
+  result,
+  status,
+}) => {
+  const providerReference =
+    getProviderReference(result);
+
+  const providerMessage =
+    getProviderMessage(result);
+
+  const token =
+    firstValue(
+      result?.token,
+      result?.rawResponse?.token,
+      result?.rawResponse?.purchased_code
     );
 
-    return null;
-  }
+  const units =
+    firstValue(
+      result?.units,
+      result?.rawResponse?.units
+    );
+
+  const client = await pool.connect();
 
   try {
-    console.log(
-      '🔎 Looking up completed Sogo transaction:',
-      providerReference
+    await client.query('BEGIN');
+
+    const billUpdate = await client.query(
+      `
+      UPDATE bill_payments
+      SET
+        status = $1,
+        provider_reference =
+          COALESCE($2, provider_reference),
+        provider_response = $3,
+        provider_response_message = $4,
+        electricity_token =
+          COALESCE($5, electricity_token),
+        units =
+          COALESCE($6, units),
+        completed_at =
+          CASE
+            WHEN $1 = 'completed'
+            THEN CURRENT_TIMESTAMP
+            ELSE completed_at
+          END
+      WHERE
+        id = $7
+        AND status = 'processing'
+      `,
+      [
+        status,
+        providerReference,
+        safeJson(result?.rawResponse || result),
+        providerMessage,
+        token,
+        units,
+        billId,
+      ]
     );
 
-    const response =
-      await axios.get(
-        `${baseUrl}/transactions/${encodeURIComponent(
-          providerReference
-        )}`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${SOGO_API_KEY}`,
+    if (billUpdate.rowCount !== 1) {
+      await client.query('ROLLBACK');
+      return false;
+    }
 
-            'Content-Type':
-              'application/json',
-          },
+    const transactionUpdate = await client.query(
+      `
+      UPDATE transactions
+      SET status = $1
+      WHERE reference = $2
+      `,
+      [status, reference]
+    );
 
-          timeout: 30000,
-        }
+    if (transactionUpdate.rowCount !== 1) {
+      throw new Error(
+        'Electricity transaction ledger record was not updated.'
       );
+    }
 
-    console.log(
-      '✅ Sogo transaction lookup successful'
-    );
-
-    return response?.data || null;
-
+    await client.query('COMMIT');
+    return true;
   } catch (error) {
-    console.warn(
-      '⚠️ Sogo transaction lookup failed:',
-      error?.response?.status ||
-        error?.message
-    );
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
-    return null;
+    throw error;
+  } finally {
+    client.release();
   }
 };
 
-/**
- * ============================================================
- * PURCHASE ELECTRICITY
- * ============================================================
- */
+// ============================================================
+// REFUND CONFIRMED FAILED TRANSACTION
+// ============================================================
 
-const purchaseElectricity = async (
-  req,
-  res
-) => {
+const refundElectricity = async ({
+  billId,
+  reference,
+  providerResult,
+}) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const billResult = await client.query(
+      `
+      SELECT
+        id,
+        account_id,
+        amount,
+        status
+      FROM bill_payments
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [billId]
+    );
+
+    if (billResult.rows.length === 0) {
+      throw new Error('Electricity payment record not found.');
+    }
+
+    const bill = billResult.rows[0];
+
+    // A previous refund or final status must never be refunded again.
+    if (bill.status !== 'processing') {
+      await client.query('COMMIT');
+      return false;
+    }
+
+    const amount = Number(bill.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('Invalid electricity refund amount.');
+    }
+
+    const accountUpdate = await client.query(
+      `
+      UPDATE accounts
+      SET
+        balance = balance + $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
+      [amount, bill.account_id]
+    );
+
+    if (accountUpdate.rowCount !== 1) {
+      throw new Error('Customer account could not be refunded.');
+    }
+
+    // Deterministic reference prevents duplicate refund ledger entries.
+    const refundReference = `REF-${reference}`;
+
+    await client.query(
+      `
+      INSERT INTO transactions (
+        account_id,
+        type,
+        amount,
+        currency,
+        reference,
+        status,
+        description
+      )
+      VALUES (
+        $1,
+        'electricity_refund',
+        $2,
+        'NGN',
+        $3,
+        'completed',
+        $4
+      )
+      `,
+      [
+        bill.account_id,
+        amount,
+        refundReference,
+        `VTPass electricity payment refund - ${reference}`,
+      ]
+    );
+
+    const providerReference =
+      getProviderReference(providerResult);
+
+    const providerMessage =
+      getProviderMessage(providerResult);
+
+    await client.query(
+      `
+      UPDATE bill_payments
+      SET
+        status = 'failed',
+        provider_reference =
+          COALESCE($1, provider_reference),
+        provider_response = $2,
+        provider_response_message = $3
+      WHERE id = $4
+      `,
+      [
+        providerReference,
+        safeJson(providerResult?.rawResponse || providerResult),
+        providerMessage,
+        billId,
+      ]
+    );
+
+    const originalTransactionUpdate = await client.query(
+      `
+      UPDATE transactions
+      SET status = 'failed'
+      WHERE reference = $1
+      `,
+      [reference]
+    );
+
+    if (originalTransactionUpdate.rowCount !== 1) {
+      throw new Error(
+        'Original electricity transaction could not be updated.'
+      );
+    }
+
+    await client.query('COMMIT');
+    return true;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
+
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+// ============================================================
+// PURCHASE ELECTRICITY
+// ============================================================
+
+const purchaseElectricity = async (req, res) => {
   const userId =
     req.user?.id ||
     req.user?.user_id;
@@ -395,464 +343,311 @@ const purchaseElectricity = async (
     amount,
   } = req.body || {};
 
-  console.log(
-    '🔥 ZENIMONIES ELECTRICITY CONTROLLER V8 REACHED 🔥'
-  );
-
-  /**
-   * ----------------------------------------------------------
-   * BASIC AUTHENTICATION
-   * ----------------------------------------------------------
-   */
-
   if (!userId) {
     return res.status(401).json({
       success: false,
-      message:
-        'Authentication required',
+      message: 'Authentication required.',
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * ENVIRONMENT CHECK
-   * ----------------------------------------------------------
-   */
+  const normalizedProvider = String(provider || '')
+    .trim()
+    .toUpperCase();
 
-  if (!SOGO_API_KEY) {
-    console.error(
-      '❌ SOGO_API_KEY is missing'
-    );
+  const normalizedMeterNumber = String(meter_number || '')
+    .trim();
 
-    return res.status(500).json({
-      success: false,
-      message:
-        'Electricity provider is not configured',
-    });
-  }
+  const normalizedMeterType = String(meter_type || '')
+    .trim()
+    .toLowerCase();
 
-  /**
-   * ----------------------------------------------------------
-   * VALIDATE PROVIDER
-   * ----------------------------------------------------------
-   */
+  const numericAmount = Number(amount);
 
-  const normalizedProvider =
-    String(provider || '')
-      .trim()
-      .toUpperCase();
-
-  const discoSlug =
-    SOGO_DISCO_SLUGS[
-      normalizedProvider
-    ];
-
-  if (!discoSlug) {
+  if (!normalizedProvider) {
     return res.status(400).json({
       success: false,
-      message:
-        'Invalid electricity provider',
+      message: 'Electricity provider is required.',
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * VALIDATE METER TYPE
-   * ----------------------------------------------------------
-   */
-
-  const normalizedMeterType =
-    String(meter_type || '')
-      .trim()
-      .toLowerCase();
-
-  if (
-    ![
-      'prepaid',
-      'postpaid',
-    ].includes(
-      normalizedMeterType
-    )
-  ) {
+  if (!['prepaid', 'postpaid'].includes(normalizedMeterType)) {
     return res.status(400).json({
       success: false,
-      message:
-        'Meter type must be prepaid or postpaid',
+      message: 'Meter type must be prepaid or postpaid.',
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * VALIDATE METER NUMBER
-   * ----------------------------------------------------------
-   */
-
-  const normalizedMeterNumber =
-    String(meter_number || '')
-      .trim();
-
-  if (
-    !/^[A-Za-z0-9\-]{5,50}$/.test(
-      normalizedMeterNumber
-    )
-  ) {
+  if (!/^[A-Za-z0-9-]{5,50}$/.test(normalizedMeterNumber)) {
     return res.status(400).json({
       success: false,
-      message:
-        'Invalid meter/account number',
-    });
-  }
-
-  /**
-   * ----------------------------------------------------------
-   * VALIDATE AMOUNT
-   * ----------------------------------------------------------
-   */
-
-  const numericAmount =
-    Number(amount);
-
-  if (
-    !Number.isFinite(
-      numericAmount
-    ) ||
-    numericAmount <= 0
-  ) {
-    return res.status(400).json({
-      success: false,
-      message:
-        'Invalid electricity amount',
+      message: 'Invalid meter/account number.',
     });
   }
 
   if (
+    !Number.isFinite(numericAmount) ||
+    numericAmount <= 0 ||
     numericAmount > 1000000
   ) {
     return res.status(400).json({
       success: false,
-      message:
-        'Electricity amount cannot exceed ₦1,000,000',
+      message: 'Enter a valid electricity amount.',
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * STEP 1 — VERIFY METER
-   * ----------------------------------------------------------
-   */
+  // ==========================================================
+  // GET CUSTOMER PHONE
+  // VTPass requires a phone number for Electricity purchases.
+  // ==========================================================
+
+  let phone;
+
+  try {
+    const userResult = await pool.query(
+      `
+      SELECT phone
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    phone = String(
+      req.body?.phone ||
+      userResult.rows[0]?.phone ||
+      ''
+    ).replace(/\D/g, '');
+
+    if (!/^0\d{10}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'A valid Nigerian phone number is required for this electricity payment.',
+      });
+    }
+  } catch (error) {
+    console.error(
+      'Electricity customer phone lookup failed:',
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to retrieve customer details.',
+    });
+  }
+
+  // ==========================================================
+  // STEP 1 — VERIFY METER THROUGH VTPASS
+  // ==========================================================
 
   let verification;
 
   try {
-    console.log(
-      '🔎 Verifying electricity meter:',
-      normalizedMeterNumber
-    );
+    verification = await verifyVTPassMeter({
+      provider: normalizedProvider,
+      meterNumber: normalizedMeterNumber,
+      meterType: normalizedMeterType,
+    });
 
-    const verifyResponse =
-      await axios.post(
-        `${SOGO_API_BASE_URL}/bills/electricity/verify-meter`,
-        {
-          disco_slug:
-            discoSlug,
-
-          meter_number:
-            normalizedMeterNumber,
-
-          meter_type:
-            normalizedMeterType,
-        },
-        {
-          headers: {
-            Authorization:
-              `Bearer ${SOGO_API_KEY}`,
-
-            'Content-Type':
-              'application/json',
-          },
-
-          timeout: 30000,
-        }
-      );
-
-    verification =
-      verifyResponse?.data;
-
-    console.log(
-      '✅ Electricity meter verification successful'
-    );
-
+    if (
+      !verification ||
+      String(verification.code) !== '020'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'VTPass could not confirm this electricity meter. Please check the provider and meter number.',
+        verification_code: verification?.code || null,
+      });
+    }
   } catch (error) {
     console.error(
-      '❌ Electricity meter verification failed:',
-      error?.response?.data ||
-        error?.message
+      'VTPass meter verification error:',
+      error.message
     );
 
-    return res.status(
-      error?.response?.status >= 400 &&
-      error?.response?.status < 500
-        ? error.response.status
-        : 502
-    ).json({
+    return res.status(502).json({
       success: false,
-
       message:
-        error?.response?.data?.message ||
-        'Unable to verify electricity meter',
-
-      provider_response:
-        error?.response?.data ||
-        null,
+        'Unable to verify this electricity meter at the moment. Please try again.',
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * EXTRACT VERIFIED CUSTOMER INFORMATION
-   * ----------------------------------------------------------
-   */
-
-  const verificationData =
-    verification?.data ||
-    verification?.transaction ||
-    verification;
-
   const customerName =
-    firstValue(
-      verificationData?.customer_name,
-      verificationData?.customerName,
-      verificationData?.name,
-
-      verificationData?.customer?.name,
-
-      verification?.customer_name,
-      verification?.customerName
-    );
+    firstValue(verification.customerName);
 
   const customerAddress =
-    firstValue(
-      verificationData?.customer_address,
-      verificationData?.address,
-
-      verificationData?.customer?.address,
-
-      verification?.customer_address,
-      verification?.address
-    );
+    firstValue(verification.customerAddress);
 
   const tariffClass =
     firstValue(
-      verificationData?.tariff_class,
-      verificationData?.tariffClass,
-
-      verificationData?.customer?.tariff_class
+      verification.rawResponse?.content?.Tariff_Class,
+      verification.rawResponse?.content?.tariff_class
     );
 
-  /**
-   * ----------------------------------------------------------
-   * DATABASE TRANSACTION
-   * ----------------------------------------------------------
-   */
+  // ==========================================================
+  // STEP 2 — CREATE LOCAL TRANSACTION AND DEBIT WALLET
+  // ==========================================================
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
-  let localBillId;
+  let billId;
   let transactionReference;
-  let idempotencyKey;
+  let providerRequestId;
 
   try {
-    await client.query(
-      'BEGIN'
+    await client.query('BEGIN');
+
+    const accountResult = await client.query(
+      `
+      SELECT
+        id,
+        balance,
+        currency,
+        status
+      FROM accounts
+      WHERE
+        user_id = $1
+        AND currency = 'NGN'
+        AND status = 'active'
+      ORDER BY created_at ASC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [userId]
     );
 
-    /**
-     * LOCK USER ACCOUNT
-     */
-
-    const accountResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          balance,
-          currency,
-          status
-        FROM accounts
-        WHERE
-          user_id = $1
-          AND currency = 'NGN'
-          AND status = 'active'
-        ORDER BY created_at ASC
-        LIMIT 1
-        FOR UPDATE
-        `,
-        [userId]
-      );
-
-    if (
-      accountResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    if (accountResult.rows.length === 0) {
+      await client.query('ROLLBACK');
 
       return res.status(404).json({
         success: false,
-        message:
-          'Active NGN account not found',
+        message: 'Active NGN account not found.',
       });
     }
 
-    const account =
-      accountResult.rows[0];
-
-    const balance =
-      Number(account.balance);
-
-    /**
-     * CHECK BALANCE
-     */
+    const account = accountResult.rows[0];
+    const balance = Number(account.balance);
 
     if (
       !Number.isFinite(balance) ||
       balance < numericAmount
     ) {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
-        message:
-          'Insufficient balance',
+        message: 'Insufficient balance.',
       });
     }
 
-    /**
-     * CREATE REFERENCES
-     */
-
     transactionReference =
-      `ZEL-${Date.now()}-${crypto
-        .randomBytes(4)
+      `ZEL-${Date.now()}-${require('crypto')
+        .randomBytes(5)
         .toString('hex')
         .toUpperCase()}`;
 
-    idempotencyKey =
-      crypto.randomUUID();
+    // Generate the VTPass ID BEFORE the provider request.
+    providerRequestId = generateElectricityRequestId();
 
-    /**
-     * FIND ELECTRICITY BILLER
-     */
+    // Match the biller where possible instead of blindly choosing
+    // an unrelated first Electricity biller.
+    const billerResult = await client.query(
+      `
+      SELECT id, name
+      FROM billers
+      WHERE
+        category = 'electricity'
+        AND UPPER(name) LIKE $1
+      ORDER BY created_at ASC
+      LIMIT 1
+      `,
+      [`%${normalizedProvider}%`]
+    );
 
-    const billerResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          name
-        FROM billers
-        WHERE
-          category = 'electricity'
-        ORDER BY created_at ASC
-        LIMIT 1
-        `
-      );
+    const fallbackBillerResult =
+      billerResult.rows.length === 0
+        ? await client.query(
+            `
+            SELECT id, name
+            FROM billers
+            WHERE category = 'electricity'
+            ORDER BY created_at ASC
+            LIMIT 1
+            `
+          )
+        : null;
 
     const biller =
       billerResult.rows[0] ||
+      fallbackBillerResult?.rows[0] ||
       null;
 
-    /**
-     * CREATE BILL PAYMENT
-     */
+    const billResult = await client.query(
+      `
+      INSERT INTO bill_payments (
+        account_id,
+        biller_id,
+        category,
+        biller_name,
+        customer_reference,
+        customer_name,
+        amount,
+        currency,
+        reference,
+        provider_request_id,
+        status,
+        meter_type,
+        meter_number,
+        verification_status,
+        verified_customer_name,
+        verified_customer_address,
+        tariff_class
+      )
+      VALUES (
+        $1, $2, 'electricity', $3, $4, $5,
+        $6, 'NGN', $7, $8, 'processing',
+        $9, $10, 'verified', $11, $12, $13
+      )
+      RETURNING id
+      `,
+      [
+        account.id,
+        biller?.id || null,
+        normalizedProvider,
+        normalizedMeterNumber,
+        customerName,
+        numericAmount,
+        transactionReference,
+        providerRequestId,
+        normalizedMeterType,
+        normalizedMeterNumber,
+        customerName,
+        customerAddress,
+        tariffClass,
+      ]
+    );
 
-    const billResult =
-      await client.query(
-        `
-        INSERT INTO bill_payments (
-          account_id,
-          biller_id,
-          category,
-          biller_name,
-          customer_reference,
-          customer_name,
-          amount,
-          currency,
-          reference,
-          provider_request_id,
-          status,
-          meter_type,
-          meter_number,
-          verification_status,
-          verified_customer_name,
-          verified_customer_address,
-          tariff_class
-        )
-        VALUES (
-          $1,
-          $2,
-          'electricity',
-          $3,
-          $4,
-          $5,
-          $6,
-          'NGN',
-          $7,
-          $8,
-          'processing',
-          $9,
-          $10,
-          'verified',
-          $11,
-          $12,
-          $13
-        )
-        RETURNING id
-        `,
-        [
-          account.id,
-          biller?.id || null,
-          normalizedProvider,
-          normalizedMeterNumber,
-          customerName || null,
-          numericAmount,
-          transactionReference,
-          idempotencyKey,
-          normalizedMeterType,
-          normalizedMeterNumber,
-          customerName || null,
-          customerAddress || null,
-          tariffClass || null,
-        ]
-      );
+    billId = billResult.rows[0].id;
 
-    localBillId =
-      billResult.rows[0].id;
-
-    /**
-     * DEBIT CUSTOMER
-     */
-
-    await client.query(
+    const debitResult = await client.query(
       `
       UPDATE accounts
       SET
         balance = balance - $1,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
+      WHERE
+        id = $2
+        AND balance >= $1
       `,
-      [
-        numericAmount,
-        account.id,
-      ]
+      [numericAmount, account.id]
     );
 
-    /**
-     * CREATE TRANSACTION RECORD
-     */
+    if (debitResult.rowCount !== 1) {
+      throw new Error('Wallet debit failed.');
+    }
 
     await client.query(
       `
@@ -883,874 +678,196 @@ const purchaseElectricity = async (
       ]
     );
 
-    await client.query(
-      'COMMIT'
-    );
-
-    console.log(
-      '💰 Customer account debited'
-    );
-
+    await client.query('COMMIT');
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch (_) {}
 
     console.error(
-      '❌ Electricity local transaction failed:',
-      error
+      'Electricity local transaction failed:',
+      error.message
     );
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to create electricity payment',
+      message: 'Unable to create electricity payment.',
     });
-
   } finally {
     client.release();
   }
 
-  /**
-   * ----------------------------------------------------------
-   * STEP 2 — PURCHASE THROUGH SOGO
-   * ----------------------------------------------------------
-   */
+  // ==========================================================
+  // STEP 3 — SEND PURCHASE TO VTPASS
+  // ==========================================================
 
   let purchaseResult;
 
   try {
-    console.log(
-      '⚡ Sending electricity purchase to Sogo'
-    );
-
-    const response =
-      await axios.post(
-        `${SOGO_API_BASE_URL}/bills/electricity`,
-        {
-          disco_slug:
-            discoSlug,
-
-          meter_number:
-            normalizedMeterNumber,
-
-          meter_type:
-            normalizedMeterType,
-
-          amount:
-            numericAmount,
-        },
-        {
-          headers: {
-            Authorization:
-              `Bearer ${SOGO_API_KEY}`,
-
-            'Content-Type':
-              'application/json',
-
-            'Idempotency-Key':
-              idempotencyKey,
-          },
-
-          timeout: 60000,
-        }
-      );
-
-    purchaseResult =
-      response?.data;
-
-    console.log(
-      '✅ Sogo electricity purchase response received'
-    );
-
+    purchaseResult = await purchaseVTPassElectricity({
+      provider: normalizedProvider,
+      meterNumber: normalizedMeterNumber,
+      meterType: normalizedMeterType,
+      amount: numericAmount,
+      phone,
+      requestId: providerRequestId,
+    });
   } catch (error) {
-    /**
-     * DO NOT REFUND HERE.
-     *
-     * The request may have reached Sogo and could still
-     * complete asynchronously.
-     */
+    // Never refund a timeout or network error.
+    // VTPass may have received and processed the request.
 
     console.error(
-      '⚠️ Sogo electricity request/network error:',
-      error?.message
+      'VTPass Electricity purchase uncertain:',
+      error.message
     );
 
     return res.status(202).json({
       success: true,
       processing: true,
-
+      status: 'processing',
       message:
         'Your electricity payment is being processed. Please do not submit it again.',
-
-      reference:
-        transactionReference,
-
-      provider_request_id:
-        idempotencyKey,
+      reference: transactionReference,
+      provider_request_id: providerRequestId,
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * STEP 3 — NORMALIZE INITIAL SOGO RESPONSE
-   * ----------------------------------------------------------
-   */
+  // ==========================================================
+  // STEP 4 — INTERPRET VTPASS RESPONSE
+  // ==========================================================
 
-  let providerData =
-    extractProviderData(
-      purchaseResult
-    );
+  const providerStatus =
+    getProviderStatus(purchaseResult);
 
-  let providerStatus =
-    extractProviderStatus(
-      providerData,
-      purchaseResult
-    );
+  const providerReference =
+    getProviderReference(purchaseResult);
 
-  let providerReference =
-    extractProviderReference(
-      providerData,
-      purchaseResult
-    );
+  const providerMessage =
+    getProviderMessage(purchaseResult);
 
-  let providerMessage =
-    extractProviderMessage(
-      providerData,
-      purchaseResult
-    );
-
-  let electricityToken =
-    extractElectricityToken(
-      purchaseResult
-    );
-
-  let units =
-    extractUnits(
-      purchaseResult
-    );
-
-  console.log(
-    '📌 Sogo status:',
-    providerStatus
-  );
-
-  console.log(
-    '📌 Sogo reference:',
-    providerReference
-  );
-
-  console.log(
-    '📌 Electricity token:',
-    electricityToken
-      ? '[PRESENT]'
-      : '[NOT PRESENT]'
-  );
-
-  console.log(
-    '📌 Electricity units:',
-    units !== null &&
-    units !== undefined &&
-    units !== ''
-      ? units
-      : '[NOT PRESENT]'
-  );
-
-  /**
-   * ----------------------------------------------------------
-   * STEP 4 — LIVE TRANSACTION LOOKUP
-   *
-   * If Sogo says the transaction is completed but the initial
-   * response does not contain the token/units, retrieve the
-   * completed transaction from Sogo.
-   * ----------------------------------------------------------
-   */
-
-  if (
-    (
-      providerStatus === 'completed' ||
-      providerStatus === 'success' ||
-      providerStatus === 'successful'
-    ) &&
-    providerReference &&
-    (
-      !electricityToken ||
-      units === null ||
-      units === undefined ||
-      units === ''
-    )
-  ) {
-    console.log(
-      '🔎 Token/units missing from initial response. Attempting Sogo transaction lookup...'
-    );
-
-    const lookupResult =
-      await fetchSogoTransaction(
-        providerReference
+  if (providerStatus === 'completed') {
+    try {
+      await saveProviderResponse({
+        billId,
+        reference: transactionReference,
+        result: purchaseResult,
+        status: 'completed',
+      });
+    } catch (error) {
+      // Provider may have delivered the token. Keep local record
+      // pending if database finalization fails; do not refund.
+      console.error(
+        'VTPass completed but local update failed:',
+        error.message
       );
 
-    if (lookupResult) {
-      const lookupData =
-        extractProviderData(
-          lookupResult
-        );
-
-      const lookupToken =
-        extractElectricityToken(
-          lookupResult
-        ) ||
-        extractElectricityToken(
-          lookupData
-        );
-
-      const lookupUnits =
-        extractUnits(
-          lookupResult
-        ) ??
-        extractUnits(
-          lookupData
-        );
-
-      const lookupStatus =
-        extractProviderStatus(
-          lookupData,
-          lookupResult
-        );
-
-      const lookupMessage =
-        extractProviderMessage(
-          lookupData,
-          lookupResult
-        );
-
-      if (lookupToken) {
-        electricityToken =
-          lookupToken;
-      }
-
-      if (
-        lookupUnits !== null &&
-        lookupUnits !== undefined &&
-        lookupUnits !== ''
-      ) {
-        units =
-          lookupUnits;
-      }
-
-      if (lookupStatus) {
-        providerStatus =
-          lookupStatus;
-      }
-
-      if (lookupMessage) {
-        providerMessage =
-          lookupMessage;
-      }
-
-      console.log(
-        '📌 Sogo lookup token:',
-        electricityToken
-          ? '[PRESENT]'
-          : '[NOT PRESENT]'
-      );
-
-      console.log(
-        '📌 Sogo lookup units:',
-        units !== null &&
-        units !== undefined &&
-        units !== ''
-          ? units
-          : '[NOT PRESENT]'
-      );
+      return res.status(202).json({
+        success: true,
+        processing: true,
+        status: 'processing',
+        message:
+          'Your payment was received and is being confirmed. Please do not submit it again.',
+        reference: transactionReference,
+        provider_request_id: providerRequestId,
+      });
     }
-  }
 
-  /**
-   * ----------------------------------------------------------
-   * STEP 5 — COMPLETED
-   * ----------------------------------------------------------
-   */
+    const token =
+      firstValue(
+        purchaseResult.token,
+        purchaseResult.rawResponse?.token,
+        purchaseResult.rawResponse?.purchased_code
+      );
 
-  if (
-    providerStatus === 'completed' ||
-    providerStatus === 'success' ||
-    providerStatus === 'successful'
-  ) {
-    await pool.query(
-      `
-      UPDATE bill_payments
-      SET
-        status = 'completed',
-        provider_reference = $1,
-        provider_response = $2,
-        provider_response_message = $3,
-        electricity_token = COALESCE($4, electricity_token),
-        units = COALESCE($5, units),
-        completed_at = CURRENT_TIMESTAMP
-      WHERE id = $6
-      `,
-      [
-        providerReference,
-
-        JSON.stringify(
-          purchaseResult
-        ),
-
-        providerMessage,
-
-        electricityToken,
-
-        units,
-
-        localBillId,
-      ]
-    );
-
-    await pool.query(
-      `
-      UPDATE transactions
-      SET
-        status = 'completed'
-      WHERE reference = $1
-      `,
-      [transactionReference]
-    );
-
-    console.log(
-      '🎉 ELECTRICITY PAYMENT COMPLETED'
-    );
+    const units =
+      firstValue(
+        purchaseResult.units,
+        purchaseResult.rawResponse?.units
+      );
 
     return res.status(200).json({
       success: true,
-
-      status:
-        'completed',
-
+      status: 'completed',
       message:
         providerMessage ||
-        'Electricity payment successful',
-
-      reference:
-        transactionReference,
-
-      provider_reference:
-        providerReference,
-
-      electricity_token:
-        electricityToken,
-
-      token:
-        electricityToken,
-
+        'Electricity payment successful.',
+      reference: transactionReference,
+      provider_reference: providerReference,
+      provider_request_id: providerRequestId,
+      electricity_token: token,
+      token,
       units,
-
-      customer_name:
-        customerName,
-
-      customer_address:
-        customerAddress,
-
-      meter_number:
-        normalizedMeterNumber,
-
-      meter_type:
-        normalizedMeterType,
-
-      provider:
-        normalizedProvider,
+      customer_name: customerName,
+      customer_address: customerAddress,
+      meter_number: normalizedMeterNumber,
+      meter_type: normalizedMeterType,
+      provider: normalizedProvider,
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * STEP 6 — PROCESSING
-   * ----------------------------------------------------------
-   */
-
-  if (
-    providerStatus === 'processing' ||
-    providerStatus === 'pending'
-  ) {
-    await pool.query(
-      `
-      UPDATE bill_payments
-      SET
-        status = 'processing',
-        provider_reference =
-          COALESCE($1, provider_reference),
-        provider_response = $2,
-        provider_response_message = $3,
-        electricity_token =
-          COALESCE($4, electricity_token),
-        units =
-          COALESCE($5, units)
-      WHERE id = $6
-      `,
-      [
-        providerReference,
-
-        JSON.stringify(
-          purchaseResult
-        ),
-
-        providerMessage,
-
-        electricityToken,
-
-        units,
-
-        localBillId,
-      ]
-    );
-
-    await pool.query(
-      `
-      UPDATE transactions
-      SET
-        status = 'processing'
-      WHERE reference = $1
-      `,
-      [transactionReference]
-    );
-
-    console.log(
-      '⏳ ELECTRICITY PAYMENT PROCESSING'
-    );
-
-    return res.status(202).json({
-      success: true,
-
-      processing: true,
-
-      status:
-        'processing',
-
-      message:
-        providerMessage ||
-        'Electricity payment is still processing. Please do not submit it again.',
-
-      reference:
-        transactionReference,
-
-      provider_reference:
-        providerReference,
-    });
-  }
-
-  /**
-   * ----------------------------------------------------------
-   * STEP 7 — FAILED / CANCELLED
-   * ----------------------------------------------------------
-   */
-
-  if (
-    providerStatus === 'failed' ||
-    providerStatus === 'cancelled'
-  ) {
-    const refundClient =
-      await pool.connect();
-
+  if (providerStatus === 'failed') {
     try {
-      await refundClient.query(
-        'BEGIN'
-      );
-
-      const billAccount =
-        await refundClient.query(
-          `
-          SELECT
-            account_id,
-            amount
-          FROM bill_payments
-          WHERE id = $1
-          FOR UPDATE
-          `,
-          [localBillId]
-        );
-
-      if (
-        billAccount.rows.length > 0
-      ) {
-        const refundAccountId =
-          billAccount.rows[0].account_id;
-
-        const refundAmount =
-          Number(
-            billAccount.rows[0].amount
-          );
-
-        const statusCheck =
-          await refundClient.query(
-            `
-            SELECT status
-            FROM bill_payments
-            WHERE id = $1
-            FOR UPDATE
-            `,
-            [localBillId]
-          );
-
-        if (
-          statusCheck.rows[0]?.status ===
-          'processing'
-        ) {
-          await refundClient.query(
-            `
-            UPDATE accounts
-            SET
-              balance = balance + $1,
-              updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2
-            `,
-            [
-              refundAmount,
-              refundAccountId,
-            ]
-          );
-
-          await refundClient.query(
-            `
-            INSERT INTO transactions (
-              account_id,
-              type,
-              amount,
-              currency,
-              reference,
-              status,
-              description
-            )
-            VALUES (
-              $1,
-              'electricity_refund',
-              $2,
-              'NGN',
-              $3,
-              'completed',
-              $4
-            )
-            `,
-            [
-              refundAccountId,
-
-              refundAmount,
-
-              `REF-${transactionReference}`,
-
-              `Electricity payment refund - ${normalizedProvider}`,
-            ]
-          );
-        }
-      }
-
-      await refundClient.query(
-        `
-        UPDATE bill_payments
-        SET
-          status = $1,
-          provider_reference =
-            COALESCE($2, provider_reference),
-          provider_response = $3,
-          provider_response_message = $4
-        WHERE id = $5
-        `,
-        [
-          providerStatus ===
-          'cancelled'
-            ? 'cancelled'
-            : 'failed',
-
-          providerReference,
-
-          JSON.stringify(
-            purchaseResult
-          ),
-
-          providerMessage,
-
-          localBillId,
-        ]
-      );
-
-      await refundClient.query(
-        `
-        UPDATE transactions
-        SET
-          status = $1
-        WHERE reference = $2
-        `,
-        [
-          providerStatus ===
-          'cancelled'
-            ? 'cancelled'
-            : 'failed',
-
-          transactionReference,
-        ]
-      );
-
-      await refundClient.query(
-        'COMMIT'
-      );
-
-    } catch (refundError) {
-      try {
-        await refundClient.query(
-          'ROLLBACK'
-        );
-      } catch (_) {}
-
+      await refundElectricity({
+        billId,
+        reference: transactionReference,
+        providerResult: purchaseResult,
+      });
+    } catch (error) {
       console.error(
-        '❌ Electricity refund processing failed:',
-        refundError
+        'Electricity refund failed:',
+        error.message
       );
 
-    } finally {
-      refundClient.release();
-    }
-
-    return res.status(502).json({
-      success: false,
-
-      status:
-        providerStatus ===
-        'cancelled'
-          ? 'cancelled'
-          : 'failed',
-
-      message:
-        providerMessage ||
-        'Electricity payment failed. Your account has been refunded.',
-
-      reference:
-        transactionReference,
-
-      provider_reference:
-        providerReference,
-    });
-  }
-
-  /**
-   * ----------------------------------------------------------
-   * STEP 8 — REFUNDED
-   * ----------------------------------------------------------
-   */
-
-  if (
-    providerStatus === 'refunded'
-  ) {
-    const refundClient =
-      await pool.connect();
-
-    try {
-      await refundClient.query(
-        'BEGIN'
-      );
-
-      const billAccount =
-        await refundClient.query(
-          `
-          SELECT
-            account_id,
-            amount,
-            status
-          FROM bill_payments
-          WHERE id = $1
-          FOR UPDATE
-          `,
-          [localBillId]
-        );
-
-      if (
-        billAccount.rows.length > 0 &&
-        billAccount.rows[0].status ===
-          'processing'
-      ) {
-        const refundAmount =
-          Number(
-            billAccount.rows[0].amount
-          );
-
-        await refundClient.query(
-          `
-          UPDATE accounts
-          SET
-            balance = balance + $1,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-          `,
-          [
-            refundAmount,
-
-            billAccount.rows[0]
-              .account_id,
-          ]
-        );
-
-        await refundClient.query(
-          `
-          INSERT INTO transactions (
-            account_id,
-            type,
-            amount,
-            currency,
-            reference,
-            status,
-            description
-          )
-          VALUES (
-            $1,
-            'electricity_refund',
-            $2,
-            'NGN',
-            $3,
-            'completed',
-            $4
-          )
-          `,
-          [
-            billAccount.rows[0]
-              .account_id,
-
-            refundAmount,
-
-            `REF-${transactionReference}`,
-
-            `Electricity payment refund - ${normalizedProvider}`,
-          ]
-        );
-      }
-
-      await refundClient.query(
-        `
-        UPDATE bill_payments
-        SET
-          status = 'refunded',
-          provider_reference =
-            COALESCE($1, provider_reference),
-          provider_response = $2,
-          provider_response_message = $3
-        WHERE id = $4
-        `,
-        [
-          providerReference,
-
-          JSON.stringify(
-            purchaseResult
-          ),
-
-          providerMessage,
-
-          localBillId,
-        ]
-      );
-
-      await refundClient.query(
-        `
-        UPDATE transactions
-        SET
-          status = 'refunded'
-        WHERE reference = $1
-        `,
-        [transactionReference]
-      );
-
-      await refundClient.query(
-        'COMMIT'
-      );
-
-    } catch (refundError) {
-      try {
-        await refundClient.query(
-          'ROLLBACK'
-        );
-      } catch (_) {}
-
-      console.error(
-        '❌ Electricity refund failed:',
-        refundError
-      );
-
-    } finally {
-      refundClient.release();
+      return res.status(202).json({
+        success: true,
+        processing: true,
+        status: 'processing',
+        message:
+          'The provider reported a failed transaction. Your refund is being reconciled.',
+        reference: transactionReference,
+        provider_request_id: providerRequestId,
+      });
     }
 
     return res.status(200).json({
       success: true,
-
-      status:
-        'refunded',
-
+      status: 'failed',
+      refunded: true,
       message:
-        'Electricity payment was refunded.',
-
-      reference:
-        transactionReference,
-
-      provider_reference:
-        providerReference,
+        providerMessage ||
+        'Electricity payment failed. Your wallet has been refunded.',
+      reference: transactionReference,
+      provider_reference: providerReference,
     });
   }
 
-  /**
-   * ----------------------------------------------------------
-   * STEP 9 — UNKNOWN PROVIDER RESPONSE
-   * ----------------------------------------------------------
-   */
+  // Any other response, including 099, 001, initiated,
+  // pending, or an unrecognized response, stays processing.
 
-  console.error(
-    '⚠️ Unexpected Sogo electricity response:',
-    JSON.stringify(
-      purchaseResult,
-      null,
-      2
-    )
-  );
+  try {
+    await saveProviderResponse({
+      billId,
+      reference: transactionReference,
+      result: purchaseResult,
+      status: 'processing',
+    });
+  } catch (error) {
+    console.error(
+      'Unable to save pending VTPass response:',
+      error.message
+    );
+  }
 
-  await pool.query(
-    `
-    UPDATE bill_payments
-    SET
-      status =
-        'provider_response_unrecognized',
-
-      provider_reference =
-        COALESCE($1, provider_reference),
-
-      provider_response = $2,
-
-      provider_response_message = $3
-
-    WHERE id = $4
-    `,
-    [
-      providerReference,
-
-      JSON.stringify(
-        purchaseResult
-      ),
-
-      providerMessage,
-
-      localBillId,
-    ]
-  );
-
-  return res.status(502).json({
-    success: false,
-
-    status:
-      'provider_response_unrecognized',
-
+  return res.status(202).json({
+    success: true,
+    processing: true,
+    status: 'processing',
     message:
-      'The electricity provider returned an unexpected response. Please do not submit the payment again while we verify the transaction.',
-
-    reference:
-      transactionReference,
-
-    provider_reference:
-      providerReference,
+      providerMessage ||
+      'Your electricity payment is still processing. Please do not submit it again.',
+    reference: transactionReference,
+    provider_reference: providerReference,
+    provider_request_id: providerRequestId,
   });
 };
 
