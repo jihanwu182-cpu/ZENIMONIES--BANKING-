@@ -262,7 +262,7 @@ export default function KYCScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Website-style green verification banner */}
+        {/* Compact website-style green banner */}
         <View style={styles.heroCard}>
           <Text style={styles.brandText}>
             ZENIMONIES BANKING
@@ -436,63 +436,65 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
 
+  /* Compact green banner */
   heroCard: {
-  backgroundColor: GREEN,
-  width: '75%',
-  alignSelf: 'center',
-  borderRadius: 18,
-  paddingHorizontal: 13,
-  paddingTop: 12,
-  paddingBottom: 10,
-  marginBottom: 16,
-},
+    backgroundColor: GREEN,
+    width: '75%',
+    alignSelf: 'center',
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingTop: 12,
+    paddingBottom: 10,
+    marginBottom: 16,
+  },
 
-brandText: {
-  color: '#DDF3E5',
-  fontSize: 9,
-  fontWeight: '900',
-  letterSpacing: 1.5,
-  marginBottom: 6,
-},
+  brandText: {
+    color: '#DDF3E5',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
 
-heroTitle: {
-  color: WHITE,
-  fontSize: 19,
-  lineHeight: 25,
-  fontWeight: '900',
-  letterSpacing: -0.4,
-},
+  heroTitle: {
+    color: WHITE,
+    fontSize: 19,
+    lineHeight: 25,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
 
-heroDescription: {
-  color: '#E5F5EA',
-  fontSize: 12,
-  lineHeight: 17,
-  marginTop: 6,
-},
+  heroDescription: {
+    color: '#E5F5EA',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 6,
+  },
 
-heroBadges: {
-  flexDirection: 'row',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  marginTop: 9,
-  gap: 5,
-},
+  heroBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 9,
+    gap: 5,
+  },
 
-heroBadge: {
-  borderRadius: 30,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.24)',
-  backgroundColor: 'rgba(255,255,255,0.12)',
-  paddingHorizontal: 8,
-  paddingVertical: 5,
-},
+  heroBadge: {
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
 
-heroBadgeText: {
-  color: WHITE,
-  fontSize: 9,
-  fontWeight: '800',
-},
+  heroBadgeText: {
+    color: WHITE,
+    fontSize: 9,
+    fontWeight: '800',
+  },
 
+  /* Current verification level */
   currentLevelCard: {
     backgroundColor: WHITE,
     borderRadius: 22,
@@ -576,6 +578,7 @@ heroBadgeText: {
     fontWeight: '900',
   },
 
+  /* Verification tier cards */
   tierCard: {
     backgroundColor: WHITE,
     borderRadius: 23,
