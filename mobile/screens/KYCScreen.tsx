@@ -5,18 +5,18 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 
 const GREEN = '#07803F';
 const DARK_GREEN = '#056B34';
 const BLACK = '#172018';
 const MUTED = '#858B83';
-const BACKGROUND = '#F5F7F4';
+const BACKGROUND = '#F3F7F4';
 const WHITE = '#FFFFFF';
-const BORDER = '#E6EBE5';
+const BORDER = '#E5EBE7';
 
 const API_BASE = 'https://zenimonies-banking.onrender.com/api';
 
@@ -26,13 +26,6 @@ type Props = {
   onSelect?: (section: string) => void;
   verificationLevel?: string | number;
   verificationStatus?: string;
-};
-
-type Tier = {
-  number: number;
-  subtitle: string;
-  accountLimit: string;
-  dailyLimit: string;
 };
 
 type Limits = {
@@ -51,22 +44,36 @@ type KycStatus = {
   tier_2_liveness_status?: string;
 };
 
+type Tier = {
+  number: number;
+  title: string;
+  description: string;
+  accountLimit: string;
+  dailyLimit: string;
+};
+
 const tiers: Tier[] = [
   {
     number: 1,
-    subtitle: 'Basic Banking',
+    title: 'Identity Verification',
+    description:
+      'Complete Tier 1 using either your BVN or your NIN. You only need one successfully verified option.',
     accountLimit: '₦300,000',
     dailyLimit: '₦50,000',
   },
   {
     number: 2,
-    subtitle: 'Enhanced Banking',
+    title: 'Identity Verification',
+    description:
+      'Complete your identity verification securely using our approved verification process.',
     accountLimit: '₦500,000',
     dailyLimit: '₦200,000',
   },
   {
     number: 3,
-    subtitle: 'Full Banking',
+    title: 'Proof of Address',
+    description:
+      'Submit an approved proof of address and a selfie to complete Tier 3 verification.',
     accountLimit: 'Unlimited',
     dailyLimit: '₦5,000,000',
   },
@@ -84,7 +91,6 @@ const formatLevel = (value?: string | number) => {
 
 const formatLimit = (value?: number | string | null) => {
   if (value === null) return 'Unlimited';
-
   if (value === undefined || value === '') return null;
 
   const amount = Number(value);
@@ -103,7 +109,6 @@ const isPending = (value?: string | null) =>
 
 export default function KYCScreen({
   token,
-  onBack,
   onSelect,
   verificationLevel = 0,
 }: Props) {
@@ -113,85 +118,62 @@ export default function KYCScreen({
 
   const [kyc, setKyc] = useState<KycStatus>({});
   const [limits, setLimits] = useState<Limits>({});
-
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchKycStatus = useCallback(
-    async (isRefresh = false) => {
-      try {
-        if (isRefresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+  const fetchKycStatus = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        setError('');
-
-        if (!token) {
-          setError('Session expired. Please log in again.');
-          return;
-        }
-
-        const response = await fetch(`${API_BASE}/kyc/status`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data?.message ||
-              data?.error ||
-              'Unable to retrieve KYC status.',
-          );
-        }
-
-        const responseKyc =
-          data?.kyc ??
-          data?.data?.kyc ??
-          data?.data ??
-          data;
-
-        const responseLimits =
-          data?.limits ??
-          data?.data?.limits ??
-          {};
-
-        setKyc(responseKyc);
-        setLimits(responseLimits);
-        setCurrentLevel(formatLevel(responseKyc?.tier));
-      } catch (err: any) {
-        setError(
-          err?.message || 'Unable to load your KYC status.',
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+      if (!token) {
+        throw new Error('Session expired. Please log in again.');
       }
-    },
-    [token],
-  );
+
+      const response = await fetch(`${API_BASE}/kyc/status`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            'Unable to retrieve KYC status.',
+        );
+      }
+
+      const responseKyc =
+        data?.kyc ??
+        data?.data?.kyc ??
+        data?.data ??
+        data;
+
+      const responseLimits =
+        data?.limits ??
+        data?.data?.limits ??
+        {};
+
+      setKyc(responseKyc);
+      setLimits(responseLimits);
+      setCurrentLevel(formatLevel(responseKyc?.tier));
+    } catch (err: any) {
+      setError(
+        err?.message || 'Unable to load your verification status.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     fetchKycStatus();
   }, [fetchKycStatus]);
-
-  const handleSelectTier = (tierNumber: number) => {
-    const section =
-      tierNumber === 1
-        ? 'Tier 1 BVN or NIN Verification'
-        : tierNumber === 2
-        ? 'Tier 2 Identity Verification'
-        : 'Tier 3 Proof of Address';
-
-    onSelect?.(section);
-  };
 
   const getStatus = (tierNumber: number) => {
     if (tierNumber <= currentLevel && currentLevel > 0) {
@@ -200,10 +182,7 @@ export default function KYCScreen({
 
     if (
       tierNumber === 1 &&
-      (
-        isPending(kyc.bvn_status) ||
-        isPending(kyc.nin_status)
-      )
+      (isPending(kyc.bvn_status) || isPending(kyc.nin_status))
     ) {
       return 'Pending';
     }
@@ -233,14 +212,6 @@ export default function KYCScreen({
     return 'Locked';
   };
 
-  const getStatusStyle = (status: string) => {
-    if (status === 'Verified') return styles.verifiedBadge;
-    if (status === 'Pending') return styles.pendingBadge;
-    if (status === 'Available') return styles.availableBadge;
-
-    return styles.lockedBadge;
-  };
-
   const getAccountLimit = (tier: Tier) => {
     if (tier.number === currentLevel) {
       return formatLimit(limits.account_limit) ?? tier.accountLimit;
@@ -260,153 +231,164 @@ export default function KYCScreen({
     return tier.dailyLimit;
   };
 
+  const handleSelectTier = (tierNumber: number) => {
+    const section =
+      tierNumber === 1
+        ? 'Tier 1 BVN or NIN Verification'
+        : tierNumber === 2
+        ? 'Tier 2 Identity Verification'
+        : 'Tier 3 Proof of Address';
+
+    onSelect?.(section);
+  };
+
+  const getBadgeStyle = (status: string) => {
+    if (status === 'Verified') return styles.verifiedBadge;
+    if (status === 'Pending') return styles.pendingBadge;
+    if (status === 'Available') return styles.availableBadge;
+    return styles.lockedBadge;
+  };
+
+  const getBadgeTextStyle = (status: string) => {
+    if (status === 'Verified') return styles.verifiedText;
+    if (status === 'Pending') return styles.pendingText;
+    if (status === 'Available') return styles.availableText;
+    return styles.lockedText;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>KYC</Text>
-
-        <Text style={styles.headerSubtitle}>
-          Manage your account verification and banking limits.
-        </Text>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTop}>
-            <View style={styles.summaryIcon}>
-              <Text style={styles.summaryIconText}>✓</Text>
+        {/* Website-style green verification banner */}
+        <View style={styles.heroCard}>
+          <Text style={styles.brandText}>
+            ZENIMONIES BANKING
+          </Text>
+
+          <Text style={styles.heroTitle}>
+            Identity Verification
+          </Text>
+
+          <Text style={styles.heroDescription}>
+            Complete your verification securely to unlock higher
+            account and transfer limits.
+          </Text>
+
+          <View style={styles.heroBadges}>
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>
+                ✓ Secure verification
+              </Text>
             </View>
 
-            <View style={styles.summaryInfo}>
-              <Text style={styles.summaryLabel}>
-                ACCOUNT VERIFICATION
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>
+                🔒 Your information is protected
               </Text>
+            </View>
 
-              <Text style={styles.summaryLevel}>
-                {loading
-                  ? 'Checking status...'
-                  : currentLevel > 0
-                  ? `Tier ${currentLevel} Verified`
-                  : 'Not verified'}
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>
+                ₦ Nigerian Naira
               </Text>
             </View>
           </View>
-
-          <View style={styles.summaryDivider} />
-
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={() => fetchKycStatus(true)}
-            disabled={loading || refreshing}
-            activeOpacity={0.7}
-          >
-            {refreshing ? (
-              <ActivityIndicator color={GREEN} size="small" />
-            ) : (
-              <>
-                <Text style={styles.refreshIcon}>↻</Text>
-                <Text style={styles.refreshText}>
-                  Refresh status
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {!!error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-
-              <TouchableOpacity
-                onPress={() => fetchKycStatus(true)}
-                style={styles.retryButton}
-              >
-                <Text style={styles.retryText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
+        {/* Current verification level */}
+        <View style={styles.currentLevelCard}>
+          <View style={styles.levelNumberBox}>
+            <Text style={styles.levelNumber}>
+              {loading ? '—' : currentLevel}
+            </Text>
+          </View>
+
+          <View style={styles.levelInfo}>
+            <Text style={styles.levelTitle}>
+              Current verification level
+            </Text>
+
+            <Text style={styles.levelDescription}>
+              Your approved ZENIMONIES verification level
+            </Text>
+          </View>
+        </View>
+
+        {loading && (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={GREEN} size="small" />
+            <Text style={styles.loadingText}>
+              Checking verification status...
+            </Text>
+          </View>
+        )}
+
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+
+            <TouchableOpacity
+              onPress={fetchKycStatus}
+              activeOpacity={0.8}
+              style={styles.retryButton}
+            >
+              <Text style={styles.retryText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Verification tier cards */}
         {tiers.map((tier) => {
           const status = getStatus(tier.number);
-          const isVerified = status === 'Verified';
-          const isAvailable = status === 'Available';
-          const isPendingStatus = status === 'Pending';
-          const isLocked = status === 'Locked';
 
           return (
-            <View
+            <TouchableOpacity
               key={tier.number}
-              style={[
-                styles.tierCard,
-                isVerified && styles.currentTierCard,
-                isAvailable && styles.availableTierCard,
-                isPendingStatus && styles.pendingTierCard,
-              ]}
+              activeOpacity={status === 'Available' ? 0.92 : 1}
+              disabled={loading || status !== 'Available'}
+              onPress={() => handleSelectTier(tier.number)}
+              style={styles.tierCard}
             >
-              <View style={styles.tierHeader}>
-                <View
-                  style={[
-                    styles.tierNumberBox,
-                    isVerified && styles.activeTierNumberBox,
-                    isAvailable && styles.availableTierNumberBox,
-                    isPendingStatus && styles.pendingTierNumberBox,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tierNumber,
-                      isVerified && styles.activeTierNumber,
-                      isAvailable && styles.availableTierNumber,
-                      isPendingStatus && styles.pendingTierNumber,
-                    ]}
-                  >
-                    {tier.number}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.statusBadge,
-                    getStatusStyle(status),
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      isVerified && styles.verifiedBadgeText,
-                      isAvailable && styles.availableBadgeText,
-                      isPendingStatus && styles.pendingBadgeText,
-                    ]}
-                  >
-                    {loading ? '...' : status}
-                  </Text>
-                </View>
-              </View>
+              <Text style={styles.tierLabel}>
+                TIER {tier.number}
+              </Text>
 
               <Text style={styles.tierTitle}>
-                Tier {tier.number}
+                {tier.title}
               </Text>
 
-              <Text style={styles.tierSubtitle}>
-                {tier.subtitle}
+              <Text style={styles.tierDescription}>
+                {tier.description}
               </Text>
+
+              <View
+                style={[
+                  styles.statusBadge,
+                  getBadgeStyle(status),
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusBadgeText,
+                    getBadgeTextStyle(status),
+                  ]}
+                >
+                  {loading
+                    ? 'Checking...'
+                    : status === 'Verified'
+                    ? '✓ Verified'
+                    : status === 'Pending'
+                    ? '◷ Pending'
+                    : status === 'Available'
+                    ? 'Available'
+                    : '🔒 Locked'}
+                </Text>
+              </View>
 
               <View style={styles.limitsBox}>
-                <Text style={styles.limitsHeading}>
-                  Account limits
-                </Text>
-
                 <View style={styles.limitRow}>
                   <Text style={styles.limitLabel}>
                     Account limit
@@ -417,9 +399,11 @@ export default function KYCScreen({
                   </Text>
                 </View>
 
+                <View style={styles.limitDivider} />
+
                 <View style={styles.limitRow}>
                   <Text style={styles.limitLabel}>
-                    Daily transfer
+                    Daily transfer limit
                   </Text>
 
                   <Text style={styles.limitValue}>
@@ -427,53 +411,14 @@ export default function KYCScreen({
                   </Text>
                 </View>
               </View>
-
-              {!loading && isVerified && (
-                <View style={styles.verifiedFooter}>
-                  <Text style={styles.verifiedFooterText}>
-                    ✓ Verified
-                  </Text>
-                </View>
-              )}
-
-              {!loading && isPendingStatus && (
-                <View style={styles.pendingFooter}>
-                  <ActivityIndicator
-                    color="#9A6700"
-                    size="small"
-                  />
-                  <Text style={styles.pendingFooterText}>
-                    Verification pending
-                  </Text>
-                </View>
-              )}
-
-              {!loading && isAvailable && (
-                <TouchableOpacity
-                  style={styles.upgradeButton}
-                  activeOpacity={0.85}
-                  onPress={() => handleSelectTier(tier.number)}
-                >
-                  <Text style={styles.upgradeButtonText}>
-                    Continue
-                  </Text>
-
-                  <Text style={styles.upgradeArrow}>›</Text>
-                </TouchableOpacity>
-              )}
-
-              {!loading && isLocked && (
-                <View style={styles.lockedFooter}>
-                  <Text style={styles.lockedFooterText}>
-                    Complete Tier {tier.number - 1} first
-                  </Text>
-                </View>
-              )}
-            </View>
+            </TouchableOpacity>
           );
         })}
 
-        <View style={styles.bottomSpace} />
+        <Text style={styles.footerText}>
+          ZENIMONIES Banking uses secure identity verification
+          to help protect your account and financial activities.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -482,234 +427,204 @@ export default function KYCScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: WHITE,
-  },
-
-  header: {
-    backgroundColor: WHITE,
-    paddingHorizontal: 22,
-    paddingTop: 8,
-    paddingBottom: 25,
-  },
-
-  backButton: {
-    width: 42,
-    height: 42,
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-
-  backIcon: {
-    fontSize: 42,
-    lineHeight: 46,
-    color: BLACK,
-  },
-
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: BLACK,
-    letterSpacing: -0.8,
-  },
-
-  headerSubtitle: {
-    fontSize: 15,
-    lineHeight: 23,
-    color: MUTED,
-    marginTop: 10,
-    maxWidth: 340,
+    backgroundColor: BACKGROUND,
   },
 
   scrollContent: {
-    backgroundColor: BACKGROUND,
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 30,
+    paddingTop: 14,
+    paddingBottom: 28,
   },
 
-  summaryCard: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
+  heroCard: {
+    backgroundColor: GREEN,
+    borderRadius: 23,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 20,
+    marginBottom: 16,
   },
 
-  summaryTop: {
+  brandText: {
+    color: '#DDF3E5',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+    marginBottom: 14,
+  },
+
+  heroTitle: {
+    color: WHITE,
+    fontSize: 29,
+    lineHeight: 36,
+    fontWeight: '900',
+    letterSpacing: -0.7,
+  },
+
+  heroDescription: {
+    color: '#E5F5EA',
+    fontSize: 15,
+    lineHeight: 23,
+    marginTop: 12,
+  },
+
+  heroBadges: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-  },
-
-  summaryIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: '#E8F5ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-
-  summaryIconText: {
-    color: GREEN,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-
-  summaryInfo: {
-    flex: 1,
-  },
-
-  summaryLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    color: MUTED,
-  },
-
-  summaryLevel: {
-    fontSize: 21,
-    fontWeight: '900',
-    color: BLACK,
-    marginTop: 4,
-  },
-
-  summaryDivider: {
-    height: 1,
-    backgroundColor: BORDER,
     marginTop: 18,
+    gap: 8,
   },
 
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingTop: 15,
+  heroBadge: {
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
 
-  refreshIcon: {
-    fontSize: 19,
-    color: GREEN,
-    fontWeight: '900',
-    marginRight: 8,
-  },
-
-  refreshText: {
-    fontSize: 13,
-    color: GREEN,
+  heroBadgeText: {
+    color: WHITE,
+    fontSize: 12,
     fontWeight: '800',
   },
 
+  currentLevelCard: {
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    padding: 18,
+    minHeight: 112,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 16,
+  },
+
+  levelNumberBox: {
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    backgroundColor: '#159A4B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
+
+  levelNumber: {
+    color: WHITE,
+    fontSize: 29,
+    fontWeight: '900',
+  },
+
+  levelInfo: {
+    flex: 1,
+  },
+
+  levelTitle: {
+    color: BLACK,
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+
+  levelDescription: {
+    color: MUTED,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 5,
+  },
+
+  loadingBox: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+
+  loadingText: {
+    color: MUTED,
+    fontSize: 13,
+    marginLeft: 9,
+  },
+
   errorBox: {
-    backgroundColor: '#FFF2F0',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 14,
+    backgroundColor: '#FFF1EF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
   },
 
   errorText: {
     color: '#B42318',
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 20,
   },
 
   retryButton: {
-    marginTop: 8,
     alignSelf: 'flex-start',
+    marginTop: 9,
   },
 
   retryText: {
     color: '#B42318',
+    fontSize: 13,
     fontWeight: '900',
   },
 
   tierCard: {
     backgroundColor: WHITE,
-    borderRadius: 22,
+    borderRadius: 23,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,
   },
 
-  currentTierCard: {
-    borderColor: '#C7E3D0',
-    borderWidth: 1.5,
-  },
-
-  availableTierCard: {
-    borderColor: '#A5D5B6',
-    borderWidth: 1.5,
-  },
-
-  pendingTierCard: {
-    borderColor: '#E8D7A8',
-    borderWidth: 1.5,
-  },
-
-  tierHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-
-  tierNumberBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: '#F0F3F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  activeTierNumberBox: {
-    backgroundColor: '#E8F5ED',
-  },
-
-  availableTierNumberBox: {
-    backgroundColor: GREEN,
-  },
-
-  pendingTierNumberBox: {
-    backgroundColor: '#FFF4D6',
-  },
-
-  tierNumber: {
-    fontSize: 25,
+  tierLabel: {
+    color: '#159A4B',
+    fontSize: 13,
     fontWeight: '900',
-    color: MUTED,
+    letterSpacing: 1.2,
+    marginBottom: 11,
   },
 
-  activeTierNumber: {
-    color: GREEN,
+  tierTitle: {
+    color: BLACK,
+    fontSize: 25,
+    lineHeight: 32,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
 
-  availableTierNumber: {
-    color: WHITE,
-  },
-
-  pendingTierNumber: {
-    color: '#9A6700',
+  tierDescription: {
+    color: '#777F79',
+    fontSize: 15,
+    lineHeight: 23,
+    marginTop: 10,
   },
 
   statusBadge: {
+    alignSelf: 'flex-start',
     borderRadius: 30,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginTop: 18,
+    marginBottom: 18,
   },
 
   verifiedBadge: {
-    backgroundColor: '#E8F5ED',
-  },
-
-  availableBadge: {
-    backgroundColor: '#E8F5ED',
+    backgroundColor: '#E5F6EC',
   },
 
   pendingBadge: {
-    backgroundColor: '#FFF4D6',
+    backgroundColor: '#FFF3D3',
+  },
+
+  availableBadge: {
+    backgroundColor: '#E5F6EC',
   },
 
   lockedBadge: {
@@ -717,143 +632,68 @@ const styles = StyleSheet.create({
   },
 
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: MUTED,
-  },
-
-  verifiedBadgeText: {
-    color: DARK_GREEN,
-  },
-
-  availableBadgeText: {
-    color: DARK_GREEN,
-  },
-
-  pendingBadgeText: {
-    color: '#9A6700',
-  },
-
-  tierTitle: {
-    fontSize: 29,
+    fontSize: 14,
     fontWeight: '900',
-    color: BLACK,
-    letterSpacing: -0.5,
   },
 
-  tierSubtitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: GREEN,
-    marginTop: 4,
+  verifiedText: {
+    color: DARK_GREEN,
+  },
+
+  pendingText: {
+    color: '#986500',
+  },
+
+  availableText: {
+    color: DARK_GREEN,
+  },
+
+  lockedText: {
+    color: MUTED,
   },
 
   limitsBox: {
-    backgroundColor: '#F5F7F3',
-    borderRadius: 17,
-    paddingHorizontal: 16,
-    paddingVertical: 17,
-    marginTop: 22,
-  },
-
-  limitsHeading: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: BLACK,
-    marginBottom: 8,
+    backgroundColor: '#F5F8F5',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E6ECE7',
+    overflow: 'hidden',
   },
 
   limitRow: {
+    minHeight: 62,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 11,
   },
 
   limitLabel: {
+    color: '#7B837D',
     fontSize: 14,
-    color: MUTED,
     flex: 1,
   },
 
   limitValue: {
-    fontSize: 15,
-    fontWeight: '900',
     color: BLACK,
-    marginLeft: 8,
-  },
-
-  verifiedFooter: {
-    backgroundColor: '#E8F5ED',
-    borderRadius: 15,
-    paddingVertical: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-  },
-
-  verifiedFooterText: {
     fontSize: 15,
     fontWeight: '900',
-    color: DARK_GREEN,
+    marginLeft: 10,
+    textAlign: 'right',
   },
 
-  pendingFooter: {
-    backgroundColor: '#FFF8E7',
-    borderRadius: 15,
-    paddingVertical: 17,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
+  limitDivider: {
+    height: 1,
+    backgroundColor: '#E7ECE8',
   },
 
-  pendingFooterText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#9A6700',
-    marginLeft: 9,
-  },
-
-  upgradeButton: {
-    backgroundColor: DARK_GREEN,
-    borderRadius: 16,
-    minHeight: 58,
-    paddingHorizontal: 18,
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  upgradeButtonText: {
-    color: WHITE,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-
-  upgradeArrow: {
-    color: WHITE,
-    fontSize: 27,
-    fontWeight: '700',
-    marginLeft: 12,
-  },
-
-  lockedFooter: {
-    backgroundColor: '#F0F2EF',
-    borderRadius: 15,
-    paddingVertical: 17,
-    alignItems: 'center',
-    marginTop: 18,
-  },
-
-  lockedFooterText: {
+  footerText: {
     color: MUTED,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-
-  bottomSpace: {
-    height: 10,
+    fontSize: 11,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 2,
+    paddingHorizontal: 12,
   },
 });
