@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -34,6 +35,22 @@ type Tier = {
   dailyLimit: string;
 };
 
+type Limits = {
+  account_limit?: number | string | null;
+  daily_transfer_limit?: number | string | null;
+};
+
+type KycStatus = {
+  tier?: string | number;
+  tier_2_status?: string;
+  tier_3_status?: string;
+  tier_3_method?: string | null;
+  bvn_status?: string;
+  nin_status?: string;
+  id_status?: string;
+  tier_2_liveness_status?: string;
+};
+
 const tiers: Tier[] = [
   {
     number: 1,
@@ -65,6 +82,25 @@ const formatLevel = (value?: string | number) => {
   return Math.max(0, Math.min(3, Math.floor(parsed)));
 };
 
+const formatLimit = (value?: number | string | null) => {
+  if (value === null) return 'Unlimited';
+
+  if (value === undefined || value === '') return null;
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) return String(value);
+
+  return `₦${amount.toLocaleString('en-NG', {
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+const isPending = (value?: string | null) =>
+  ['pending', 'under_review'].includes(
+    String(value || '').trim().toLowerCase(),
+  );
+
 export default function KYCScreen({
   token,
   onBack,
@@ -74,6 +110,9 @@ export default function KYCScreen({
   const [currentLevel, setCurrentLevel] = useState(
     formatLevel(verificationLevel),
   );
+
+  const [kyc, setKyc] = useState<KycStatus>({});
+  const [limits, setLimits] = useState<Limits>({});
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,13 +152,20 @@ export default function KYCScreen({
           );
         }
 
-        const kyc =
+        const responseKyc =
           data?.kyc ??
           data?.data?.kyc ??
           data?.data ??
           data;
 
-        setCurrentLevel(formatLevel(kyc?.tier));
+        const responseLimits =
+          data?.limits ??
+          data?.data?.limits ??
+          {};
+
+        setKyc(responseKyc);
+        setLimits(responseLimits);
+        setCurrentLevel(formatLevel(responseKyc?.tier));
       } catch (err: any) {
         setError(
           err?.message || 'Unable to load your KYC status.',
@@ -148,29 +194,74 @@ export default function KYCScreen({
   };
 
   const getStatus = (tierNumber: number) => {
-    if (tierNumber < currentLevel) return 'Verified';
-    if (tierNumber === currentLevel && currentLevel > 0)
-      return 'Current Tier';
-    if (tierNumber === currentLevel + 1)
+    if (tierNumber <= currentLevel && currentLevel > 0) {
+      return 'Verified';
+    }
+
+    if (
+      tierNumber === 1 &&
+      (
+        isPending(kyc.bvn_status) ||
+        isPending(kyc.nin_status)
+      )
+    ) {
+      return 'Pending';
+    }
+
+    if (
+      tierNumber === 2 &&
+      (
+        isPending(kyc.id_status) ||
+        isPending(kyc.tier_2_liveness_status)
+      )
+    ) {
+      return 'Pending';
+    }
+
+    if (
+      tierNumber === 3 &&
+      !!kyc.tier_3_method &&
+      isPending(kyc.tier_3_status)
+    ) {
+      return 'Pending';
+    }
+
+    if (tierNumber === currentLevel + 1) {
       return 'Available';
+    }
+
     return 'Locked';
   };
 
   const getStatusStyle = (status: string) => {
-    if (status === 'Verified' || status === 'Current Tier') {
-      return styles.verifiedBadge;
-    }
-
-    if (status === 'Available') {
-      return styles.availableBadge;
-    }
+    if (status === 'Verified') return styles.verifiedBadge;
+    if (status === 'Pending') return styles.pendingBadge;
+    if (status === 'Available') return styles.availableBadge;
 
     return styles.lockedBadge;
   };
 
+  const getAccountLimit = (tier: Tier) => {
+    if (tier.number === currentLevel) {
+      return formatLimit(limits.account_limit) ?? tier.accountLimit;
+    }
+
+    return tier.accountLimit;
+  };
+
+  const getDailyLimit = (tier: Tier) => {
+    if (tier.number === currentLevel) {
+      return (
+        formatLimit(limits.daily_transfer_limit) ??
+        tier.dailyLimit
+      );
+    }
+
+    return tier.dailyLimit;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={onBack}
@@ -183,7 +274,7 @@ export default function KYCScreen({
         <Text style={styles.headerTitle}>KYC</Text>
 
         <Text style={styles.headerSubtitle}>
-          Upgrade your account for higher limits and more features.
+          Manage your account verification and banking limits.
         </Text>
       </View>
 
@@ -191,7 +282,6 @@ export default function KYCScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Account verification summary */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
             <View style={styles.summaryIcon}>
@@ -207,7 +297,7 @@ export default function KYCScreen({
                 {loading
                   ? 'Checking status...'
                   : currentLevel > 0
-                  ? `Tier ${currentLevel}`
+                  ? `Tier ${currentLevel} Verified`
                   : 'Not verified'}
               </Text>
             </View>
@@ -236,6 +326,7 @@ export default function KYCScreen({
           {!!error && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
+
               <TouchableOpacity
                 onPress={() => fetchKycStatus(true)}
                 style={styles.retryButton}
@@ -246,12 +337,11 @@ export default function KYCScreen({
           )}
         </View>
 
-        {/* KYC Tier Cards */}
         {tiers.map((tier) => {
           const status = getStatus(tier.number);
-          const isCurrent = status === 'Current Tier';
           const isVerified = status === 'Verified';
           const isAvailable = status === 'Available';
+          const isPendingStatus = status === 'Pending';
           const isLocked = status === 'Locked';
 
           return (
@@ -259,26 +349,26 @@ export default function KYCScreen({
               key={tier.number}
               style={[
                 styles.tierCard,
-                isCurrent && styles.currentTierCard,
+                isVerified && styles.currentTierCard,
                 isAvailable && styles.availableTierCard,
+                isPendingStatus && styles.pendingTierCard,
               ]}
             >
-              {/* Tier header */}
               <View style={styles.tierHeader}>
                 <View
                   style={[
                     styles.tierNumberBox,
-                    (isCurrent || isVerified) &&
-                      styles.activeTierNumberBox,
+                    isVerified && styles.activeTierNumberBox,
                     isAvailable && styles.availableTierNumberBox,
+                    isPendingStatus && styles.pendingTierNumberBox,
                   ]}
                 >
                   <Text
                     style={[
                       styles.tierNumber,
-                      (isCurrent || isVerified) &&
-                        styles.activeTierNumber,
+                      isVerified && styles.activeTierNumber,
                       isAvailable && styles.availableTierNumber,
+                      isPendingStatus && styles.pendingTierNumber,
                     ]}
                   >
                     {tier.number}
@@ -294,9 +384,9 @@ export default function KYCScreen({
                   <Text
                     style={[
                       styles.statusBadgeText,
-                      (isCurrent || isVerified) &&
-                        styles.verifiedBadgeText,
+                      isVerified && styles.verifiedBadgeText,
                       isAvailable && styles.availableBadgeText,
+                      isPendingStatus && styles.pendingBadgeText,
                     ]}
                   >
                     {loading ? '...' : status}
@@ -304,7 +394,6 @@ export default function KYCScreen({
                 </View>
               </View>
 
-              {/* Tier title */}
               <Text style={styles.tierTitle}>
                 Tier {tier.number}
               </Text>
@@ -313,7 +402,6 @@ export default function KYCScreen({
                 {tier.subtitle}
               </Text>
 
-              {/* Limits */}
               <View style={styles.limitsBox}>
                 <Text style={styles.limitsHeading}>
                   Account limits
@@ -325,7 +413,7 @@ export default function KYCScreen({
                   </Text>
 
                   <Text style={styles.limitValue}>
-                    {tier.accountLimit}
+                    {getAccountLimit(tier)}
                   </Text>
                 </View>
 
@@ -335,21 +423,31 @@ export default function KYCScreen({
                   </Text>
 
                   <Text style={styles.limitValue}>
-                    {tier.dailyLimit}
+                    {getDailyLimit(tier)}
                   </Text>
                 </View>
               </View>
 
-              {/* Verified */}
-              {!loading && (isCurrent || isVerified) && (
+              {!loading && isVerified && (
                 <View style={styles.verifiedFooter}>
                   <Text style={styles.verifiedFooterText}>
-                    ✓ {isCurrent ? 'Current Tier' : 'Verified'}
+                    ✓ Verified
                   </Text>
                 </View>
               )}
 
-              {/* Upgrade button */}
+              {!loading && isPendingStatus && (
+                <View style={styles.pendingFooter}>
+                  <ActivityIndicator
+                    color="#9A6700"
+                    size="small"
+                  />
+                  <Text style={styles.pendingFooterText}>
+                    Verification pending
+                  </Text>
+                </View>
+              )}
+
               {!loading && isAvailable && (
                 <TouchableOpacity
                   style={styles.upgradeButton}
@@ -357,14 +455,13 @@ export default function KYCScreen({
                   onPress={() => handleSelectTier(tier.number)}
                 >
                   <Text style={styles.upgradeButtonText}>
-                    Upgrade to Tier {tier.number}
+                    Continue
                   </Text>
 
                   <Text style={styles.upgradeArrow}>›</Text>
                 </TouchableOpacity>
               )}
 
-              {/* Locked */}
               {!loading && isLocked && (
                 <View style={styles.lockedFooter}>
                   <Text style={styles.lockedFooterText}>
@@ -388,7 +485,6 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
-  /* HEADER */
   header: {
     backgroundColor: WHITE,
     paddingHorizontal: 22,
@@ -424,7 +520,6 @@ const styles = StyleSheet.create({
     maxWidth: 340,
   },
 
-  /* PAGE */
   scrollContent: {
     backgroundColor: BACKGROUND,
     paddingHorizontal: 16,
@@ -432,7 +527,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
 
-  /* SUMMARY */
   summaryCard: {
     backgroundColor: WHITE,
     borderRadius: 20,
@@ -530,7 +624,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  /* TIER CARD */
   tierCard: {
     backgroundColor: WHITE,
     borderRadius: 22,
@@ -547,6 +640,11 @@ const styles = StyleSheet.create({
 
   availableTierCard: {
     borderColor: '#A5D5B6',
+    borderWidth: 1.5,
+  },
+
+  pendingTierCard: {
+    borderColor: '#E8D7A8',
     borderWidth: 1.5,
   },
 
@@ -574,6 +672,10 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
   },
 
+  pendingTierNumberBox: {
+    backgroundColor: '#FFF4D6',
+  },
+
   tierNumber: {
     fontSize: 25,
     fontWeight: '900',
@@ -588,7 +690,10 @@ const styles = StyleSheet.create({
     color: WHITE,
   },
 
-  /* STATUS */
+  pendingTierNumber: {
+    color: '#9A6700',
+  },
+
   statusBadge: {
     borderRadius: 30,
     paddingHorizontal: 14,
@@ -601,6 +706,10 @@ const styles = StyleSheet.create({
 
   availableBadge: {
     backgroundColor: '#E8F5ED',
+  },
+
+  pendingBadge: {
+    backgroundColor: '#FFF4D6',
   },
 
   lockedBadge: {
@@ -621,7 +730,10 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
   },
 
-  /* TITLES */
+  pendingBadgeText: {
+    color: '#9A6700',
+  },
+
   tierTitle: {
     fontSize: 29,
     fontWeight: '900',
@@ -636,7 +748,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  /* LIMITS */
   limitsBox: {
     backgroundColor: '#F5F7F3',
     borderRadius: 17,
@@ -672,7 +783,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  /* VERIFIED FOOTER */
   verifiedFooter: {
     backgroundColor: '#E8F5ED',
     borderRadius: 15,
@@ -688,7 +798,23 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
   },
 
-  /* UPGRADE */
+  pendingFooter: {
+    backgroundColor: '#FFF8E7',
+    borderRadius: 15,
+    paddingVertical: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+
+  pendingFooterText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#9A6700',
+    marginLeft: 9,
+  },
+
   upgradeButton: {
     backgroundColor: DARK_GREEN,
     borderRadius: 16,
@@ -713,7 +839,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  /* LOCKED */
   lockedFooter: {
     backgroundColor: '#F0F2EF',
     borderRadius: 15,
