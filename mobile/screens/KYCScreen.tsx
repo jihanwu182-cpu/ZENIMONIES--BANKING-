@@ -437,53 +437,53 @@ const styles = StyleSheet.create({
   },
 
   heroCard: {
-    backgroundColor: GREEN,
-    borderRadius: 23,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
-    marginBottom: 16,
-  },
+  backgroundColor: GREEN,
+  borderRadius: 23,
+  paddingHorizontal: 20,
+  paddingTop: 18,
+  paddingBottom: 14,
+  marginBottom: 16,
+},
 
-  brandText: {
-    color: '#DDF3E5',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 2.2,
-    marginBottom: 14,
-  },
+brandText: {
+  color: '#DDF3E5',
+  fontSize: 11,
+  fontWeight: '900',
+  letterSpacing: 2.2,
+  marginBottom: 9,
+},
 
-  heroTitle: {
-    color: WHITE,
-    fontSize: 29,
-    lineHeight: 36,
-    fontWeight: '900',
-    letterSpacing: -0.7,
-  },
+heroTitle: {
+  color: WHITE,
+  fontSize: 25,
+  lineHeight: 31,
+  fontWeight: '900',
+  letterSpacing: -0.5,
+},
 
-  heroDescription: {
-    color: '#E5F5EA',
-    fontSize: 15,
-    lineHeight: 23,
-    marginTop: 12,
-  },
+heroDescription: {
+  color: '#E5F5EA',
+  fontSize: 14,
+  lineHeight: 20,
+  marginTop: 8,
+},
 
-  heroBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginTop: 18,
-    gap: 8,
-  },
+heroBadges: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  marginTop: 12,
+  gap: 7,
+},
 
-  heroBadge: {
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
+heroBadge: {
+  borderRadius: 30,
+  borderWidth: 1,
+  borderColor: 'rgba(255,255,255,0.24)',
+  backgroundColor: 'rgba(255,255,255,0.12)',
+  paddingHorizontal: 10,
+  paddingVertical: 7,
+},
 
   heroBadgeText: {
     color: WHITE,
