@@ -438,44 +438,44 @@ const styles = StyleSheet.create({
 
   heroCard: {
   backgroundColor: GREEN,
-  width: '72%',
+  width: '75%',
   alignSelf: 'center',
-  borderRadius: 20,
-  paddingHorizontal: 15,
-  paddingTop: 13,
-  paddingBottom: 12,
+  borderRadius: 18,
+  paddingHorizontal: 13,
+  paddingTop: 12,
+  paddingBottom: 10,
   marginBottom: 16,
 },
 
 brandText: {
   color: '#DDF3E5',
-  fontSize: 11,
+  fontSize: 9,
   fontWeight: '900',
-  letterSpacing: 2.2,
-  marginBottom: 9,
+  letterSpacing: 1.5,
+  marginBottom: 6,
 },
 
 heroTitle: {
   color: WHITE,
-  fontSize: 25,
-  lineHeight: 31,
-  fontWeight: '800',
-  letterSpacing: -0.5,
+  fontSize: 19,
+  lineHeight: 25,
+  fontWeight: '900',
+  letterSpacing: -0.4,
 },
 
 heroDescription: {
   color: '#E5F5EA',
-  fontSize: 15,
-  lineHeight: 20,
-  marginTop: 8,
+  fontSize: 12,
+  lineHeight: 17,
+  marginTop: 6,
 },
 
 heroBadges: {
   flexDirection: 'row',
   flexWrap: 'wrap',
   alignItems: 'center',
-  marginTop: 12,
-  gap: 7,
+  marginTop: 9,
+  gap: 5,
 },
 
 heroBadge: {
@@ -483,13 +483,13 @@ heroBadge: {
   borderWidth: 1,
   borderColor: 'rgba(255,255,255,0.24)',
   backgroundColor: 'rgba(255,255,255,0.12)',
-  paddingHorizontal: 10,
-  paddingVertical: 7,
+  paddingHorizontal: 8,
+  paddingVertical: 5,
 },
 
-  heroBadgeText: {
+heroBadgeText: {
   color: WHITE,
-  fontSize: 12,
+  fontSize: 9,
   fontWeight: '800',
 },
 
