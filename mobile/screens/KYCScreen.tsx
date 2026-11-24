@@ -438,12 +438,13 @@ const styles = StyleSheet.create({
 
   heroCard: {
   backgroundColor: GREEN,
-  borderRadius: 23,
-  paddingHorizontal: 20,
-  paddingTop: 18,
-  paddingBottom: 14,
+  width: '72%',
+  alignSelf: 'center',
+  borderRadius: 20,
+  paddingHorizontal: 15,
+  paddingTop: 13,
+  paddingBottom: 12,
   marginBottom: 16,
-  marginHorizontal: 12,
 },
 
 brandText: {
@@ -487,10 +488,10 @@ heroBadge: {
 },
 
   heroBadgeText: {
-    color: WHITE,
-    fontSize: 12,
-    fontWeight: '800',
-  },
+  color: WHITE,
+  fontSize: 10,
+  fontWeight: '700',
+},
 
   currentLevelCard: {
     backgroundColor: WHITE,
