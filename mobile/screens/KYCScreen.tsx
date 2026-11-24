@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
 
   heroCard: {
   backgroundColor: GREEN,
-  width: '62%',
+  width: '72%',
   alignSelf: 'center',
   borderRadius: 20,
   paddingHorizontal: 15,
@@ -450,22 +450,22 @@ const styles = StyleSheet.create({
 brandText: {
   color: '#DDF3E5',
   fontSize: 11,
-  fontWeight: '700',
+  fontWeight: '900',
   letterSpacing: 2.2,
   marginBottom: 9,
 },
 
 heroTitle: {
   color: WHITE,
-  fontSize: 20,
+  fontSize: 25,
   lineHeight: 31,
-  fontWeight: '700',
+  fontWeight: '800',
   letterSpacing: -0.5,
 },
 
 heroDescription: {
   color: '#E5F5EA',
-  fontSize: 11,
+  fontSize: 15,
   lineHeight: 20,
   marginTop: 8,
 },
@@ -489,8 +489,8 @@ heroBadge: {
 
   heroBadgeText: {
   color: WHITE,
-  fontSize: 7,
-  fontWeight: '600',
+  fontSize: 12,
+  fontWeight: '800',
 },
 
   currentLevelCard: {
