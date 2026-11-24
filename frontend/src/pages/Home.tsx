@@ -1202,44 +1202,69 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        <section className="section company-section" id="company">
-          <div className="section-inner company-grid">
-            <div className="company-copy">
-              <div className="eyebrow">About ZENIMONIES</div>
-              <h2>Building a simpler everyday banking experience.</h2>
-              <p>
-                ZENIMONIES is a digital banking platform focused on making
-                everyday financial services more accessible and convenient
-                for customers in Nigeria.
-              </p>
-              <p>
-                Our goal is to bring useful account and payment services
-                together in a straightforward mobile experience for
-                individuals and businesses.
-              </p>
-              <Link className="text-link" to="/about">Discover our company →</Link>
-            </div>
+   
+<section className="section company-section" id="company">
+  <div className="section-inner company-grid">
+    <div className="company-copy">
+      <div className="eyebrow">ABOUT ZENIMONIES</div>
 
-            <div className="values-grid">
-              <div className="value-card">
-                <strong>Convenience</strong>
-                <span>Make everyday account and payment tasks easier to access.</span>
-              </div>
-              <div className="value-card">
-                <strong>Clarity</strong>
-                <span>Present services and account information in a clear way.</span>
-              </div>
-              <div className="value-card">
-                <strong>Accessibility</strong>
-                <span>Build useful digital experiences for individuals and businesses.</span>
-              </div>
-              <div className="value-card">
-                <strong>Responsibility</strong>
-                <span>Support responsible account use and applicable verification processes.</span>
-              </div>
-            </div>
-          </div>
-        </section>
+      <h2>
+        Delivering a more seamless digital banking experience.
+      </h2>
+
+      <p>
+        ZENIMONIES is a digital banking platform committed to making
+        everyday financial services more accessible, convenient and
+        straightforward for individuals and businesses across Nigeria.
+      </p>
+
+      <p>
+        Through a unified digital experience, we bring essential
+        account and payment services together, helping customers
+        manage their everyday financial needs with greater ease.
+      </p>
+
+      <Link className="text-link" to="/about">
+        Learn more about our company →
+      </Link>
+    </div>
+
+    <div className="values-grid">
+      <div className="value-card">
+        <strong>Convenience</strong>
+        <span>
+          Access essential account and payment services through
+          a single, straightforward digital experience.
+        </span>
+      </div>
+
+      <div className="value-card">
+        <strong>Clarity</strong>
+        <span>
+          Navigate financial services and account information
+          through clear, intuitive digital interfaces.
+        </span>
+      </div>
+
+      <div className="value-card">
+        <strong>Accessibility</strong>
+        <span>
+          Deliver practical digital financial services designed
+          around the needs of individuals and businesses.
+        </span>
+      </div>
+
+      <div className="value-card">
+        <strong>Responsibility</strong>
+        <span>
+          Promote informed account use, appropriate verification
+          and responsible access to financial services.
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
 
         <section className="section security-section" id="security">
           <div className="section-inner security-content">
