@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 import {
@@ -10,10 +11,13 @@ import {
 } from 'react-router-dom';
 
 // ============================================================
-// ZENIMONIES BANKING
-// APPLICATION ROUTES
-// PERSONAL + BUSINESS BANKING
+// ZENIMONIES BANKING — APPLICATION ROUTES
+// PERSONAL + BUSINESS BANKING + PUBLIC WEBSITE
 // ============================================================
+
+// ==================== PUBLIC WEBSITE ====================
+
+import About from './pages/About.tsx';
 
 // ==================== AUTHENTICATION ====================
 
@@ -96,6 +100,9 @@ import CustomerCareDashboard from './pages/CustomerCareDashboard.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
 
+// ============================================================
+// ADMIN ERROR BOUNDARY
+// ============================================================
 
 class AdminErrorBoundary extends React.Component<
   React.PropsWithChildren,
@@ -137,6 +144,7 @@ class AdminErrorBoundary extends React.Component<
         >
           <h2>ZENIMONIES Admin Dashboard</h2>
           <p>The dashboard encountered a display error.</p>
+
           <p
             style={{
               padding: 12,
@@ -147,6 +155,7 @@ class AdminErrorBoundary extends React.Component<
           >
             <strong>Error details:</strong> {this.state.message}
           </p>
+
           <button onClick={() => window.location.reload()}>
             Reload dashboard
           </button>
@@ -163,19 +172,13 @@ class AdminErrorBoundary extends React.Component<
 // ============================================================
 
 const AdminRoute: React.FC = () => {
-  const adminToken =
-    localStorage.getItem('adminToken');
+  const adminToken = localStorage.getItem('adminToken');
 
   if (!adminToken) {
-    return (
-      <Navigate
-        to="/admin/login"
-        replace
-      />
-    );
+    return <Navigate to="/admin/login" replace />;
   }
 
-   return (
+  return (
     <AdminErrorBoundary>
       <Admin />
     </AdminErrorBoundary>
@@ -184,7 +187,6 @@ const AdminRoute: React.FC = () => {
 
 // ============================================================
 // GENERAL SERVICE PAGE
-// USED BY PERSONAL BANKING
 // ============================================================
 
 interface ServicePageProps {
@@ -198,8 +200,7 @@ const ServicePage: React.FC<ServicePageProps> = ({
   description,
   icon,
 }) => {
-  const location =
-    useLocation();
+  const location = useLocation();
 
   return (
     <div
@@ -215,8 +216,7 @@ const ServicePage: React.FC<ServicePageProps> = ({
       <header
         style={{
           background: '#ffffff',
-          borderBottom:
-            '1px solid #e5ebe8',
+          borderBottom: '1px solid #e5ebe8',
           position: 'sticky',
           top: 0,
           zIndex: 20,
@@ -224,21 +224,18 @@ const ServicePage: React.FC<ServicePageProps> = ({
       >
         <div
           style={{
-            width:
-              'min(920px, 92%)',
+            width: 'min(920px, 92%)',
             margin: '0 auto',
             height: '64px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent:
-              'space-between',
+            justifyContent: 'space-between',
           }}
         >
           <Link
-            to="/"
+            to="/dashboard"
             style={{
-              textDecoration:
-                'none',
+              textDecoration: 'none',
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
@@ -249,13 +246,11 @@ const ServicePage: React.FC<ServicePageProps> = ({
                 width: '40px',
                 height: '40px',
                 borderRadius: '11px',
-                background:
-                  'linear-gradient(135deg, #079447, #007a3f)',
+                background: 'linear-gradient(135deg, #079447, #007a3f)',
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent:
-                  'center',
+                justifyContent: 'center',
                 fontSize: '20px',
                 fontWeight: 800,
               }}
@@ -277,8 +272,7 @@ const ServicePage: React.FC<ServicePageProps> = ({
               <div
                 style={{
                   fontSize: '9px',
-                  letterSpacing:
-                    '1.5px',
+                  letterSpacing: '1.5px',
                   color: '#98a2a0',
                 }}
               >
@@ -288,43 +282,37 @@ const ServicePage: React.FC<ServicePageProps> = ({
           </Link>
 
           <Link
-            to="/"
+            to="/dashboard"
             style={{
-              textDecoration:
-                'none',
+              textDecoration: 'none',
               color: '#087c43',
               fontWeight: 700,
               fontSize: '13px',
             }}
           >
-            Home
+            Dashboard
           </Link>
         </div>
       </header>
 
       <main
         style={{
-          width:
-            'min(700px, 92%)',
+          width: 'min(700px, 92%)',
           margin: '0 auto',
           paddingTop: '28px',
         }}
       >
         <Link
-          to="/"
+          to="/dashboard"
           style={{
-            display:
-              'inline-flex',
-            alignItems:
-              'center',
+            display: 'inline-flex',
+            alignItems: 'center',
             gap: '6px',
-            textDecoration:
-              'none',
+            textDecoration: 'none',
             color: '#66756e',
             fontSize: '13px',
             fontWeight: 600,
-            marginBottom:
-              '18px',
+            marginBottom: '18px',
           }}
         >
           ← Back to Dashboard
@@ -332,33 +320,25 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
         <div
           style={{
-            background:
-              '#ffffff',
-            border:
-              '1px solid #e5ebe8',
+            background: '#ffffff',
+            border: '1px solid #e5ebe8',
             borderRadius: '20px',
             padding: '26px',
-            boxShadow:
-              '0 8px 25px rgba(26, 61, 47, 0.05)',
+            boxShadow: '0 8px 25px rgba(26, 61, 47, 0.05)',
           }}
         >
           <div
             style={{
               width: '58px',
               height: '58px',
-              borderRadius:
-                '17px',
-              background:
-                '#e8f8f0',
+              borderRadius: '17px',
+              background: '#e8f8f0',
               color: '#087c43',
               display: 'flex',
-              alignItems:
-                'center',
-              justifyContent:
-                'center',
+              alignItems: 'center',
+              justifyContent: 'center',
               fontSize: '27px',
-              marginBottom:
-                '17px',
+              marginBottom: '17px',
             }}
           >
             {icon}
@@ -366,8 +346,7 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
           <h1
             style={{
-              margin:
-                '0 0 8px',
+              margin: '0 0 8px',
               fontSize: '26px',
               fontWeight: 800,
               color: '#063b2d',
@@ -378,8 +357,7 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
           <p
             style={{
-              margin:
-                '0 0 20px',
+              margin: '0 0 20px',
               color: '#66756e',
               fontSize: '14px',
               lineHeight: 1.6,
@@ -391,19 +369,15 @@ const ServicePage: React.FC<ServicePageProps> = ({
           <div
             style={{
               padding: '15px',
-              borderRadius:
-                '13px',
-              background:
-                '#effbf5',
-              border:
-                '1px solid #d2eee0',
+              borderRadius: '13px',
+              background: '#effbf5',
+              border: '1px solid #d2eee0',
               color: '#05603a',
               fontSize: '13px',
               lineHeight: 1.5,
             }}
           >
-            This service is ready for
-            the next setup stage.
+            This service is ready for the next setup stage.
           </div>
 
           <div
@@ -415,47 +389,32 @@ const ServicePage: React.FC<ServicePageProps> = ({
             }}
           >
             <Link
-              to="/"
+              to="/dashboard"
               style={{
-                textDecoration:
-                  'none',
-                background:
-                  '#079447',
-                color:
-                  '#ffffff',
-                padding:
-                  '11px 17px',
-                borderRadius:
-                  '10px',
+                textDecoration: 'none',
+                background: '#079447',
+                color: '#ffffff',
+                padding: '11px 17px',
+                borderRadius: '10px',
                 fontWeight: 700,
-                fontSize:
-                  '13px',
+                fontSize: '13px',
               }}
             >
-              Back Home
+              Back to Dashboard
             </Link>
 
             <button
               type="button"
-              onClick={() =>
-                window.history.back()
-              }
+              onClick={() => window.history.back()}
               style={{
-                background:
-                  '#ffffff',
-                border:
-                  '1px solid #d0d9d5',
-                color:
-                  '#344054',
-                padding:
-                  '11px 17px',
-                borderRadius:
-                  '10px',
+                background: '#ffffff',
+                border: '1px solid #d0d9d5',
+                color: '#344054',
+                padding: '11px 17px',
+                borderRadius: '10px',
                 fontWeight: 700,
-                fontSize:
-                  '13px',
-                cursor:
-                  'pointer',
+                fontSize: '13px',
+                cursor: 'pointer',
               }}
             >
               Go Back
@@ -465,14 +424,10 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
         <div
           style={{
-            marginTop:
-              '13px',
-            color:
-              '#98a2b3',
-            fontSize:
-              '11px',
-            textAlign:
-              'center',
+            marginTop: '13px',
+            color: '#98a2b3',
+            fontSize: '11px',
+            textAlign: 'center',
           }}
         >
           {location.pathname}
@@ -484,46 +439,27 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
 // ============================================================
 // ADMIN ROUTES
-//
-// IMPORTANT:
 // SessionGuard is NOT mounted here.
 // ============================================================
 
 const AdminRoutes: React.FC = () => {
   return (
     <Routes>
-      <Route
-        path="/admin/login"
-        element={
-          <AdminLogin />
-        }
-      />
+      <Route path="/admin/login" element={<AdminLogin />} />
 
       <Route
         path="/admin"
-        element={
-          <Navigate
-            to="/admin/dashboard"
-            replace
-          />
-        }
+        element={<Navigate to="/admin/dashboard" replace />}
       />
 
       <Route
         path="/admin/dashboard"
-        element={
-          <AdminRoute />
-        }
+        element={<AdminRoute />}
       />
 
       <Route
         path="*"
-        element={
-          <Navigate
-            to="/admin/login"
-            replace
-          />
-        }
+        element={<Navigate to="/admin/login" replace />}
       />
     </Routes>
   );
@@ -531,34 +467,16 @@ const AdminRoutes: React.FC = () => {
 
 // ============================================================
 // CUSTOMER CARE ROUTE GUARD
-//
-// CUSTOMER CARE IS A SEPARATE WORKSPACE.
-//
-// Allowed:
-//   role = customer_care
-//
-// Not allowed:
-//   user
-//   admin
-//
-// The backend customerCareMiddleware is the REAL security
-// boundary. This frontend guard only controls navigation.
 // ============================================================
 
 const CustomerCareRoute: React.FC = () => {
   let user: any = null;
 
   try {
-    const storedUser =
-      localStorage.getItem(
-        'zenimonies_user'
-      );
+    const storedUser = localStorage.getItem('zenimonies_user');
 
     if (storedUser) {
-      user =
-        JSON.parse(
-          storedUser
-        );
+      user = JSON.parse(storedUser);
     }
   } catch (error) {
     console.error(
@@ -567,116 +485,56 @@ const CustomerCareRoute: React.FC = () => {
     );
   }
 
-  const role =
-    String(
-      user?.role || ''
-    )
-      .trim()
-      .toLowerCase();
+  const role = String(user?.role || '')
+    .trim()
+    .toLowerCase();
 
   console.log(
     'ZENIMONIES Customer Care route check:',
-    {
-      role,
-      user,
-    }
+    { role, user }
   );
 
-  // ----------------------------------------------------------
-  // CUSTOMER CARE AGENT
-  // ----------------------------------------------------------
-
-  if (
-    role === 'customer_care'
-  ) {
-    return (
-      <CustomerCareDashboard />
-    );
+  if (role === 'customer_care') {
+    return <CustomerCareDashboard />;
   }
 
-  // ----------------------------------------------------------
-  // ADMIN
-  // ----------------------------------------------------------
-
-  if (
-    role === 'admin'
-  ) {
-    return (
-      <Navigate
-        to="/admin/dashboard"
-        replace
-      />
-    );
+  if (role === 'admin') {
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
-  // ----------------------------------------------------------
-  // NORMAL CUSTOMER / UNKNOWN USER
-  // ----------------------------------------------------------
-
-  return (
-    <Navigate
-      to="/customer-care/login"
-      replace
-    />
-  );
+  return <Navigate to="/customer-care/login" replace />;
 };
 
 // ============================================================
 // CUSTOMER CARE ROUTES
-//
-// IMPORTANT:
-// Customer Care Login is NOT inside SessionGuard.
-//
-// Customer Care Workspace is also NOT inside SessionGuard.
-//
-// This prevents the normal banking session guard from
-// redirecting Customer Care agents to the normal dashboard.
+// NOT INSIDE SESSION GUARD
 // ============================================================
 
 const CustomerCareRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* ======================================================
-          CUSTOMER CARE LOGIN
-          ====================================================== */}
-
       <Route
         path="/customer-care/login"
-        element={
-          <CustomerCareLogin />
-        }
+        element={<CustomerCareLogin />}
       />
-
-      {/* ======================================================
-          CUSTOMER CARE WORKSPACE
-          ====================================================== */}
 
       <Route
         path="/customer-care"
-        element={
-          <CustomerCareRoute />
-        }
+        element={<CustomerCareRoute />}
       />
-
-      {/* ======================================================
-          CUSTOMER CARE UNKNOWN URL
-          ====================================================== */}
 
       <Route
         path="*"
-        element={
-          <Navigate
-            to="/customer-care/login"
-            replace
-          />
-        }
+        element={<Navigate to="/customer-care/login" replace />}
       />
     </Routes>
   );
 };
 
 // ============================================================
-// CUSTOMER ROUTES
+// CUSTOMER BANKING ROUTES
+// SessionGuard remains in place.
+// PUBLIC WEBSITE IS NOT INSIDE THIS COMPONENT.
 // ============================================================
 
 const CustomerRoutes: React.FC = () => {
@@ -686,371 +544,220 @@ const CustomerRoutes: React.FC = () => {
 
         {/* ================= AUTHENTICATION ================= */}
 
-        <Route
-          path="/login"
-          element={
-            <Login />
-          }
-        />
+        <Route path="/login" element={<Login />} />
 
-        <Route
-          path="/register"
-          element={
-            <Register />
-          }
-        />
+        <Route path="/register" element={<Register />} />
 
         <Route
           path="/forgot-password"
-          element={
-            <ForgotPassword />
-          }
+          element={<ForgotPassword />}
         />
 
         <Route
           path="/reset-password"
-          element={
-            <ResetPassword />
-          }
+          element={<ResetPassword />}
         />
 
         {/* ================= SECURITY ================= */}
 
         <Route
           path="/passkey-security"
-          element={
-            <PasskeySecurity />
-          }
+          element={<PasskeySecurity />}
         />
 
         <Route
           path="/account-locked"
-          element={
-            <AccountLocked />
-          }
+          element={<AccountLocked />}
         />
 
         {/* ================= PERSONAL DASHBOARD ================= */}
 
         <Route
-          path="/"
-          element={
-            <Dashboard />
-          }
-        />
-
-        <Route
           path="/dashboard"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
+          element={<Dashboard />}
         />
 
         {/* ================= BUSINESS BANKING ================= */}
 
         <Route
           path="/business/dashboard/:id"
-          element={
-            <BusinessDashboard />
-          }
+          element={<BusinessDashboard />}
         />
 
         <Route
           path="/business/:id/transactions"
-          element={
-            <BusinessTransactions />
-          }
+          element={<BusinessTransactions />}
         />
 
         <Route
           path="/business/:id/:section"
-          element={
-            <BusinessServicePage />
-          }
+          element={<BusinessServicePage />}
         />
 
         <Route
           path="/business/:id"
-          element={
-            <Navigate
-              to="/business"
-              replace
-            />
-          }
+          element={<Navigate to="/business" replace />}
         />
 
         <Route
           path="/business"
-          element={
-            <Business />
-          }
+          element={<Business />}
         />
 
         {/* ================= NOTIFICATIONS ================= */}
 
         <Route
           path="/notifications"
-          element={
-            <Notifications />
-          }
+          element={<Notifications />}
         />
 
         {/* ================= HELP CENTER ================= */}
 
         <Route
           path="/help-center"
-          element={
-            <HelpCenter />
-          }
+          element={<HelpCenter />}
         />
 
         {/* ================= CUSTOMER SUPPORT ================= */}
 
         <Route
           path="/support"
-          element={
-            <Support />
-          }
+          element={<Support />}
         />
 
         {/* ================= ACCOUNT ================= */}
 
-        <Route
-          path="/profile"
-          element={
-            <Profile />
-          }
-        />
+        <Route path="/profile" element={<Profile />} />
 
-        <Route
-          path="/settings"
-          element={
-            <Settings />
-          }
-        />
+        <Route path="/settings" element={<Settings />} />
 
-        <Route
-          path="/kyc"
-          element={
-            <KYC />
-          }
-        />
+        <Route path="/kyc" element={<KYC />} />
 
         <Route
           path="/verify-phone"
-          element={
-            <VerifyPhone />
-          }
+          element={<VerifyPhone />}
         />
 
         <Route
           path="/verify-otp"
-          element={
-            <VerifyOTP />
-          }
+          element={<VerifyOTP />}
         />
 
         {/* ================= MONEY ================= */}
 
-        <Route
-          path="/transfer"
-          element={
-            <Transfer />
-          }
-        />
+        <Route path="/transfer" element={<Transfer />} />
 
-        <Route
-          path="/to-bank"
-          element={
-            <ToBank />
-          }
-        />
+        <Route path="/to-bank" element={<ToBank />} />
 
         <Route
           path="/transfer-confirmation"
-          element={
-            <TransferConfirmation />
-          }
+          element={<TransferConfirmation />}
         />
 
-        <Route
-          path="/deposit"
-          element={
-            <Deposit />
-          }
-        />
+        <Route path="/deposit" element={<Deposit />} />
 
-        <Route
-          path="/withdraw"
-          element={
-            <Withdraw />
-          }
-        />
+        <Route path="/withdraw" element={<Withdraw />} />
 
         <Route
           path="/transactions"
-          element={
-            <Transactions />
-          }
+          element={<Transactions />}
         />
 
         <Route
           path="/transaction-receipt"
-          element={
-            <TransactionReceipt />
-          }
+          element={<TransactionReceipt />}
         />
 
-        <Route
-          path="/statement"
-          element={
-            <Statement />
-          }
-        />
+        <Route path="/statement" element={<Statement />} />
 
         <Route
           path="/beneficiaries"
-          element={
-            <Beneficiaries />
-          }
+          element={<Beneficiaries />}
         />
 
         {/* ================= WALLET ================= */}
 
-        <Route
-          path="/wallet"
-          element={
-            <Wallet />
-          }
-        />
+        <Route path="/wallet" element={<Wallet />} />
 
         {/* ================= VIRTUAL CARD ================= */}
 
         <Route
           path="/virtual-card"
-          element={
-            <VirtualCard />
-          }
+          element={<VirtualCard />}
         />
 
         {/* ================= AIRTIME ================= */}
 
-        <Route
-          path="/airtime"
-          element={
-            <Airtime />
-          }
-        />
+        <Route path="/airtime" element={<Airtime />} />
 
         {/* ================= DATA ================= */}
 
-        <Route
-          path="/data"
-          element={
-            <Data />
-          }
-        />
+        <Route path="/data" element={<Data />} />
 
         {/* ================= TV ================= */}
 
         <Route
           path="/tv-subscription"
-          element={
-            <TVSubscription />
-          }
+          element={<TVSubscription />}
         />
 
-        <Route
-          path="/tv"
-          element={
-            <TVSubscription />
-          }
-        />
+        <Route path="/tv" element={<TVSubscription />} />
 
         {/* ================= BILLS ================= */}
 
-        <Route
-          path="/bills"
-          element={
-            <Bills />
-          }
-        />
+        <Route path="/bills" element={<Bills />} />
 
         <Route
           path="/bills/internet"
-          element={
-            <InternetBills />
-          }
+          element={<InternetBills />}
         />
 
         <Route
           path="/bills/other"
-          element={
-            <OtherBills />
-          }
+          element={<OtherBills />}
         />
 
         {/* ================= GIFT CARDS ================= */}
 
         <Route
           path="/gift-cards"
-          element={
-            <GiftCards />
-          }
+          element={<GiftCards />}
         />
 
         {/* ================= ELECTRICITY ================= */}
 
         <Route
           path="/electricity"
-          element={
-            <Electricity />
-          }
+          element={<Electricity />}
         />
 
         <Route
           path="/electricity/verification"
-          element={
-            <ElectricityVerification />
-          }
+          element={<ElectricityVerification />}
         />
 
         <Route
           path="/electricity/payment-confirmation"
-          element={
-            <ElectricityPaymentConfirmation />
-          }
+          element={<ElectricityPaymentConfirmation />}
         />
 
         {/* ================= EDUCATION ================= */}
 
         <Route
           path="/education"
-          element={
-            <Education />
-          }
+          element={<Education />}
         />
 
         {/* ================= INSURANCE ================= */}
 
         <Route
           path="/insurance"
-          element={
-            <Insurance />
-          }
+          element={<Insurance />}
         />
 
         {/* ================= BETTING ================= */}
 
-        <Route
-          path="/betting"
-          element={
-            <Betting />
-          }
-        />
+        <Route path="/betting" element={<Betting />} />
 
         {/* ================= SAVINGS ================= */}
 
@@ -1067,9 +774,7 @@ const CustomerRoutes: React.FC = () => {
 
         <Route
           path="/savings"
-          element={
-            <Savings />
-          }
+          element={<Savings />}
         />
 
         {/* ================= MORE ================= */}
@@ -1089,21 +794,14 @@ const CustomerRoutes: React.FC = () => {
 
         <Route
           path="/airtime-reconciliation"
-          element={
-            <AirtimeReconciliation />
-          }
+          element={<AirtimeReconciliation />}
         />
 
         {/* ================= FALLBACK ================= */}
 
         <Route
           path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
+          element={<Navigate to="/dashboard" replace />}
         />
 
       </Routes>
@@ -1112,7 +810,7 @@ const CustomerRoutes: React.FC = () => {
 };
 
 // ============================================================
-// ROUTER SWITCH
+// MAIN ROUTER SWITCH
 //
 // /admin/*
 //     → AdminRoutes
@@ -1120,18 +818,16 @@ const CustomerRoutes: React.FC = () => {
 // /customer-care/*
 //     → CustomerCareRoutes
 //
-// everything else
-//     → CustomerRoutes
+// / and /about
+//     → Public ZENIMONIES website
 //
-// This is the important separation.
+// Everything else
+//     → CustomerRoutes
 // ============================================================
 
 const AppRouter: React.FC = () => {
-  const location =
-    useLocation();
-
-  const pathname =
-    location.pathname;
+  const location = useLocation();
+  const pathname = location.pathname;
 
   // ==========================================================
   // ADMIN WORKSPACE
@@ -1139,48 +835,44 @@ const AppRouter: React.FC = () => {
 
   const isAdminRoute =
     pathname === '/admin' ||
-    pathname.startsWith(
-      '/admin/'
-    );
+    pathname.startsWith('/admin/');
 
   if (isAdminRoute) {
-    return (
-      <AdminRoutes />
-    );
+    return <AdminRoutes />;
   }
 
   // ==========================================================
   // CUSTOMER CARE WORKSPACE
-  //
-  // IMPORTANT:
-  // This check happens BEFORE CustomerRoutes.
-  //
-  // Therefore SessionGuard cannot redirect the Customer Care
-  // login or Customer Care dashboard to the normal dashboard.
   // ==========================================================
 
   const isCustomerCareRoute =
-    pathname ===
-      '/customer-care' ||
-    pathname.startsWith(
-      '/customer-care/'
-    );
+    pathname === '/customer-care' ||
+    pathname.startsWith('/customer-care/');
+
+  if (isCustomerCareRoute) {
+    return <CustomerCareRoutes />;
+  }
+
+  // ==========================================================
+  // PUBLIC ZENIMONIES CORPORATE WEBSITE
+  //
+  // IMPORTANT:
+  // This is outside SessionGuard.
+  // Visitors can access the website without logging in.
+  // ==========================================================
 
   if (
-    isCustomerCareRoute
+    pathname === '/' ||
+    pathname === '/about'
   ) {
-    return (
-      <CustomerCareRoutes />
-    );
+    return <About />;
   }
 
   // ==========================================================
   // NORMAL CUSTOMER BANKING
   // ==========================================================
 
-  return (
-    <CustomerRoutes />
-  );
+  return <CustomerRoutes />;
 };
 
 // ============================================================
