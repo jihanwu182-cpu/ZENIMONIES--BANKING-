@@ -312,7 +312,7 @@ async function verifyElectricityMeter({
     meterNumber: billersCode,
     meterType: normalizedMeterType,
     code: String(response.code || ''),
-    verified: String(response.code || '') === '000',
+  verified: String(response.code || '') === '020',
     customerName:
       response.content?.Customer_Name ||
       response.content?.customer_name ||
@@ -384,7 +384,7 @@ async function purchaseElectricity({
     billersCode,
     variation_code: normalizedMeterType,
     amount: purchaseAmount,
-    phone: normalizedPhone,
+    phone: b
   });
 
   return {
