@@ -1,34 +1,33 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 
-const GREEN = '#00A83E';
-const DARK_GREEN = '#07552F';
-const DARK = '#14251B';
-const MUTED = '#68756C';
-const BORDER = '#E6ECE7';
-const LIGHT = '#F7FAF7';
+const GREEN = '#07803F';
+const DARK = '#17251C';
+const MUTED = '#68736B';
+const BORDER = '#E7ECE8';
+const LIGHT = '#F7F9F7';
 
 const services = [
   {
     icon: '↗',
     title: 'Bank Transfers',
-    description: 'Send money through supported transfer services for everyday financial needs.',
+    description: 'Convenient transfers for everyday personal and business banking.',
   },
   {
     icon: '▤',
     title: 'Airtime & Data',
-    description: 'Purchase airtime and mobile data through the ZENIMONIES platform.',
-  },
-  {
-    icon: 'ϟ',
-    title: 'Electricity Payments',
-    description: 'Pay supported electricity bills with a convenient digital experience.',
+    description: 'Purchase airtime and mobile data through one convenient platform.',
   },
   {
     icon: '▣',
-    title: 'TV Subscriptions',
-    description: 'Manage supported television subscription payments.',
+    title: 'Bill Payments',
+    description: 'Pay supported electricity and television subscription bills.',
+  },
+  {
+    icon: '◉',
+    title: 'Personal Banking',
+    description: 'Access everyday banking services through your personal account.',
   },
   {
     icon: '▥',
@@ -38,16 +37,13 @@ const services = [
   {
     icon: '▦',
     title: 'POS Services',
-    description: 'Explore POS payment solutions for eligible business customers.',
+    description: 'POS services designed to support business payment activities.',
   },
 ];
 
 const Home: React.FC = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [balanceVisible, setBalanceVisible] = useState(false);
-
   return (
-    <div className="zm-site">
+    <div className="zen-home">
       <style>{`
         * {
           box-sizing: border-box;
@@ -57,1303 +53,1537 @@ const Home: React.FC = () => {
           scroll-behavior: smooth;
         }
 
-        body {
-          margin: 0;
-        }
-
-        .zm-site {
+        .zen-home {
           min-height: 100vh;
-          overflow: hidden;
           background: #fff;
           color: ${DARK};
           font-family: Inter, -apple-system, BlinkMacSystemFont,
             "Segoe UI", Arial, sans-serif;
+          overflow: hidden;
         }
 
-        .zm-container {
-          width: min(1200px, calc(100% - 64px));
+        .zen-container {
+          width: min(1160px, calc(100% - 48px));
           margin: 0 auto;
         }
 
         a {
-          -webkit-tap-highlight-color: transparent;
+          transition: color .2s ease, background .2s ease,
+            border-color .2s ease, transform .2s ease;
         }
 
-        /* HEADER */
-
-        .zm-header {
+        .zen-header {
           position: sticky;
           top: 0;
           z-index: 100;
           background: rgba(255,255,255,.97);
           border-bottom: 1px solid ${BORDER};
-          backdrop-filter: blur(16px);
+          backdrop-filter: blur(14px);
         }
 
-        .zm-nav {
-          min-height: 82px;
+        .zen-nav {
+          height: 76px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 28px;
+          gap: 25px;
         }
 
-        .zm-brand {
+        .zen-logo {
           display: inline-flex;
           align-items: center;
-          gap: 11px;
+          gap: 10px;
           color: ${DARK};
           text-decoration: none;
           font-size: 21px;
-          font-weight: 900;
+          font-weight: 850;
           letter-spacing: -1px;
           white-space: nowrap;
         }
 
-        .zm-brand-symbol {
-          width: 41px;
-          height: 41px;
+        .zen-logo-mark {
+          width: 37px;
+          height: 37px;
           display: grid;
           place-items: center;
-          border-radius: 12px;
-          background: ${GREEN};
-          color: white;
-          font-size: 23px;
+          background: #EDF5EF;
+          color: ${GREEN};
+          border-radius: 10px;
+          font-size: 21px;
           font-weight: 900;
         }
 
-        .zm-nav-links {
+        .zen-nav-links {
           display: flex;
           align-items: center;
           gap: 27px;
         }
 
-        .zm-nav-links a {
-          color: #46544A;
+        .zen-nav-links a {
+          color: #47534A;
           text-decoration: none;
           font-size: 13px;
           font-weight: 650;
-          transition: color .2s ease;
         }
 
-        .zm-nav-links a:hover {
+        .zen-nav-links a:hover {
           color: ${GREEN};
         }
 
-        .zm-nav-actions {
-          display: flex;
-          align-items: center;
-          gap: 12px;
+        .zen-nav-links .zen-nav-contact {
+          padding: 11px 18px;
+          border: 1px solid ${GREEN};
+          border-radius: 7px;
+          color: ${GREEN};
         }
 
-        .zm-signin {
+        .zen-nav-links .zen-nav-contact:hover {
+          background: #F3F8F4;
+        }
+
+        .zen-mobile-menu {
+          display: none;
+          position: relative;
+        }
+
+        .zen-mobile-menu summary {
+          list-style: none;
+          cursor: pointer;
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          border: 1px solid ${BORDER};
+          border-radius: 9px;
+          color: ${DARK};
+          font-size: 23px;
+        }
+
+        .zen-mobile-menu summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .zen-mobile-menu nav {
+          position: absolute;
+          top: 52px;
+          right: 0;
+          width: 220px;
+          padding: 10px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
+          box-shadow: 0 15px 35px rgba(20,40,25,.12);
+        }
+
+        .zen-mobile-menu nav a {
+          display: block;
+          padding: 13px 12px;
           color: ${DARK};
           text-decoration: none;
           font-size: 13px;
-          font-weight: 750;
+          font-weight: 650;
+          border-radius: 7px;
         }
 
-        .zm-nav-cta,
-        .zm-primary-button {
+        .zen-mobile-menu nav a:hover {
+          background: ${LIGHT};
+          color: ${GREEN};
+        }
+
+        .zen-hero {
+          padding: 76px 0 82px;
+          background: #fff;
+        }
+
+        .zen-hero-grid {
+          display: grid;
+          grid-template-columns: 1.05fr .95fr;
+          align-items: center;
+          gap: 55px;
+        }
+
+        .zen-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          color: ${GREEN};
+          font-size: 11px;
+          font-weight: 850;
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+        }
+
+        .zen-eyebrow-dot {
+          width: 7px;
+          height: 7px;
+          background: ${GREEN};
+          border-radius: 50%;
+        }
+
+        .zen-hero h1 {
+          max-width: 620px;
+          margin: 22px 0 19px;
+          color: ${DARK};
+          font-size: clamp(43px, 5.2vw, 65px);
+          line-height: 1.08;
+          letter-spacing: -2.8px;
+          font-weight: 850;
+        }
+
+        .zen-hero h1 span {
+          color: ${GREEN};
+        }
+
+        .zen-hero-description {
+          max-width: 510px;
+          margin: 0;
+          color: ${MUTED};
+          font-size: 15px;
+          line-height: 1.85;
+        }
+
+        .zen-hero-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 29px;
+        }
+
+        .zen-button {
           min-height: 47px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 0 21px;
-          border: 1px solid ${GREEN};
+          padding: 0 19px;
           border-radius: 7px;
-          background: ${GREEN};
-          color: white;
+          font-size: 12px;
+          font-weight: 750;
           text-decoration: none;
-          font-size: 13px;
-          font-weight: 800;
-          transition: .2s ease;
         }
 
-        .zm-nav-cta:hover,
-        .zm-primary-button:hover {
-          background: ${DARK_GREEN};
-          border-color: ${DARK_GREEN};
+        .zen-button-primary {
+          background: ${GREEN};
+          color: #fff;
+          border: 1px solid ${GREEN};
+        }
+
+        .zen-button-primary:hover {
+          background: #056B34;
           transform: translateY(-2px);
         }
 
-        .zm-menu-button {
-          display: none;
-          width: 43px;
-          height: 43px;
+        .zen-button-secondary {
+          background: #fff;
+          color: ${DARK};
           border: 1px solid ${BORDER};
-          border-radius: 9px;
-          background: white;
-          color: ${DARK};
-          font-size: 22px;
-          cursor: pointer;
         }
 
-        .zm-mobile-nav {
-          display: none;
-          padding: 8px 24px 18px;
-          border-top: 1px solid ${BORDER};
-          background: white;
+        .zen-button-secondary:hover {
+          border-color: ${GREEN};
+          color: ${GREEN};
         }
 
-        .zm-mobile-nav.open {
-          display: grid;
+        .zen-hero-note {
+          margin-top: 20px;
+          color: #89938C;
+          font-size: 11px;
         }
 
-        .zm-mobile-nav a {
-          padding: 13px 4px;
-          border-bottom: 1px solid ${BORDER};
-          color: ${DARK};
-          text-decoration: none;
-          font-size: 14px;
-          font-weight: 650;
-        }
+        /* SMARTPHONE SHOWCASE */
 
-        /* HERO */
-
-        .zm-hero {
+        .zen-visual {
           position: relative;
-          padding: 82px 0 85px;
-          background:
-            radial-gradient(
-              circle at 82% 42%,
-              rgba(0,168,62,.075),
-              transparent 35%
-            ),
-            #fff;
+          min-height: 610px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 25px;
+          background: #F7FAF7;
+          border: 1px solid ${BORDER};
+          border-radius: 20px;
         }
 
-        .zm-hero-grid {
+        .zen-dashboard-preview {
+          position: relative;
+          z-index: 2;
+          width: 100%;
+          max-width: 340px;
+          padding: 23px 17px 18px;
+          background: #FFFFFF;
+          border: 9px solid #17251C;
+          border-radius: 37px;
+          box-shadow: 0 25px 60px rgba(20,45,28,.16);
+          overflow: hidden;
+        }
+
+        .zen-phone-notch {
+          width: 82px;
+          height: 17px;
+          margin: -16px auto 17px;
+          background: #17251C;
+          border-radius: 0 0 12px 12px;
+        }
+
+        .zen-dashboard-header,
+        .zen-dashboard-user,
+        .zen-dashboard-balance-top,
+        .zen-dashboard-section-title,
+        .zen-dashboard-bottom-nav {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .zen-dashboard-header {
+          padding-bottom: 14px;
+          border-bottom: 1px solid ${BORDER};
+        }
+
+        .zen-dashboard-brand {
+          color: ${DARK};
+          font-size: 13px;
+          font-weight: 900;
+          letter-spacing: -.4px;
+        }
+
+        .zen-dashboard-header-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .zen-dashboard-header-actions span {
+          width: 29px;
+          height: 29px;
+          display: grid;
+          place-items: center;
+          border: 1px solid ${BORDER};
+          border-radius: 50%;
+          color: ${DARK};
+          font-size: 12px;
+        }
+
+        .zen-dashboard-user {
+          justify-content: flex-start;
+          gap: 10px;
+          margin: 17px 0;
+        }
+
+        .zen-dashboard-avatar {
+          width: 36px;
+          height: 36px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          background: #EDF5EF;
+          color: ${GREEN};
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .zen-dashboard-user small {
+          display: block;
+          color: ${MUTED};
+          font-size: 9px;
+        }
+
+        .zen-dashboard-user strong {
+          display: block;
+          margin-top: 3px;
+          color: ${DARK};
+          font-size: 12px;
+        }
+
+        .zen-dashboard-balance {
+          padding: 17px;
+          color: #fff;
+          background: linear-gradient(125deg, #176D3C, #0A8745);
+          border-radius: 11px;
+        }
+
+        .zen-dashboard-balance-top {
+          color: rgba(255,255,255,.85);
+          font-size: 9px;
+        }
+
+        .zen-dashboard-balance strong {
+          display: block;
+          margin: 13px 0 12px;
+          font-size: 23px;
+          letter-spacing: .5px;
+        }
+
+        .zen-dashboard-balance-foot {
+          display: flex;
+          justify-content: space-between;
+          color: rgba(255,255,255,.86);
+          font-size: 9px;
+        }
+
+        .zen-dashboard-section-title {
+          margin: 19px 0 11px;
+          color: ${DARK};
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .zen-dashboard-actions {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 10px 5px;
+        }
+
+        .zen-dashboard-action {
+          text-align: center;
+          color: #59645C;
+          font-size: 8px;
+          line-height: 1.35;
+        }
+
+        .zen-dashboard-action span {
+          width: 32px;
+          height: 32px;
+          display: grid;
+          place-items: center;
+          margin: 0 auto 5px;
+          background: #F0F5F1;
+          color: ${GREEN};
+          border-radius: 9px;
+          font-size: 14px;
+          font-weight: 800;
+        }
+
+        .zen-dashboard-service-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 9px 0;
+          border-bottom: 1px solid ${BORDER};
+          color: #4D5A51;
+          font-size: 9px;
+        }
+
+        .zen-dashboard-service-row span:last-child {
+          color: ${GREEN};
+          font-size: 13px;
+        }
+
+        .zen-dashboard-transactions {
+          padding: 13px 10px;
+          text-align: center;
+          background: #FAFCFA;
+          border: 1px solid ${BORDER};
+          border-radius: 8px;
+        }
+
+        .zen-dashboard-transactions strong {
+          display: block;
+          color: ${DARK};
+          font-size: 10px;
+        }
+
+        .zen-dashboard-transactions span {
+          display: block;
+          margin-top: 4px;
+          color: ${MUTED};
+          font-size: 8px;
+        }
+
+        .zen-dashboard-bottom-nav {
+          margin-top: 15px;
+          padding-top: 12px;
+          border-top: 1px solid ${BORDER};
+        }
+
+        .zen-dashboard-bottom-nav span {
+          color: #7A857D;
+          font-size: 8px;
+          text-align: center;
+        }
+
+        .zen-dashboard-bottom-nav span:first-child {
+          color: ${GREEN};
+          font-weight: 850;
+        }
+
+        .zen-preview-caption {
+          position: absolute;
+          right: 18px;
+          bottom: 14px;
+          color: #8A948D;
+          font-size: 9px;
+          letter-spacing: .2px;
+        }
+
+        /* GENERAL SECTIONS */
+
+        .zen-section {
+          padding: 82px 0;
+          background: #fff;
+        }
+
+        .zen-section-light {
+          background: ${LIGHT};
+        }
+
+        .zen-kicker {
+          color: ${GREEN};
+          font-size: 11px;
+          font-weight: 850;
+          letter-spacing: 1.4px;
+          text-transform: uppercase;
+        }
+
+        .zen-section-heading {
+          max-width: 690px;
+          margin: 0 auto 40px;
+          text-align: center;
+        }
+
+        .zen-section-heading h2 {
+          margin: 13px 0;
+          color: ${DARK};
+          font-size: clamp(29px, 4vw, 40px);
+          line-height: 1.2;
+          letter-spacing: -1.3px;
+        }
+
+        .zen-section-heading p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 14px;
+          line-height: 1.85;
+        }
+
+        /* ABOUT */
+
+        .zen-intro-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           align-items: center;
           gap: 65px;
         }
 
-        .zm-eyebrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          color: ${GREEN};
-          font-size: 11px;
-          font-weight: 850;
-          letter-spacing: 1.7px;
-          text-transform: uppercase;
-        }
-
-        .zm-eyebrow::before {
-          content: "";
-          width: 26px;
-          height: 2px;
-          background: ${GREEN};
-        }
-
-        .zm-hero h1 {
-          max-width: 590px;
-          margin: 23px 0 20px;
-          color: ${DARK};
-          font-size: clamp(44px, 5.3vw, 68px);
-          line-height: 1.07;
-          letter-spacing: -3px;
-          font-weight: 850;
-        }
-
-        .zm-hero h1 span {
-          color: ${GREEN};
-        }
-
-        .zm-hero-description {
-          max-width: 510px;
-          color: ${MUTED};
-          font-size: 15px;
-          line-height: 1.95;
-        }
-
-        .zm-hero-actions {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 13px;
-          margin-top: 30px;
-        }
-
-        .zm-secondary-button {
-          min-height: 47px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 21px;
-          border: 1px solid #CFD9D1;
-          border-radius: 7px;
-          background: white;
-          color: ${DARK};
-          text-decoration: none;
-          font-size: 13px;
-          font-weight: 750;
-          transition: .2s ease;
-        }
-
-        .zm-secondary-button:hover {
-          border-color: ${GREEN};
-          color: ${GREEN};
-        }
-
-        .zm-hero-note {
-          margin-top: 22px;
-          color: #8A958D;
-          font-size: 11px;
-        }
-
-        /* PHONE SHOWCASE */
-
-        .zm-phone-stage {
-          position: relative;
-          min-height: 650px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          isolation: isolate;
-        }
-
-        .zm-phone-glow {
-          position: absolute;
-          z-index: -1;
-          width: 470px;
-          height: 470px;
-          border-radius: 50%;
-          background: radial-gradient(
-            circle,
-            #E5F5E9 0%,
-            rgba(229,245,233,.45) 55%,
-            transparent 72%
-          );
-        }
-
-        .zm-phone {
-          position: relative;
-          width: 302px;
-          height: 620px;
-          padding: 9px;
-          border: 2px solid #26332B;
-          border-radius: 43px;
-          background: #151C18;
-          box-shadow:
-            0 30px 70px rgba(17,43,25,.20),
-            0 8px 18px rgba(17,43,25,.12);
-          transform: rotate(-3deg);
-        }
-
-        .zm-phone::before {
-          content: "";
-          position: absolute;
-          top: 145px;
-          left: -5px;
-          width: 3px;
-          height: 65px;
-          border-radius: 4px 0 0 4px;
-          background: #344139;
-        }
-
-        .zm-phone::after {
-          content: "";
-          position: absolute;
-          top: 175px;
-          right: -5px;
-          width: 3px;
-          height: 85px;
-          border-radius: 0 4px 4px 0;
-          background: #344139;
-        }
-
-        .zm-phone-screen {
-          height: 100%;
-          overflow: hidden;
-          position: relative;
-          border-radius: 34px;
-          background: #fff;
-        }
-
-        .zm-phone-status {
-          height: 30px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 19px;
-          color: #1A2920;
-          font-size: 9px;
-          font-weight: 850;
-        }
-
-        .zm-phone-island {
-          position: absolute;
-          top: 7px;
-          left: 50%;
-          width: 83px;
-          height: 19px;
-          transform: translateX(-50%);
-          border-radius: 20px;
-          background: #101713;
-        }
-
-        .zm-phone-app-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 9px 15px 12px;
-          border-bottom: 1px solid #EDF1ED;
-        }
-
-        .zm-phone-logo {
-          color: ${DARK};
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: -.5px;
-        }
-
-        .zm-phone-logo span {
-          color: ${GREEN};
-        }
-
-        .zm-phone-header-icons {
-          display: flex;
-          gap: 7px;
-        }
-
-        .zm-phone-header-icons span {
-          width: 27px;
-          height: 27px;
-          display: grid;
-          place-items: center;
-          border: 1px solid #E7ECE8;
-          border-radius: 50%;
-          color: #47554B;
-          font-size: 11px;
-        }
-
-        .zm-phone-content {
-          padding: 12px 13px 0;
-        }
-
-        .zm-phone-welcome {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          margin-bottom: 13px;
-        }
-
-        .zm-phone-avatar {
-          width: 34px;
-          height: 34px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          background: #EAF7ED;
-          color: ${GREEN};
-          font-size: 13px;
-          font-weight: 900;
-        }
-
-        .zm-phone-welcome small {
-          display: block;
-          color: #89948C;
-          font-size: 8px;
-        }
-
-        .zm-phone-welcome strong {
-          display: block;
-          margin-top: 3px;
-          color: ${DARK};
-          font-size: 11px;
-        }
-
-        .zm-phone-balance {
-          padding: 15px;
-          border-radius: 11px;
-          background: linear-gradient(
-            125deg,
-            #078F40,
-            #07582F
-          );
-          color: white;
-          box-shadow: 0 8px 18px rgba(7,100,48,.16);
-        }
-
-        .zm-phone-balance-top,
-        .zm-phone-balance-bottom {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .zm-phone-balance-top {
-          color: rgba(255,255,255,.83);
-          font-size: 9px;
-        }
-
-        .zm-phone-balance-value {
-          display: block;
-          margin: 13px 0;
-          font-size: 23px;
-          letter-spacing: 1px;
-        }
-
-        .zm-phone-balance-bottom {
-          color: rgba(255,255,255,.85);
-          font-size: 8px;
-        }
-
-        .zm-phone-section-title {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin: 16px 0 10px;
-          color: ${DARK};
-          font-size: 10px;
-          font-weight: 850;
-        }
-
-        .zm-phone-section-title span:last-child {
-          color: ${GREEN};
-          font-size: 8px;
-        }
-
-        .zm-phone-actions {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 13px 5px;
-        }
-
-        .zm-phone-action {
-          text-align: center;
-          color: #526057;
-          font-size: 7px;
-          font-weight: 650;
-        }
-
-        .zm-phone-action-icon {
-          width: 33px;
-          height: 33px;
-          display: grid;
-          place-items: center;
-          margin: 0 auto 5px;
-          border-radius: 10px;
-          background: #F0F7F1;
-          color: ${GREEN};
-          font-size: 15px;
-          font-weight: 850;
-        }
-
-        .zm-phone-verification {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 14px;
-          padding: 9px;
-          border: 1px solid #E7EEE8;
-          border-radius: 9px;
-          background: #FBFDFB;
-        }
-
-        .zm-phone-verification-icon {
-          width: 25px;
-          height: 25px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          background: #EAF7ED;
-          color: ${GREEN};
-          font-size: 11px;
-        }
-
-        .zm-phone-verification strong {
-          display: block;
-          color: ${DARK};
-          font-size: 8px;
-        }
-
-        .zm-phone-verification small {
-          display: block;
-          margin-top: 3px;
-          color: #8A958D;
-          font-size: 7px;
-        }
-
-        .zm-phone-transactions {
-          padding: 12px 7px;
-          border: 1px solid #E9EEE9;
-          border-radius: 8px;
-          text-align: center;
-        }
-
-        .zm-phone-transactions strong {
-          display: block;
-          color: #59665D;
-          font-size: 8px;
-        }
-
-        .zm-phone-transactions small {
-          display: block;
-          margin-top: 4px;
-          color: #929C94;
-          font-size: 7px;
-        }
-
-        .zm-phone-bottom-nav {
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          padding: 10px 5px 15px;
-          border-top: 1px solid #EDF1ED;
-          background: white;
-        }
-
-        .zm-phone-tab {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 3px;
-          color: #879188;
-          font-size: 7px;
-        }
-
-        .zm-phone-tab span {
-          font-size: 14px;
-        }
-
-        .zm-phone-tab.active {
-          color: ${GREEN};
-          font-weight: 850;
-        }
-
-        .zm-phone-caption {
-          position: absolute;
-          right: -45px;
-          bottom: 85px;
-          padding: 13px 16px;
-          border: 1px solid ${BORDER};
-          border-radius: 10px;
-          background: white;
-          box-shadow: 0 12px 30px rgba(20,45,28,.09);
-          transform: rotate(3deg);
-        }
-
-        .zm-phone-caption strong {
-          display: block;
-          color: ${DARK};
-          font-size: 10px;
-        }
-
-        .zm-phone-caption small {
-          display: block;
-          margin-top: 5px;
-          color: ${MUTED};
-          font-size: 8px;
-        }
-
-        /* GENERAL SECTION STYLES */
-
-        .zm-section {
-          padding: 92px 0;
-        }
-
-        .zm-section-light {
-          background: ${LIGHT};
-        }
-
-        .zm-section-heading {
-          max-width: 720px;
-          margin: 0 auto 45px;
-          text-align: center;
-        }
-
-        .zm-kicker {
-          color: ${GREEN};
-          font-size: 10px;
-          font-weight: 850;
-          letter-spacing: 1.7px;
-          text-transform: uppercase;
-        }
-
-        .zm-section-heading h2 {
+        .zen-intro-copy h2 {
           margin: 15px 0;
           color: ${DARK};
-          font-size: clamp(31px, 4vw, 45px);
-          line-height: 1.16;
-          letter-spacing: -1.8px;
+          font-size: 39px;
+          line-height: 1.2;
+          letter-spacing: -1.4px;
         }
 
-        .zm-section-heading p {
-          margin: 0;
+        .zen-intro-copy p {
           color: ${MUTED};
           font-size: 14px;
           line-height: 1.9;
         }
 
-        /* RESPONSIVE */
+        .zen-intro-panel {
+          padding: 33px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 14px;
+        }
 
-        @media (max-width: 1050px) {
-          .zm-nav-links {
-            gap: 15px;
+        .zen-intro-mark {
+          width: 45px;
+          height: 45px;
+          display: grid;
+          place-items: center;
+          background: #EDF5EF;
+          color: ${GREEN};
+          border-radius: 10px;
+          font-size: 22px;
+          font-weight: 900;
+        }
+
+        .zen-intro-panel h3 {
+          margin: 20px 0 10px;
+          font-size: 22px;
+          line-height: 1.35;
+        }
+
+        .zen-intro-panel p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 13px;
+          line-height: 1.85;
+        }
+
+        /* SERVICES */
+
+        .zen-services-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 17px;
+        }
+
+        .zen-service-card {
+          padding: 25px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
+          transition: .2s ease;
+        }
+
+        .zen-service-card:hover {
+          border-color: #BBD9C2;
+          transform: translateY(-3px);
+          box-shadow: 0 12px 30px rgba(20,50,30,.05);
+        }
+
+        .zen-service-icon {
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 18px;
+          background: #F0F5F1;
+          color: ${GREEN};
+          border-radius: 9px;
+          font-size: 19px;
+        }
+
+        .zen-service-card h3 {
+          margin: 0 0 9px;
+          font-size: 15px;
+        }
+
+        .zen-service-card p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 12px;
+          line-height: 1.8;
+        }
+
+        /* BANKING */
+
+        .zen-banking-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+
+        .zen-banking-card {
+          padding: 31px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
+        }
+
+        .zen-banking-card small {
+          color: ${GREEN};
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+        }
+
+        .zen-banking-card h3 {
+          max-width: 370px;
+          margin: 18px 0 11px;
+          font-size: 25px;
+          line-height: 1.25;
+        }
+
+        .zen-banking-card p {
+          color: ${MUTED};
+          font-size: 13px;
+          line-height: 1.8;
+        }
+
+        .zen-banking-card a {
+          display: inline-block;
+          margin-top: 12px;
+          color: ${GREEN};
+          font-size: 12px;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        /* BUSINESS FEATURES */
+
+        .zen-business-details {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-top: 20px;
+        }
+
+        .zen-business-detail {
+          padding: 25px;
+          background: #F7FAF7;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
+        }
+
+        .zen-business-detail strong {
+          display: block;
+          margin-bottom: 9px;
+          color: ${DARK};
+          font-size: 14px;
+        }
+
+        .zen-business-detail p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 12px;
+          line-height: 1.8;
+        }
+
+        /* SECURITY */
+
+        .zen-security-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 18px;
+        }
+
+        .zen-security-item {
+          padding: 25px;
+          background: white;
+          border: 1px solid ${BORDER};
+          border-radius: 12px;
+        }
+
+        .zen-security-item h3 {
+          margin: 0 0 10px;
+          font-size: 15px;
+        }
+
+        .zen-security-item p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 12px;
+          line-height: 1.85;
+        }
+
+        /* CONTACT */
+
+        .zen-contact {
+          padding: 60px 0;
+          border-top: 1px solid ${BORDER};
+          border-bottom: 1px solid ${BORDER};
+          background: white;
+        }
+
+        .zen-contact-inner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 25px;
+        }
+
+        .zen-contact h2 {
+          max-width: 600px;
+          margin: 0 0 10px;
+          font-size: 30px;
+          line-height: 1.25;
+          letter-spacing: -1px;
+        }
+
+        .zen-contact p {
+          margin: 0;
+          color: ${MUTED};
+          font-size: 13px;
+          line-height: 1.8;
+        }
+
+        .zen-contact-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        /* FOOTER */
+
+        .zen-footer {
+          padding: 55px 0 22px;
+          background: #14251B;
+          color: #fff;
+        }
+
+        .zen-footer-grid {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr 1fr 1fr;
+          gap: 35px;
+          padding-bottom: 35px;
+        }
+
+        .zen-footer .zen-logo {
+          color: white;
+        }
+
+        .zen-footer .zen-logo-mark {
+          background: #234B32;
+          color: #75D99A;
+        }
+
+        .zen-footer-brand p {
+          max-width: 290px;
+          color: #C1CDC4;
+          font-size: 12px;
+          line-height: 1.9;
+        }
+
+        .zen-footer-column h4 {
+          margin: 0 0 17px;
+          font-size: 12px;
+        }
+
+        .zen-footer-column a {
+          display: block;
+          margin: 11px 0;
+          color: #C1CDC4;
+          font-size: 11px;
+          text-decoration: none;
+        }
+
+        .zen-footer-column a:hover {
+          color: #fff;
+        }
+
+        .zen-footer-bottom {
+          display: flex;
+          justify-content: space-between;
+          gap: 15px;
+          padding-top: 20px;
+          border-top: 1px solid #34483A;
+          color: #AAB9AE;
+          font-size: 10px;
+        }
+
+        /* TABLET */
+
+        @media (max-width: 900px) {
+          .zen-hero-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
           }
 
-          .zm-hero-grid {
-            gap: 30px;
+          .zen-hero h1 {
+            font-size: 46px;
           }
 
-          .zm-phone-caption {
-            right: -12px;
+          .zen-visual {
+            min-height: 570px;
+          }
+
+          .zen-services-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .zen-footer-grid {
+            grid-template-columns: repeat(2, 1fr);
           }
         }
 
-        @media (max-width: 760px) {
-          .zm-container {
-            width: calc(100% - 38px);
+        /* MOBILE */
+
+        @media (max-width: 650px) {
+          .zen-container {
+            width: calc(100% - 36px);
           }
 
-          .zm-nav {
-            min-height: 70px;
+          .zen-nav {
+            height: 67px;
           }
 
-          .zm-nav-links,
-          .zm-nav-actions {
-            display: none;
-          }
-
-          .zm-menu-button {
-            display: block;
-          }
-
-          .zm-hero {
-            padding: 55px 0 40px;
-          }
-
-          .zm-hero-grid {
-            grid-template-columns: 1fr;
-            gap: 20px;
-          }
-
-          .zm-hero h1 {
-            max-width: 580px;
-            font-size: clamp(39px, 9.5vw, 56px);
-            letter-spacing: -2px;
-          }
-
-          .zm-hero-description {
-            font-size: 14px;
-          }
-
-          .zm-phone-stage {
-            min-height: 630px;
-          }
-
-          .zm-phone {
-            transform: scale(.91) rotate(-2deg);
-          }
-
-          .zm-phone-caption {
-            right: -4px;
-            bottom: 45px;
-          }
-
-          .zm-section {
-            padding: 65px 0;
-          }
-        }
-
-        @media (max-width: 390px) {
-          .zm-container {
-            width: calc(100% - 28px);
-          }
-
-          .zm-brand {
+          .zen-logo {
             font-size: 18px;
           }
 
-          .zm-phone {
-            transform: scale(.84) rotate(-2deg);
+          .zen-logo-mark {
+            width: 34px;
+            height: 34px;
+            font-size: 19px;
           }
 
-          .zm-phone-stage {
-            min-height: 590px;
+          .zen-nav-links {
+            display: none;
           }
 
-          .zm-phone-caption {
-            right: -3px;
-            bottom: 22px;
+          .zen-mobile-menu {
+            display: block;
+          }
+
+          .zen-hero {
+            padding: 48px 0 42px;
+          }
+
+          .zen-hero-grid {
+            grid-template-columns: 1fr;
+            gap: 30px;
+          }
+
+          .zen-eyebrow {
+            font-size: 9px;
+            letter-spacing: 1.1px;
+          }
+
+          .zen-hero h1 {
+            max-width: 440px;
+            margin: 17px 0 14px;
+            font-size: clamp(35px, 9vw, 43px);
+            line-height: 1.12;
+            letter-spacing: -1.7px;
+          }
+
+          .zen-hero-description {
+            font-size: 13px;
+            line-height: 1.75;
+          }
+
+          .zen-hero-actions {
+            gap: 9px;
+            margin-top: 21px;
+          }
+
+          .zen-button {
+            min-height: 43px;
+            padding: 0 14px;
+            font-size: 11px;
+          }
+
+          .zen-hero-note {
+            margin-top: 14px;
+            font-size: 10px;
+          }
+
+          .zen-visual {
+            min-height: auto;
+            padding: 24px 12px;
+            border-radius: 12px;
+          }
+
+          .zen-dashboard-preview {
+            width: 100%;
+            max-width: 340px;
+            padding: 20px 13px 15px;
+            border-width: 8px;
+            border-radius: 32px;
+          }
+
+          .zen-dashboard-balance {
+            padding: 14px;
+          }
+
+          .zen-dashboard-balance strong {
+            font-size: 20px;
+          }
+
+          .zen-dashboard-action span {
+            width: 27px;
+            height: 27px;
+          }
+
+          .zen-preview-caption {
+            position: static;
+            display: block;
+            margin-top: 12px;
+            text-align: center;
+          }
+
+          .zen-section {
+            padding: 60px 0;
+          }
+
+          .zen-intro-grid {
+            grid-template-columns: 1fr;
+            gap: 25px;
+          }
+
+          .zen-intro-copy h2 {
+            font-size: 30px;
+          }
+
+          .zen-intro-copy p {
+            font-size: 13px;
+          }
+
+          .zen-intro-panel {
+            padding: 25px;
+          }
+
+          .zen-section-heading {
+            margin-bottom: 28px;
+          }
+
+          .zen-section-heading h2 {
+            font-size: 28px;
+          }
+
+          .zen-section-heading p {
+            font-size: 12px;
+          }
+
+          .zen-services-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 11px;
+          }
+
+          .zen-service-card {
+            padding: 17px;
+          }
+
+          .zen-service-icon {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 13px;
+            font-size: 16px;
+          }
+
+          .zen-service-card h3 {
+            font-size: 13px;
+          }
+
+          .zen-service-card p {
+            font-size: 11px;
+            line-height: 1.65;
+          }
+
+          .zen-banking-grid,
+          .zen-business-details,
+          .zen-security-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .zen-banking-card {
+            padding: 25px;
+          }
+
+          .zen-banking-card h3 {
+            font-size: 23px;
+          }
+
+          .zen-contact {
+            padding: 42px 0;
+          }
+
+          .zen-contact-inner {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .zen-contact h2 {
+            font-size: 26px;
+          }
+
+          .zen-footer {
+            padding-top: 43px;
+          }
+
+          .zen-footer-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 28px 18px;
+          }
+
+          .zen-footer-brand {
+            grid-column: 1 / -1;
+          }
+
+          .zen-footer-bottom {
+            flex-direction: column;
+            line-height: 1.7;
+          }
+        }
+
+        @media (max-width: 370px) {
+          .zen-container {
+            width: calc(100% - 28px);
+          }
+
+          .zen-hero h1 {
+            font-size: 34px;
+          }
+
+          .zen-services-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .zen-hero-actions {
+            flex-direction: column;
+          }
+
+          .zen-button {
+            width: 100%;
           }
         }
       `}</style>
 
       {/* HEADER */}
 
-      <header className="zm-header">
-        <div className="zm-container zm-nav">
-          <Link to="/" className="zm-brand">
-            <span className="zm-brand-symbol">Z</span>
+      <header className="zen-header">
+        <div className="zen-container zen-nav">
+          <Link to="/" className="zen-logo">
+            <span className="zen-logo-mark">Z</span>
             ZENIMONIES
           </Link>
 
-          <nav className="zm-nav-links">
+          <nav className="zen-nav-links">
+            <a href="#home">Home</a>
             <a href="#personal">Personal</a>
             <a href="#business">Business</a>
             <a href="#services">Services</a>
-            <Link to="/about">Company</Link>
-            <a href="#security">Security</a>
+            <Link to="/about">About Us</Link>
+            <a href="#contact" className="zen-nav-contact">Contact</a>
           </nav>
 
-          <div className="zm-nav-actions">
-            <Link to="/login" className="zm-signin">
-              Sign In
-            </Link>
-            <Link to="/register" className="zm-nav-cta">
-              Get Started
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            className="zm-menu-button"
-            aria-label="Toggle navigation"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            {menuOpen ? '×' : '☰'}
-          </button>
+          <details className="zen-mobile-menu">
+            <summary aria-label="Open navigation menu">☰</summary>
+            <nav>
+              <a href="#home">Home</a>
+              <a href="#personal">Personal Banking</a>
+              <a href="#business">Business Banking</a>
+              <a href="#services">Services</a>
+              <Link to="/about">About Us</Link>
+              <a href="#security">Security</a>
+              <a href="#contact">Contact</a>
+              <Link to="/login">Sign In</Link>
+              <Link to="/register">Create Account</Link>
+            </nav>
+          </details>
         </div>
-
-        <nav className={`zm-mobile-nav ${menuOpen ? 'open' : ''}`}>
-          <a href="#personal" onClick={() => setMenuOpen(false)}>Personal Banking</a>
-          <a href="#business" onClick={() => setMenuOpen(false)}>Business Banking</a>
-          <a href="#services" onClick={() => setMenuOpen(false)}>Services</a>
-          <Link to="/about" onClick={() => setMenuOpen(false)}>Company</Link>
-          <a href="#security" onClick={() => setMenuOpen(false)}>Security</a>
-          <Link to="/login">Sign In</Link>
-          <Link to="/register">Open an Account</Link>
-        </nav>
       </header>
 
       <main>
         {/* HERO */}
 
-        <section className="zm-hero">
-          <div className="zm-container zm-hero-grid">
-            <div>
-              <div className="zm-eyebrow">
-                Banking for everyday life
+        <section className="zen-hero" id="home">
+          <div className="zen-container zen-hero-grid">
+            <div className="zen-hero-content">
+              <div className="zen-eyebrow">
+                <span className="zen-eyebrow-dot" />
+                Digital banking and payment services
               </div>
 
               <h1>
-                Your money.
-                Your everyday.
-                <span> Made simpler.</span>
+                Banking designed for <span>everyday life.</span>
               </h1>
 
-              <p className="zm-hero-description">
-                Discover ZENIMONIES, a digital banking platform
-                bringing everyday banking and payment services
-                together for individuals and businesses in Nigeria.
+              <p className="zen-hero-description">
+                ZENIMONIES brings essential digital banking and payment
+                services together in one convenient platform, designed
+                to support individuals and businesses across Nigeria.
               </p>
 
-              <div className="zm-hero-actions">
-                <Link to="/register" className="zm-primary-button">
-                  Open an Account&nbsp; →
+              <div className="zen-hero-actions">
+                <Link to="/register" className="zen-button zen-button-primary">
+                  Get started
                 </Link>
 
-                <a href="#services" className="zm-secondary-button">
-                  Explore Services
+                <a href="#services" className="zen-button zen-button-secondary">
+                  Explore our services
                 </a>
               </div>
 
-              <p className="zm-hero-note">
-                Personal banking. Business banking. Digital payments.
+              <p className="zen-hero-note">
+                Digital banking and payment services in Nigeria.
               </p>
             </div>
 
-            {/* REALISTIC PHONE MOCKUP */}
+            {/* ILLUSTRATIVE PHONE — NO LIVE CUSTOMER DATA */}
 
-            <div className="zm-phone-stage">
-              <div className="zm-phone-glow" />
+            <div
+              className="zen-visual"
+              aria-label="Illustrative ZENIMONIES smartphone dashboard"
+            >
+              <div className="zen-dashboard-preview">
+                <div className="zen-phone-notch" />
 
-              <div className="zm-phone">
-                <div className="zm-phone-screen">
-                  <div className="zm-phone-status">
-                    <span>9:41</span>
-                    <span>● ● ●</span>
+                <div className="zen-dashboard-header">
+                  <span className="zen-dashboard-brand">ZENIMONIES</span>
+                  <div className="zen-dashboard-header-actions">
+                    <span>♧</span>
+                    <span>?</span>
                   </div>
+                </div>
 
-                  <div className="zm-phone-island" />
-
-                  <div className="zm-phone-app-header">
-                    <div className="zm-phone-logo">
-                      <span>ZENI</span>MONIES
-                    </div>
-
-                    <div className="zm-phone-header-icons">
-                      <span>♧</span>
-                      <span>?</span>
-                    </div>
+                <div className="zen-dashboard-user">
+                  <span className="zen-dashboard-avatar">C</span>
+                  <div>
+                    <small>Welcome back,</small>
+                    <strong>Customer</strong>
                   </div>
+                </div>
 
-                  <div className="zm-phone-content">
-                    <div className="zm-phone-welcome">
-                      <div className="zm-phone-avatar">C</div>
-                      <div>
-                        <small>Welcome back,</small>
-                        <strong>Customer</strong>
-                      </div>
-                    </div>
-
-                    <div className="zm-phone-balance">
-                      <div className="zm-phone-balance-top">
-                        <span>Available Balance</span>
-                        <button
-                          type="button"
-                          onClick={() => setBalanceVisible(!balanceVisible)}
-                          style={{
-                            border: 0,
-                            background: 'transparent',
-                            color: 'white',
-                            cursor: 'pointer',
-                            fontSize: 10,
-                          }}
-                          aria-label="Toggle balance visibility"
-                        >
-                          {balanceVisible ? 'Hide' : 'Show'}
-                        </button>
-                      </div>
-
-                      <strong className="zm-phone-balance-value">
-                        {balanceVisible ? '₦ ••••••' : '₦ ••••••'}
-                      </strong>
-
-                      <div className="zm-phone-balance-bottom">
-                        <span>Personal Account</span>
-                        <span>NGN</span>
-                      </div>
-                    </div>
-
-                    <div className="zm-phone-verification">
-                      <div className="zm-phone-verification-icon">✓</div>
-                      <div>
-                        <strong>Account Verification</strong>
-                        <small>Manage your verification status</small>
-                      </div>
-                    </div>
-
-                    <div className="zm-phone-section-title">
-                      <span>Quick Actions</span>
-                      <span>View all</span>
-                    </div>
-
-                    <div className="zm-phone-actions">
-                      {[
-                        ['＋', 'Add Money'],
-                        ['↗', 'Transfer'],
-                        ['↓', 'Withdraw'],
-                        ['▤', 'Pay Bills'],
-                        ['▣', 'Airtime'],
-                        ['◉', 'Data'],
-                        ['ϟ', 'Electricity'],
-                        ['•••', 'More'],
-                      ].map(([icon, label]) => (
-                        <div className="zm-phone-action" key={label}>
-                          <div className="zm-phone-action-icon">{icon}</div>
-                          {label}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="zm-phone-section-title">
-                      <span>Recent Transactions</span>
-                      <span>See all</span>
-                    </div>
-
-                    <div className="zm-phone-transactions">
-                      <strong>No transactions yet</strong>
-                      <small>Your transactions will appear here.</small>
-                    </div>
+                <div className="zen-dashboard-balance">
+                  <div className="zen-dashboard-balance-top">
+                    <span>Available balance</span>
+                    <span>•••</span>
                   </div>
-
-                  <div className="zm-phone-bottom-nav">
-                    <div className="zm-phone-tab active">
-                      <span>⌂</span>Home
-                    </div>
-                    <div className="zm-phone-tab">
-                      <span>▣</span>Cards
-                    </div>
-                    <div className="zm-phone-tab">
-                      <span>⇄</span>Payments
-                    </div>
-                    <div className="zm-phone-tab">
-                      <span>◷</span>History
-                    </div>
-                    <div className="zm-phone-tab">
-                      <span>◎</span>Profile
-                    </div>
+                  <strong>₦ ••••••</strong>
+                  <div className="zen-dashboard-balance-foot">
+                    <span>Personal account</span>
+                    <span>NGN</span>
                   </div>
+                </div>
+
+                <div className="zen-dashboard-section-title">
+                  <span>Quick Actions</span>
+                  <span>View all</span>
+                </div>
+
+                <div className="zen-dashboard-actions">
+                  <div className="zen-dashboard-action"><span>＋</span>Add Money</div>
+                  <div className="zen-dashboard-action"><span>↗</span>To Bank</div>
+                  <div className="zen-dashboard-action"><span>⇄</span>Send</div>
+                  <div className="zen-dashboard-action"><span>▤</span>Airtime</div>
+                  <div className="zen-dashboard-action"><span>▦</span>Data</div>
+                  <div className="zen-dashboard-action"><span>◎</span>Betting</div>
+                  <div className="zen-dashboard-action"><span>▣</span>TV</div>
+                  <div className="zen-dashboard-action"><span>ϟ</span>Bills</div>
+                  <div className="zen-dashboard-action"><span>◇</span>Savings</div>
+                  <div className="zen-dashboard-action"><span>•••</span>More</div>
+                </div>
+
+                <div className="zen-dashboard-section-title">
+                  <span>More Services</span>
+                  <span />
+                </div>
+
+                <div className="zen-dashboard-service-row">
+                  <span>Transactions</span><span>›</span>
+                </div>
+                <div className="zen-dashboard-service-row">
+                  <span>Wallet</span><span>›</span>
+                </div>
+                <div className="zen-dashboard-service-row">
+                  <span>Cards</span><span>›</span>
+                </div>
+                <div className="zen-dashboard-service-row">
+                  <span>Settings</span><span>›</span>
+                </div>
+
+                <div className="zen-dashboard-section-title">
+                  <span>Recent Transactions</span>
+                  <span>See all</span>
+                </div>
+
+                <div className="zen-dashboard-transactions">
+                  <strong>No transactions yet</strong>
+                  <span>Your transactions will appear here.</span>
+                </div>
+
+                <div className="zen-dashboard-bottom-nav">
+                  <span>⌂<br />Home</span>
+                  <span>↔<br />Activity</span>
+                  <span>▣<br />Cards</span>
+                  <span>◫<br />Wallet</span>
+                  <span>○<br />Profile</span>
                 </div>
               </div>
 
-              <div className="zm-phone-caption">
-                <strong>The ZENIMONIES experience</strong>
-                <small>Illustrative mobile app preview</small>
-              </div>
+              <span className="zen-preview-caption">
+                Illustrative customer app preview
+              </span>
             </div>
           </div>
         </section>
 
-        <style>{`
-          .section { padding: 88px 6%; }
-          .section-inner { max-width: 1160px; margin: 0 auto; }
-          .section-heading { max-width: 690px; margin-bottom: 38px; }
-          .eyebrow { color: ${GREEN}; font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 13px; }
-          .section-heading h2 { color: ${DARK}; font-size: clamp(29px, 4vw, 43px); line-height: 1.16; letter-spacing: -1.4px; margin: 0 0 15px; }
-          .section-heading p { color: ${MUTED}; font-size: 16px; line-height: 1.8; margin: 0; }
-          .personal-section { background: #fff; }
-          .personal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
-          .feature-panel { border: 1px solid ${BORDER}; border-radius: 20px; padding: 30px; background: #fff; }
-          .feature-panel h3 { color: ${DARK}; font-size: 22px; margin: 0 0 12px; }
-          .feature-panel p { color: ${MUTED}; line-height: 1.8; margin: 0 0 20px; }
-          .feature-list { display: grid; gap: 13px; padding: 0; margin: 0; list-style: none; }
-          .feature-list li { display: flex; gap: 11px; align-items: flex-start; color: ${DARK}; font-size: 14px; line-height: 1.6; }
-          .feature-check { color: ${GREEN}; font-weight: 900; }
-          .text-link { color: ${DARK_GREEN}; text-decoration: none; font-weight: 800; display: inline-flex; margin-top: 22px; }
-          .business-section { background: ${LIGHT}; }
-          .business-panel { display: grid; grid-template-columns: 1.05fr .95fr; gap: 35px; align-items: center; padding: 38px; background: #fff; border: 1px solid ${BORDER}; border-radius: 22px; }
-          .business-panel h3 { color: ${DARK}; font-size: 27px; line-height: 1.2; margin: 0 0 14px; }
-          .business-panel p { color: ${MUTED}; line-height: 1.8; }
-          .business-visual { border-radius: 17px; background: #F2F7F2; padding: 25px; }
-          .business-visual-card { background: white; border: 1px solid ${BORDER}; padding: 19px; border-radius: 13px; margin-bottom: 12px; }
-          .business-visual-card:last-child { margin-bottom: 0; }
-          .business-visual-card strong { display: block; color: ${DARK}; margin-bottom: 6px; }
-          .business-visual-card span { color: ${MUTED}; font-size: 13px; line-height: 1.6; }
-          .services-section { background: #fff; }
-          .services-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-          .service-card { border: 1px solid ${BORDER}; border-radius: 17px; padding: 24px; background: #fff; transition: border-color .2s, transform .2s; }
-          .service-card:hover { border-color: ${GREEN}; transform: translateY(-3px); }
-          .service-icon { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 13px; background: #EAF7EE; color: ${DARK_GREEN}; font-size: 19px; margin-bottom: 18px; }
-          .service-card h3 { color: ${DARK}; font-size: 17px; margin: 0 0 9px; }
-          .service-card p { color: ${MUTED}; font-size: 14px; line-height: 1.7; margin: 0; }
-          .company-section { background: ${LIGHT}; }
-          .company-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 42px; align-items: start; }
-          .company-copy h2 { color: ${DARK}; font-size: clamp(29px, 4vw, 40px); line-height: 1.2; letter-spacing: -1px; margin: 0 0 17px; }
-          .company-copy p { color: ${MUTED}; line-height: 1.85; margin: 0 0 15px; }
-          .values-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
-          .value-card { background: #fff; border: 1px solid ${BORDER}; border-radius: 15px; padding: 21px; }
-          .value-card strong { display: block; color: ${DARK}; margin-bottom: 8px; }
-          .value-card span { color: ${MUTED}; font-size: 13px; line-height: 1.65; }
-          .security-section { background: #fff; }
-          .security-content { display: grid; grid-template-columns: .85fr 1.15fr; gap: 35px; align-items: center; }
-          .security-content h2 { color: ${DARK}; font-size: clamp(29px, 4vw, 40px); line-height: 1.2; margin: 0 0 15px; }
-          .security-content p { color: ${MUTED}; line-height: 1.8; }
-          .security-points { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
-          .security-point { border: 1px solid ${BORDER}; border-radius: 15px; padding: 20px; }
-          .security-point strong { color: ${DARK}; display: block; margin-bottom: 7px; }
-          .security-point span { color: ${MUTED}; font-size: 13px; line-height: 1.6; }
-          .contact-section { background: ${LIGHT}; padding: 70px 6%; }
-          .contact-panel { max-width: 1160px; margin: 0 auto; background: #fff; border: 1px solid ${BORDER}; border-radius: 21px; padding: 38px; display: flex; justify-content: space-between; align-items: center; gap: 25px; }
-          .contact-panel h2 { color: ${DARK}; font-size: 29px; margin: 0 0 10px; }
-          .contact-panel p { color: ${MUTED}; line-height: 1.7; margin: 0; }
-          .contact-actions { display: flex; flex-wrap: wrap; gap: 11px; }
-          .footer { background: #14251B; color: #fff; padding: 48px 6% 25px; }
-          .footer-inner { max-width: 1160px; margin: 0 auto; }
-          .footer-top { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 35px; padding-bottom: 35px; }
-          .footer-brand { font-size: 23px; font-weight: 900; letter-spacing: -.7px; margin-bottom: 13px; }
-          .footer-brand span { color: #55D486; }
-          .footer p { color: #C1CDC4; font-size: 14px; line-height: 1.8; max-width: 360px; }
-          .footer h4 { margin: 0 0 15px; font-size: 14px; }
-          .footer-links { display: grid; gap: 11px; }
-          .footer-links a { color: #C1CDC4; text-decoration: none; font-size: 14px; }
-          .footer-links a:hover { color: #fff; }
-          .footer-bottom { border-top: 1px solid #34483A; padding-top: 20px; color: #AAB9AE; font-size: 12px; display: flex; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
-          @media (max-width: 760px) {
-            .section { padding: 62px 6%; }
-            .personal-grid, .business-panel, .company-grid, .security-content { grid-template-columns: 1fr; }
-            .services-grid { grid-template-columns: 1fr 1fr; }
-            .business-panel { padding: 23px; }
-            .contact-panel { padding: 27px; align-items: flex-start; flex-direction: column; }
-            .footer-top { grid-template-columns: 1fr 1fr; }
-            .footer-top > div:first-child { grid-column: 1 / -1; }
-          }
-          @media (max-width: 430px) {
-            .services-grid, .values-grid, .security-points { grid-template-columns: 1fr; }
-            .feature-panel { padding: 23px; }
-            .footer-top { grid-template-columns: 1fr; }
-            .footer-top > div:first-child { grid-column: auto; }
-          }
-        `}</style>
+        {/* ABOUT ZENIMONIES */}
 
-        <section className="section personal-section" id="personal">
-          <div className="section-inner">
-            <div className="section-heading">
-              <div className="eyebrow">Personal banking</div>
-              <h2>Everyday banking, made more convenient.</h2>
+        <section className="zen-section zen-section-light" id="company">
+          <div className="zen-container zen-intro-grid">
+            <div className="zen-intro-copy">
+              <span className="zen-kicker">About ZENIMONIES</span>
+
+              <h2>
+                Delivering a more seamless digital banking experience.
+              </h2>
+
               <p>
-                Manage everyday payments and essential financial services
-                through the ZENIMONIES mobile banking experience.
+                ZENIMONIES is a digital banking platform committed to
+                making everyday financial services more accessible,
+                convenient and straightforward for individuals and
+                businesses across Nigeria.
               </p>
+
+              <p>
+                Through a unified digital experience, we bring essential
+                account and payment services together, helping customers
+                manage their everyday financial needs with greater ease.
+              </p>
+
+              <Link to="/about" className="zen-button zen-button-primary">
+                Learn more about our company
+              </Link>
             </div>
 
-            <div className="personal-grid">
-              <div className="feature-panel">
-                <h3>Take care of everyday payments</h3>
-                <p>
-                  Access essential services from one place, with a simple
-                  experience designed around your daily financial needs.
-                </p>
-                <ul className="feature-list">
-                  <li><span className="feature-check">✓</span> Bank transfers and payment activity</li>
-                  <li><span className="feature-check">✓</span> Airtime and mobile data purchases</li>
-                  <li><span className="feature-check">✓</span> Electricity and TV subscription payments</li>
-                  <li><span className="feature-check">✓</span> Access to available account services</li>
-                </ul>
-                <Link className="text-link" to="/register">Get started →</Link>
-              </div>
+            <div className="zen-intro-panel">
+              <div className="zen-intro-mark">Z</div>
 
-              <div className="feature-panel">
-                <h3>A clear view of your account</h3>
-                <p>
-                  Keep your account information and available services
-                  together in a mobile experience designed to be easy to use.
-                </p>
-                <ul className="feature-list">
-                  <li><span className="feature-check">✓</span> Personal account dashboard</li>
-                  <li><span className="feature-check">✓</span> Account verification journey</li>
-                  <li><span className="feature-check">✓</span> Recent transaction activity</li>
-                  <li><span className="feature-check">✓</span> Convenient access to payment services</li>
-                </ul>
-                <Link className="text-link" to="/login">Access your account →</Link>
-              </div>
+              <h3>
+                Banking and payment services, connected through one platform.
+              </h3>
+
+              <p>
+                Explore personal and business banking services designed
+                to support everyday payments, account activities and
+                essential financial needs.
+              </p>
             </div>
           </div>
         </section>
 
-        <section className="section business-section" id="business">
-          <div className="section-inner">
-            <div className="section-heading">
-              <div className="eyebrow">Business banking</div>
-              <h2>Support for the way your business operates.</h2>
+        {/* SERVICES */}
+
+        <section className="zen-section" id="services">
+          <div className="zen-container">
+            <div className="zen-section-heading">
+              <span className="zen-kicker">Our services</span>
+
+              <h2>
+                Financial services for everyday life and business.
+              </h2>
+
               <p>
-                ZENIMONIES Business is designed to bring everyday business
-                account access and payment services into one experience.
+                Discover the services available through the
+                ZENIMONIES platform.
               </p>
             </div>
 
-            <div className="business-panel">
-              <div>
-                <h3>Manage business payments with greater convenience.</h3>
-                <p>
-                  Access business banking features through a dedicated
-                  business experience, with services designed for business
-                  account holders.
-                </p>
-                <ul className="feature-list">
-                  <li><span className="feature-check">✓</span> Business account dashboard</li>
-                  <li><span className="feature-check">✓</span> Business payment and transfer services</li>
-                  <li><span className="feature-check">✓</span> Business verification journey</li>
-                  <li><span className="feature-check">✓</span> POS terminal application pathway</li>
-                </ul>
-                <Link className="text-link" to="/register">Explore getting started →</Link>
-              </div>
-
-              <div className="business-visual">
-                <div className="business-visual-card">
-                  <strong>Business account</strong>
-                  <span>Access your business banking dashboard and available services.</span>
-                </div>
-                <div className="business-visual-card">
-                  <strong>Payment services</strong>
-                  <span>Manage supported transfers and everyday business payments.</span>
-                </div>
-                <div className="business-visual-card">
-                  <strong>POS services</strong>
-                  <span>Apply for a POS terminal separately from business dashboard access. Approval is subject to the applicable process.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section services-section" id="services">
-          <div className="section-inner">
-            <div className="section-heading">
-              <div className="eyebrow">Our services</div>
-              <h2>Essential services in one place.</h2>
-              <p>
-                Explore the services available through the ZENIMONIES
-                platform for personal and business customers.
-              </p>
-            </div>
-
-            <div className="services-grid">
-              {services.map((service, index) => (
-                <div className="service-card" key={service.title}>
-                  <div className="service-icon">
-                    {["↗", "▤", "ϟ", "▣", "⌂", "▰"][index]}
-                  </div>
+            <div className="zen-services-grid">
+              {services.map((service) => (
+                <article className="zen-service-card" key={service.title}>
+                  <div className="zen-service-icon">{service.icon}</div>
                   <h3>{service.title}</h3>
                   <p>{service.description}</p>
-                </div>
+                </article>
               ))}
             </div>
           </div>
         </section>
 
-   
-<section className="section company-section" id="company">
-  <div className="section-inner company-grid">
-    <div className="company-copy">
-      <div className="eyebrow">ABOUT ZENIMONIES</div>
+        {/* PERSONAL BANKING */}
 
-      <h2>
-        Delivering a more seamless digital banking experience.
-      </h2>
+        <section className="zen-section zen-section-light" id="personal">
+          <div className="zen-container">
+            <div className="zen-section-heading">
+              <span className="zen-kicker">Personal banking</span>
 
-      <p>
-        ZENIMONIES is a digital banking platform committed to making
-        everyday financial services more accessible, convenient and
-        straightforward for individuals and businesses across Nigeria.
-      </p>
+              <h2>
+                Everyday banking, designed around your needs.
+              </h2>
 
-      <p>
-        Through a unified digital experience, we bring essential
-        account and payment services together, helping customers
-        manage their everyday financial needs with greater ease.
-      </p>
-
-      <Link className="text-link" to="/about">
-        Learn more about our company →
-      </Link>
-    </div>
-
-    <div className="values-grid">
-      <div className="value-card">
-        <strong>Convenience</strong>
-        <span>
-          Access essential account and payment services through
-          a single, straightforward digital experience.
-        </span>
-      </div>
-
-      <div className="value-card">
-        <strong>Clarity</strong>
-        <span>
-          Navigate financial services and account information
-          through clear, intuitive digital interfaces.
-        </span>
-      </div>
-
-      <div className="value-card">
-        <strong>Accessibility</strong>
-        <span>
-          Deliver practical digital financial services designed
-          around the needs of individuals and businesses.
-        </span>
-      </div>
-
-      <div className="value-card">
-        <strong>Responsibility</strong>
-        <span>
-          Promote informed account use, appropriate verification
-          and responsible access to financial services.
-        </span>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-        <section className="section security-section" id="security">
-          <div className="section-inner security-content">
-            <div>
-              <div className="eyebrow">Account protection</div>
-              <h2>Your account deserves careful attention.</h2>
               <p>
-                Account verification and responsible use are important parts
-                of the ZENIMONIES experience. Customers should keep their
-                sign-in details private and review transaction information
-                carefully.
+                Access essential account and payment services through
+                a convenient digital experience.
               </p>
-              <Link className="text-link" to="/about">Learn more about ZENIMONIES →</Link>
             </div>
 
-            <div className="security-points">
-              <div className="security-point">
-                <strong>Account verification</strong>
-                <span>Verification steps help establish customer account information.</span>
+            <div className="zen-banking-grid">
+              <article className="zen-banking-card">
+                <small>Account services</small>
+                <h3>Your everyday banking, in one place.</h3>
+                <p>
+                  Access personal account services, manage account
+                  activities and review your transaction history.
+                </p>
+                <Link to="/register">Get started →</Link>
+              </article>
+
+              <article className="zen-banking-card">
+                <small>Payments and transfers</small>
+                <h3>Manage everyday payments with convenience.</h3>
+                <p>
+                  Access supported bank transfers, airtime, mobile
+                  data and bill payment services.
+                </p>
+                <Link to="/login">Access your account →</Link>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        {/* BUSINESS BANKING */}
+
+        <section className="zen-section" id="business">
+          <div className="zen-container">
+            <div className="zen-section-heading">
+              <span className="zen-kicker">Business banking</span>
+
+              <h2>
+                Digital banking that supports your business.
+              </h2>
+
+              <p>
+                A dedicated business banking experience for account
+                activities, payment services and business operations.
+              </p>
+            </div>
+
+            <div className="zen-banking-grid">
+              <article className="zen-banking-card">
+                <small>Business accounts</small>
+                <h3>Business banking in a connected experience.</h3>
+                <p>
+                  Access your business account dashboard and available
+                  banking services through the ZENIMONIES platform.
+                </p>
+                <Link to="/register">Explore getting started →</Link>
+              </article>
+
+              <article className="zen-banking-card">
+                <small>Business POS services</small>
+                <h3>Additional payment services for businesses.</h3>
+                <p>
+                  Explore the POS terminal application process for
+                  eligible business customers. POS approval is handled
+                  separately from business account access.
+                </p>
+                <Link to="/about">Learn about our company →</Link>
+              </article>
+            </div>
+
+            <div className="zen-business-details">
+              <div className="zen-business-detail">
+                <strong>Business verification</strong>
+                <p>
+                  Business accounts follow the applicable verification
+                  journey. Additional documentation may be required
+                  when progressing through verification levels.
+                </p>
               </div>
-              <div className="security-point">
-                <strong>Protect your sign-in</strong>
-                <span>Keep your password and account access details confidential.</span>
-              </div>
-              <div className="security-point">
-                <strong>Review transactions</strong>
-                <span>Check transaction details and report activity you do not recognise.</span>
-              </div>
-              <div className="security-point">
-                <strong>Use official channels</strong>
-                <span>Access your account through the official ZENIMONIES platform.</span>
+
+              <div className="zen-business-detail">
+                <strong>Business account access</strong>
+                <p>
+                  Business customers can access their account
+                  experience without waiting for a separate POS
+                  application decision.
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="contact-section" id="contact">
-          <div className="contact-panel">
-            <div>
-              <div className="eyebrow">Get started</div>
-              <h2>Make everyday banking simpler.</h2>
+        {/* SECURITY */}
+
+        <section className="zen-section zen-section-light" id="security">
+          <div className="zen-container">
+            <div className="zen-section-heading">
+              <span className="zen-kicker">Security and responsibility</span>
+
+              <h2>
+                Protecting your account is a priority.
+              </h2>
+
               <p>
-                Ready to explore ZENIMONIES? Create an account or learn
-                more about the company and its services.
+                Account verification, responsible account access
+                and careful transaction review are important parts
+                of the ZENIMONIES experience.
               </p>
             </div>
-            <div className="contact-actions">
-              <Link className="primary-button" to="/register">Create an account</Link>
-              <Link className="secondary-button" to="/about">About ZENIMONIES</Link>
+
+            <div className="zen-security-grid">
+              <article className="zen-security-item">
+                <h3>Account protection</h3>
+                <p>
+                  Keep your account credentials private and use
+                  official ZENIMONIES channels to access your account.
+                </p>
+              </article>
+
+              <article className="zen-security-item">
+                <h3>Identity verification</h3>
+                <p>
+                  Customer verification processes support account
+                  identification and applicable service requirements.
+                </p>
+              </article>
+
+              <article className="zen-security-item">
+                <h3>Transaction awareness</h3>
+                <p>
+                  Review your transaction information and report
+                  activity you do not recognise through the
+                  appropriate support channel.
+                </p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        {/* CONTACT */}
+
+        <section className="zen-contact" id="contact">
+          <div className="zen-container zen-contact-inner">
+            <div>
+              <span className="zen-kicker">Get started</span>
+
+              <h2>
+                Discover the ZENIMONIES digital banking experience.
+              </h2>
+
+              <p>
+                Explore our company profile or create an account
+                to get started with the ZENIMONIES platform.
+              </p>
+            </div>
+
+            <div className="zen-contact-actions">
+              <Link to="/register" className="zen-button zen-button-primary">
+                Create an account
+              </Link>
+
+              <Link to="/about" className="zen-button zen-button-secondary">
+                About ZENIMONIES
+              </Link>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="footer-inner">
-          <div className="footer-top">
-            <div>
-              <div className="footer-brand">ZENI<span>MONIES</span></div>
+      {/* FOOTER */}
+
+      <footer className="zen-footer">
+        <div className="zen-container">
+          <div className="zen-footer-grid">
+            <div className="zen-footer-brand">
+              <Link to="/" className="zen-logo">
+                <span className="zen-logo-mark">Z</span>
+                ZENIMONIES
+              </Link>
+
               <p>
-                A digital banking platform focused on convenient everyday
-                financial services for individuals and businesses in Nigeria.
+                A digital banking platform focused on convenient
+                banking and payment services for individuals and
+                businesses across Nigeria.
               </p>
             </div>
 
-            <div>
-              <h4>Explore</h4>
-              <div className="footer-links">
-                <a href="#personal">Personal Banking</a>
-                <a href="#business">Business Banking</a>
-                <a href="#services">Our Services</a>
-                <a href="#security">Account Protection</a>
-              </div>
+            <div className="zen-footer-column">
+              <h4>Company</h4>
+              <Link to="/">Home</Link>
+              <Link to="/about">About Us</Link>
+              <a href="#services">Our Services</a>
+              <a href="#contact">Get Started</a>
             </div>
 
-            <div>
+            <div className="zen-footer-column">
+              <h4>Services</h4>
+              <a href="#personal">Personal Banking</a>
+              <a href="#business">Business Banking</a>
+              <a href="#services">Bank Transfers</a>
+              <a href="#services">Airtime and Data</a>
+            </div>
+
+            <div className="zen-footer-column">
               <h4>Account</h4>
-              <div className="footer-links">
-                <Link to="/about">About Us</Link>
-                <Link to="/login">Sign In</Link>
-                <Link to="/register">Create Account</Link>
-                <a href="#contact">Get Started</a>
-              </div>
+              <Link to="/login">Sign In</Link>
+              <Link to="/register">Create Account</Link>
+              <a href="#security">Security</a>
+              <Link to="/about">Company Profile</Link>
             </div>
           </div>
 
-          <div className="footer-bottom">
-            <span>© {new Date().getFullYear()} ZENIMONIES. All rights reserved.</span>
-            <span>Digital banking services in Nigeria.</span>
+          <div className="zen-footer-bottom">
+            <span>
+              © {new Date().getFullYear()} ZENIMONIES. All rights reserved.
+            </span>
+
+            <span>
+              Digital banking and payment services in Nigeria.
+            </span>
           </div>
         </div>
       </footer>
