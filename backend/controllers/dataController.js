@@ -1,16 +1,12 @@
-
 const crypto = require('crypto');
+
 const pool = require('../config/database');
 
 const {
   getDataPlans,
   purchaseDataPlan,
-  generateRequestId,
-} = require('../services/sogoDataService');
+} = require('../services/vtpassService');
 
-// ============================================================
-// ZENIMONIES — SOGO DATA CONTROLLER
-// ============================================================
 
 // ============================================================
 // HELPERS
@@ -23,6 +19,7 @@ const createReference = () => {
     .toUpperCase()}`;
 };
 
+
 const getUserId = (req) => {
   return (
     req.user?.id ||
@@ -32,695 +29,408 @@ const getUserId = (req) => {
   );
 };
 
+
 const cleanPhoneNumber = (phone) => {
   return String(phone || '')
     .replace(/\s+/g, '')
     .trim();
 };
 
-const getTransactionData = (response) => {
-  return (
-    response?.data?.data ||
-    response?.data?.transaction ||
-    response?.data ||
-    response?.transaction ||
-    response ||
-    {}
-  );
-};
 
 const getProviderStatus = (providerResponse) => {
-  const transaction = getTransactionData(providerResponse);
+  const code = String(
+    providerResponse?.code ||
+      providerResponse?.response_code ||
+      ''
+  ).trim();
 
-  const status = String(
-    transaction?.status ||
-    transaction?.transaction_status ||
-    providerResponse?.status ||
-    ''
-  ).trim().toLowerCase();
+  const transactionStatus = String(
+    providerResponse
+      ?.content
+      ?.transactions
+      ?.status ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
 
+  // Successfully delivered
   if (
-    ['completed', 'successful', 'success', 'succeeded'].includes(status)
+    code === '000' &&
+    transactionStatus === 'delivered'
   ) {
     return 'completed';
   }
 
+  // Provider accepted the transaction but
+  // it is still being processed.
   if (
-    ['processing', 'pending', 'initiated', 'queued'].includes(status)
+    code === '099' ||
+    transactionStatus === 'pending' ||
+    transactionStatus === 'initiated'
   ) {
     return 'pending';
   }
 
-  if (
-    [
-      'failed',
-      'failure',
-      'declined',
-      'cancelled',
-      'canceled',
-      'refunded',
-    ].includes(status)
-  ) {
-    return 'failed';
-  }
-
-  // Unknown or missing provider status must never trigger
-  // an automatic refund.
-  return 'pending';
+  // Explicit provider failure.
+  return 'failed';
 };
 
-const getProviderReference = (providerResponse) => {
-  const transaction = getTransactionData(providerResponse);
-
-  return (
-    transaction?.reference ||
-    transaction?.provider_reference ||
-    transaction?.providerReference ||
-    transaction?.id ||
-    transaction?.transaction_id ||
-    null
-  );
-};
-
-const getProviderMessage = (providerResponse) => {
-  const transaction = getTransactionData(providerResponse);
-
-  return (
-    transaction?.message ||
-    transaction?.description ||
-    providerResponse?.message ||
-    providerResponse?.response_description ||
-    null
-  );
-};
 
 // ============================================================
 // GET DATA PLANS
 // GET /api/data/plans?network=MTN
 // ============================================================
+
 const getPlans = async (req, res) => {
-  const network = req.query?.network;
-
-  console.log('========================================');
-  console.log('ZENIMONIES DATA PLANS REQUEST');
-  console.log('Network:', network);
-  console.log('User ID:', getUserId(req));
-  console.log('========================================');
-
   try {
-    if (!network) {
-      console.warn('DATA PLANS: Missing network parameter');
+    const network =
+      req.query?.network;
 
+    if (!network) {
       return res.status(400).json({
         success: false,
-        message: 'Network is required.',
+        message:
+          'Network is required.',
       });
     }
 
-    console.log('DATA PLANS: Calling Sogo service...');
-
-    const result = await getDataPlans(network);
-
-    console.log('DATA PLANS: Sogo service returned successfully');
-
-    console.log('DATA PLANS DIAGNOSTICS:', {
-      requestedNetwork: network,
-      returnedNetwork: result?.network,
-      serviceID: result?.serviceID,
-      plansType: typeof result?.plans,
-      plansIsArray: Array.isArray(result?.plans),
-      totalPlans: result?.plans?.length,
-      firstPlanKeys:
-        result?.plans?.[0]
-          ? Object.keys(result.plans[0])
-          : [],
-      firstPlan:
-        result?.plans?.[0] || null,
-    });
+    const result =
+      await getDataPlans(network);
 
     return res.status(200).json({
-      success: true,
-      network: result.network,
-      serviceID: result.serviceID,
-      plans: result.plans,
-      diagnostic: {
-        totalPlans: result.plans.length,
-      },
-    });
+  success: true,
+  network: result.network,
+  serviceID: result.serviceID,
+  plans: result.plans,
+
+  // TEMPORARY DIAGNOSTIC
+  diagnostic: {
+    totalPlans: result.plans.length,
+    airtelPlans: result.plans
+      .filter(
+        (plan) =>
+          String(plan.variation_code || '')
+            .toLowerCase()
+            .includes('airtel')
+      )
+      .map((plan) => ({
+        code: plan.variation_code,
+        name: plan.name,
+        amount: plan.amount,
+      })),
+  },
+});
+
   } catch (error) {
-    console.error('========================================');
-    console.error('ZENIMONIES DATA PLANS ERROR');
-    console.error('Network:', network);
-    console.error('Error code:', error?.code);
-    console.error('Error message:', error?.message);
-    console.error('HTTP status:', error?.response?.status);
     console.error(
-      'Provider response:',
-      error?.response?.data
+      'Get data plans error:',
+      error?.code ||
+        error?.message ||
+        'Unknown error'
     );
-    console.error('Stack:', error?.stack);
-    console.error('========================================');
 
     const statusMap = {
       UNSUPPORTED_NETWORK: 400,
-      SOGO_CONFIGURATION_ERROR: 500,
-      SOGO_ENVIRONMENT_MISMATCH: 500,
-      SOGO_TIMEOUT: 504,
-      SOGO_NETWORK_ERROR: 503,
-      SOGO_EMPTY_DATA_CATALOGUE: 502,
+      VTPASS_CONFIGURATION_ERROR: 500,
+      VTPASS_TIMEOUT: 504,
     };
 
-    return res.status(statusMap[error?.code] || 502).json({
+    const status =
+      statusMap[error?.code] || 500;
+
+    return res.status(status).json({
       success: false,
-      code: error?.code || 'DATA_PLANS_ERROR',
-      message: error?.message || 'Unable to load data plans.',
+      code:
+        error?.code ||
+        'DATA_PLANS_ERROR',
+      message:
+        error?.message ||
+        'Unable to load data plans.',
     });
   }
 };
 
-// ============================================================
-// COMPLETE DATA TRANSACTION
-// ============================================================
-
-const completeDataTransaction = async ({
-  reference,
-  transactionId,
-  providerReference,
-  providerResponse,
-}) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const locked = await client.query(
-      `
-      SELECT id, status
-      FROM data_transactions
-      WHERE id = $1
-        AND reference = $2
-      FOR UPDATE
-      `,
-      [transactionId, reference]
-    );
-
-    if (!locked.rows.length) {
-      throw new Error('Data transaction not found.');
-    }
-
-    const currentStatus = String(
-      locked.rows[0].status || ''
-    ).toLowerCase();
-
-    if (currentStatus === 'completed') {
-      await client.query('COMMIT');
-      return { alreadyProcessed: true };
-    }
-
-    // Never reverse a previous failure/refund automatically.
-    if (['failed', 'refunded'].includes(currentStatus)) {
-      await client.query('COMMIT');
-      return { alreadyProcessed: true };
-    }
-
-    await client.query(
-      `
-      UPDATE data_transactions
-      SET
-        provider_reference = COALESCE($1, provider_reference),
-        provider_response = $2::jsonb,
-        status = 'completed',
-        completed_at = CURRENT_TIMESTAMP
-      WHERE id = $3
-      `,
-      [
-        providerReference,
-        JSON.stringify(providerResponse || {}),
-        transactionId,
-      ]
-    );
-
-    await client.query(
-      `
-      UPDATE transactions
-      SET status = 'completed'
-      WHERE reference = $1
-        AND status <> 'failed'
-      `,
-      [reference]
-    );
-
-    await client.query('COMMIT');
-
-    return { alreadyProcessed: false };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-// ============================================================
-// REFUND FAILED DATA TRANSACTION
-// EXACT-ONCE WALLET REFUND
-// ============================================================
-
-const refundDataTransaction = async ({
-  reference,
-  transactionId,
-  accountId,
-  amount,
-  providerReference,
-  providerResponse,
-  failureReason,
-}) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    // Lock the original data transaction first.
-    const dataResult = await client.query(
-      `
-      SELECT
-        id,
-        account_id,
-        amount,
-        status
-      FROM data_transactions
-      WHERE id = $1
-        AND reference = $2
-      FOR UPDATE
-      `,
-      [transactionId, reference]
-    );
-
-    if (!dataResult.rows.length) {
-      throw new Error('Data transaction not found for refund.');
-    }
-
-    const dataTransaction = dataResult.rows[0];
-
-    const currentStatus = String(
-      dataTransaction.status || ''
-    ).toLowerCase();
-
-    if (
-      ['failed', 'refunded', 'completed'].includes(currentStatus)
-    ) {
-      await client.query('COMMIT');
-
-      return {
-        alreadyProcessed: true,
-        status: currentStatus,
-      };
-    }
-
-    // Always use the account recorded on the original transaction.
-    const originalAccountId = dataTransaction.account_id;
-
-    if (!originalAccountId) {
-      throw new Error('Original wallet account is missing.');
-    }
-
-    // Verify that the supplied account matches the original account.
-    if (
-      accountId &&
-      String(accountId) !== String(originalAccountId)
-    ) {
-      throw new Error(
-        'Refund account does not match the original transaction account.'
-      );
-    }
-
-    const refundAmount = Number(dataTransaction.amount);
-
-    if (
-      !Number.isFinite(refundAmount) ||
-      refundAmount <= 0
-    ) {
-      throw new Error('Invalid data transaction refund amount.');
-    }
-
-    // Lock the original wallet account.
-    const lockedAccount = await client.query(
-      `
-      SELECT id, balance
-      FROM accounts
-      WHERE id = $1
-      FOR UPDATE
-      `,
-      [originalAccountId]
-    );
-
-    if (!lockedAccount.rows.length) {
-      throw new Error('Original wallet account not found.');
-    }
-
-    const currentBalance = Number(
-      lockedAccount.rows[0].balance
-    );
-
-    if (!Number.isFinite(currentBalance)) {
-      throw new Error('Invalid wallet balance during refund.');
-    }
-
-    const balanceAfter = currentBalance + refundAmount;
-
-    const refundReference = `ZEN-DATA-REFUND-${reference}`;
-
-    // IMPORTANT:
-    // Create the refund ledger entry FIRST.
-    // ON CONFLICT prevents a duplicate refund reference.
-    const refundLedger = await client.query(
-      `
-      INSERT INTO transactions (
-        account_id,
-        type,
-        amount,
-        currency,
-        reference,
-        description,
-        status,
-        balance_before,
-        balance_after
-      )
-      VALUES (
-        $1,
-        'data_refund',
-        $2,
-        'NGN',
-        $3,
-        $4,
-        'completed',
-        $5,
-        $6
-      )
-      ON CONFLICT (reference) DO NOTHING
-      RETURNING id
-      `,
-      [
-        originalAccountId,
-        refundAmount,
-        refundReference,
-        `Refund for failed data purchase ${reference}`,
-        currentBalance,
-        balanceAfter,
-      ]
-    );
-
-    // A refund ledger entry already exists.
-    // Do not credit the wallet a second time.
-    if (!refundLedger.rows.length) {
-      await client.query(
-        `
-        UPDATE data_transactions
-        SET
-          provider_reference = COALESCE($1, provider_reference),
-          provider_response = $2::jsonb,
-          status = 'failed',
-          failure_reason = $3
-        WHERE id = $4
-        `,
-        [
-          providerReference,
-          JSON.stringify(providerResponse || {}),
-          failureReason || 'Sogo reported that the data purchase failed.',
-          transactionId,
-        ]
-      );
-
-      await client.query(
-        `
-        UPDATE transactions
-        SET status = 'failed'
-        WHERE reference = $1
-          AND type = 'data_purchase'
-        `,
-        [reference]
-      );
-
-      await client.query('COMMIT');
-
-      return {
-        alreadyProcessed: true,
-        status: 'failed',
-      };
-    }
-
-    // Credit the original wallet only after the refund ledger
-    // entry has been successfully inserted.
-    await client.query(
-      `
-      UPDATE accounts
-      SET
-        balance = $1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      `,
-      [balanceAfter, originalAccountId]
-    );
-
-    // Mark the original data transaction as failed.
-    await client.query(
-      `
-      UPDATE data_transactions
-      SET
-        provider_reference = COALESCE($1, provider_reference),
-        provider_response = $2::jsonb,
-        status = 'failed',
-        failure_reason = $3
-      WHERE id = $4
-      `,
-      [
-        providerReference,
-        JSON.stringify(providerResponse || {}),
-        failureReason || 'Sogo reported that the data purchase failed.',
-        transactionId,
-      ]
-    );
-
-    // Mark the original central transaction as failed.
-    await client.query(
-      `
-      UPDATE transactions
-      SET status = 'failed'
-      WHERE reference = $1
-        AND type = 'data_purchase'
-      `,
-      [reference]
-    );
-
-    await client.query('COMMIT');
-
-    return {
-      alreadyProcessed: false,
-      status: 'failed',
-      refundedAmount: refundAmount,
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-};
 
 // ============================================================
 // BUY DATA
 // POST /api/data
+//
+// Transaction PIN middleware should run BEFORE this controller.
 // ============================================================
 
 const buyData = async (req, res) => {
-  const userId = getUserId(req);
+  const userId =
+    getUserId(req);
 
   if (!userId) {
     return res.status(401).json({
       success: false,
-      message: 'Authentication required.',
+      message:
+        'Authentication required.',
     });
   }
 
-  const network = req.body?.network;
+  const network =
+    req.body?.network;
 
-  const phone = cleanPhoneNumber(req.body?.phone);
+  const phone =
+    cleanPhoneNumber(
+      req.body?.phone
+    );
 
-  const variationCode = String(
-    req.body?.variation_code ||
-    req.body?.plan_id ||
-    ''
-  ).trim();
+  const variationCode =
+    String(
+      req.body?.variation_code ||
+        req.body?.plan_id ||
+        ''
+    ).trim();
 
   if (!network) {
     return res.status(400).json({
       success: false,
-      message: 'Network is required.',
+      message:
+        'Network is required.',
     });
   }
 
   if (!/^0\d{10}$/.test(phone)) {
     return res.status(400).json({
       success: false,
-      message: 'Enter a valid Nigerian phone number.',
+      message:
+        'Enter a valid Nigerian phone number.',
     });
   }
 
   if (!variationCode) {
     return res.status(400).json({
       success: false,
-      message: 'Data plan is required.',
+      message:
+        'Data plan is required.',
     });
   }
 
-  // ----------------------------------------------------------
-  // VERIFY PLAN AND PRICE DIRECTLY WITH SOGO
-  // ----------------------------------------------------------
+
+  // ==========================================================
+  // IMPORTANT:
+  // Do NOT trust the amount sent by the frontend.
+  //
+  // We retrieve the current VTpass catalogue and find the
+  // selected variation code. This prevents a user from
+  // modifying the price in the browser.
+  // ==========================================================
 
   let plansResult;
 
   try {
-    plansResult = await getDataPlans(network);
+    plansResult =
+      await getDataPlans(network);
   } catch (error) {
     console.error(
-      'Sogo Data plan verification error:',
-      error?.code || error?.message
+      'Data plan verification error:',
+      error?.code ||
+        error?.message ||
+        'Unknown error'
     );
 
     return res.status(502).json({
       success: false,
-      code: error?.code || 'DATA_PLAN_LOOKUP_FAILED',
+      code:
+        error?.code ||
+        'DATA_PLAN_LOOKUP_FAILED',
       message:
         'Unable to verify this data plan right now. Please try again.',
     });
   }
 
-  const selectedPlan = plansResult.plans.find(
-    (plan) =>
-      String(plan.variation_code) === variationCode
-  );
+
+  const selectedPlan =
+    plansResult.plans.find(
+      (plan) =>
+        String(
+          plan.variation_code
+        ) === variationCode
+    );
 
   if (!selectedPlan) {
     return res.status(400).json({
       success: false,
-      code: 'INVALID_DATA_PLAN',
+      code:
+        'INVALID_DATA_PLAN',
       message:
-        'The selected data plan is no longer available. Please refresh the plans.',
+        'The selected data plan is no longer available. Please refresh the plans and try again.',
     });
   }
 
-  const amount = Number(selectedPlan.amount);
 
-  if (!Number.isFinite(amount) || amount <= 0) {
+  const amount =
+    Number(
+      selectedPlan.amount
+    );
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
     return res.status(400).json({
       success: false,
-      code: 'INVALID_DATA_PLAN_AMOUNT',
-      message: 'The selected data plan has an invalid price.',
+      code:
+        'INVALID_DATA_PLAN_AMOUNT',
+      message:
+        'The selected data plan has an invalid price.',
     });
   }
 
-  // Generate and save the idempotency key BEFORE contacting Sogo.
-  const reference = createReference();
-  const providerRequestId = generateRequestId();
+
+  const reference =
+    createReference();
 
   let account;
   let transactionId;
 
-  // ----------------------------------------------------------
-  // STEP 1 — DEBIT WALLET AND CREATE PENDING RECORDS
-  // ----------------------------------------------------------
 
-  const client = await pool.connect();
+  // ==========================================================
+  // STEP 1
+  // Reserve/deduct the customer's Zenimonies balance.
+  //
+  // We lock the account row so two simultaneous requests
+  // cannot spend the same balance.
+  // ==========================================================
+
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
-
-    const accountResult = await client.query(
-      `
-      SELECT
-        id,
-        user_id,
-        currency,
-        balance,
-        status
-      FROM accounts
-      WHERE user_id = $1
-        AND currency = 'NGN'
-        AND status = 'active'
-      ORDER BY created_at ASC
-      LIMIT 1
-      FOR UPDATE
-      `,
-      [userId]
+    await client.query(
+      'BEGIN'
     );
 
-    if (!accountResult.rows.length) {
-      await client.query('ROLLBACK');
+    const accountResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          user_id,
+          account_number,
+          currency,
+          balance,
+          status
+        FROM accounts
+        WHERE user_id = $1
+          AND currency = 'NGN'
+          AND status = 'active'
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [userId]
+      );
+
+    if (
+      accountResult.rows.length === 0
+    ) {
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(404).json({
         success: false,
-        message: 'Active NGN wallet account not found.',
+        message:
+          'Active NGN wallet account not found.',
       });
     }
 
-    account = accountResult.rows[0];
+    account =
+      accountResult.rows[0];
 
-    const balanceBefore = Number(account.balance);
+    const balance =
+      Number(account.balance);
 
-    if (!Number.isFinite(balanceBefore)) {
-      await client.query('ROLLBACK');
+    if (
+      !Number.isFinite(balance)
+    ) {
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(500).json({
         success: false,
-        message: 'Unable to read wallet balance.',
+        message:
+          'Unable to read wallet balance.',
       });
     }
 
-    if (balanceBefore < amount) {
-      await client.query('ROLLBACK');
+    if (balance < amount) {
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
-        code: 'INSUFFICIENT_BALANCE',
-        message: 'Insufficient wallet balance.',
+        code:
+          'INSUFFICIENT_BALANCE',
+        message:
+          'Insufficient wallet balance.',
       });
     }
 
-    const balanceAfter = balanceBefore - amount;
 
-    const dataResult = await client.query(
-      `
-      INSERT INTO data_transactions (
-        account_id,
-        network,
-        phone_number,
-        plan_code,
-        plan_name,
-        amount,
-        currency,
-        reference,
-        provider_request_id,
-        status
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6,
-        'NGN', $7, $8, 'pending'
-      )
-      RETURNING id
-      `,
-      [
-        account.id,
-        plansResult.network,
-        phone,
-        selectedPlan.variation_code,
-        selectedPlan.name,
-        amount,
-        reference,
-        providerRequestId,
-      ]
-    );
+    const balanceBefore =
+      balance;
 
-    transactionId = dataResult.rows[0].id;
+    const balanceAfter =
+      balance - amount;
+
+
+    // --------------------------------------------------------
+    // Create pending data transaction
+    // --------------------------------------------------------
+
+    const dataResult =
+      await client.query(
+        `
+        INSERT INTO data_transactions (
+          account_id,
+          network,
+          phone_number,
+          plan_code,
+          plan_name,
+          amount,
+          currency,
+          reference,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          'NGN',
+          $7,
+          'pending'
+        )
+        RETURNING id
+        `,
+        [
+          account.id,
+          plansResult.network,
+          phone,
+          selectedPlan.variation_code,
+          selectedPlan.name,
+          amount,
+          reference,
+        ]
+      );
+
+    transactionId =
+      dataResult.rows[0].id;
+
+
+    // --------------------------------------------------------
+    // Update wallet
+    // --------------------------------------------------------
 
     await client.query(
       `
@@ -730,8 +440,16 @@ const buyData = async (req, res) => {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [balanceAfter, account.id]
+      [
+        balanceAfter,
+        account.id,
+      ]
     );
+
+
+    // --------------------------------------------------------
+    // Central transaction history
+    // --------------------------------------------------------
 
     await client.query(
       `
@@ -768,132 +486,225 @@ const buyData = async (req, res) => {
       ]
     );
 
-    await client.query('COMMIT');
+
+    await client.query(
+      'COMMIT'
+    );
+
   } catch (error) {
     try {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
     } catch (_) {
       // Ignore rollback errors.
     }
 
     console.error(
       'Data wallet transaction error:',
-      error?.message || 'Unknown error'
+      error?.message ||
+        'Unknown error'
     );
 
     return res.status(500).json({
       success: false,
-      code: 'DATA_WALLET_TRANSACTION_FAILED',
-      message: 'Unable to start the data purchase.',
+      code:
+        'DATA_WALLET_TRANSACTION_FAILED',
+      message:
+        'Unable to start the data purchase.',
     });
+
   } finally {
     client.release();
   }
 
-  // ----------------------------------------------------------
-  // STEP 2 — SUBMIT PURCHASE TO SOGO
-  // ----------------------------------------------------------
+
+  // ==========================================================
+  // STEP 2
+  // Send the data purchase to VTpass.
+  //
+  // IMPORTANT:
+  // The wallet has already been placed into a pending
+  // transaction state.
+  //
+  // If VTpass says it is pending, we KEEP the transaction
+  // pending and do not refund automatically.
+  //
+  // This is safer because VTpass specifically says timeouts
+  // and unclear responses should be requeried.
+  // ==========================================================
 
   let providerResult;
 
   try {
-    providerResult = await purchaseDataPlan({
-      network: plansResult.network,
-      phone,
-      variationCode: selectedPlan.variation_code,
-      amount,
-      idempotencyKey: providerRequestId,
-    });
+    providerResult =
+      await purchaseDataPlan({
+        network:
+          plansResult.network,
+
+        phone,
+
+        variationCode:
+          selectedPlan.variation_code,
+
+        amount,
+      });
+
   } catch (error) {
     console.error(
-      'Sogo Data purchase error:',
-      error?.code || error?.message || 'Unknown error'
+      'VTpass data purchase error:',
+      error?.code ||
+        error?.message ||
+        'Unknown error'
     );
 
-    // A timeout or network error does not prove failure.
-    // Keep the customer's transaction pending.
+    // --------------------------------------------------------
+    // Provider/network error:
+    // Keep the transaction pending so it can be requeried.
+    // --------------------------------------------------------
+
     return res.status(202).json({
       success: true,
       status: 'pending',
       reference,
       message:
-        'Your data purchase is being processed. Please check your transaction history for confirmation.',
+        'Your data purchase is being processed. We are checking the provider status.',
     });
   }
 
-  const providerResponse = providerResult.response;
 
-  const providerStatus = getProviderStatus(providerResponse);
+  const providerResponse =
+    providerResult.response;
 
-  const providerReference = getProviderReference(providerResponse);
+  const providerStatus =
+    getProviderStatus(
+      providerResponse
+    );
 
-  const providerMessage = getProviderMessage(providerResponse);
 
-  // ----------------------------------------------------------
-  // STEP 3 — SUCCESS
-  // ----------------------------------------------------------
+  const providerReference =
+    providerResponse
+      ?.content
+      ?.transactions
+      ?.transactionId ||
+    providerResponse?.transactionId ||
+    providerResponse?.requestId ||
+    providerResult.requestId ||
+    null;
 
-  if (providerStatus === 'completed') {
+
+  const providerMessage =
+    providerResponse
+      ?.response_description ||
+    providerResponse?.message ||
+    null;
+
+
+  // ==========================================================
+  // STEP 3
+  // Update Zenimonies transaction status.
+  // ==========================================================
+
+  if (
+    providerStatus ===
+    'completed'
+  ) {
     try {
-      await completeDataTransaction({
-        reference,
-        transactionId,
-        providerReference,
-        providerResponse,
-      });
+      await pool.query(
+        `
+        UPDATE data_transactions
+        SET
+          provider_reference = $1,
+          status = 'completed',
+          completed_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        `,
+        [
+          providerReference,
+          transactionId,
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'completed'
+        WHERE reference = $1
+        `,
+        [reference]
+      );
+
     } catch (error) {
       console.error(
         'Data completion update error:',
-        error?.message
+        error?.message ||
+          'Unknown error'
       );
 
-      // Provider may already have delivered the data.
-      // Do not refund because of a local database error.
+      // The provider has already delivered the service.
+      // Do not refund automatically here.
       return res.status(202).json({
         success: true,
         status: 'pending',
         reference,
         message:
-          'The provider processed your data purchase. Account confirmation is being finalized.',
+          'The data purchase was processed by the provider and is being finalized in your account.',
       });
     }
+
 
     return res.status(200).json({
       success: true,
       status: 'completed',
       reference,
       providerReference,
-      network: plansResult.network,
+      network:
+        plansResult.network,
       phone,
       plan: {
-        code: selectedPlan.variation_code,
-        name: selectedPlan.name,
+        code:
+          selectedPlan.variation_code,
+        name:
+          selectedPlan.name,
         amount,
       },
-      message: 'Data purchase successful.',
+      message:
+        'Data purchase successful.',
     });
   }
 
-  // ----------------------------------------------------------
-  // STEP 4 — PENDING / PROCESSING
-  // ----------------------------------------------------------
 
-  if (providerStatus === 'pending') {
+  // ==========================================================
+  // PENDING
+  // ==========================================================
+
+  if (
+    providerStatus ===
+    'pending'
+  ) {
     await pool.query(
       `
       UPDATE data_transactions
       SET
-        provider_reference = COALESCE($1, provider_reference),
-        provider_response = $2::jsonb,
+        provider_reference = $1,
         status = 'pending'
-      WHERE id = $3
-        AND status = 'pending'
+      WHERE id = $2
       `,
       [
         providerReference,
-        JSON.stringify(providerResponse || {}),
         transactionId,
       ]
+    );
+
+    await pool.query(
+      `
+      UPDATE transactions
+      SET
+        status = 'pending'
+      WHERE reference = $1
+      `,
+      [reference]
     );
 
     return res.status(202).json({
@@ -901,11 +712,14 @@ const buyData = async (req, res) => {
       status: 'pending',
       reference,
       providerReference,
-      network: plansResult.network,
+      network:
+        plansResult.network,
       phone,
       plan: {
-        code: selectedPlan.variation_code,
-        name: selectedPlan.name,
+        code:
+          selectedPlan.variation_code,
+        name:
+          selectedPlan.name,
         amount,
       },
       message:
@@ -913,55 +727,145 @@ const buyData = async (req, res) => {
     });
   }
 
-  // ----------------------------------------------------------
-  // STEP 5 — EXPLICIT PROVIDER FAILURE
-  // ----------------------------------------------------------
+
+  // ==========================================================
+  // EXPLICIT PROVIDER FAILURE
+  //
+  // Refund the customer's Zenimonies balance because VTpass
+  // explicitly rejected the transaction.
+  // ==========================================================
+
+  const refundClient =
+    await pool.connect();
 
   try {
-    const refundResult = await refundDataTransaction({
-      reference,
-      transactionId,
-      accountId: account.id,
-      amount,
-      providerReference,
-      providerResponse,
-      failureReason:
-        providerMessage || 'Sogo rejected the data purchase.',
-    });
-
-    if (refundResult.alreadyProcessed) {
-      return res.status(200).json({
-        success: true,
-        status: refundResult.status,
-        reference,
-        message:
-          'This transaction has already been reconciled.',
-      });
-    }
-  } catch (error) {
-    console.error(
-      'Data refund error:',
-      error?.message || 'Unknown error'
+    await refundClient.query(
+      'BEGIN'
     );
 
+    const lockedAccount =
+      await refundClient.query(
+        `
+        SELECT
+          id,
+          balance
+        FROM accounts
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [account.id]
+      );
+
+    if (
+      lockedAccount.rows.length === 0
+    ) {
+      throw new Error(
+        'Account disappeared during data refund.'
+      );
+    }
+
+    const currentBalance =
+      Number(
+        lockedAccount.rows[0]
+          .balance
+      );
+
+    const refundedBalance =
+      currentBalance + amount;
+
+
+    await refundClient.query(
+      `
+      UPDATE accounts
+      SET
+        balance = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
+      [
+        refundedBalance,
+        account.id,
+      ]
+    );
+
+
+    await refundClient.query(
+      `
+      UPDATE data_transactions
+      SET
+        provider_reference = $1,
+        status = 'failed',
+        failure_reason = $2
+      WHERE id = $3
+      `,
+      [
+        providerReference,
+        providerMessage ||
+          'VTpass rejected the data purchase.',
+        transactionId,
+      ]
+    );
+
+
+    await refundClient.query(
+      `
+      UPDATE transactions
+      SET
+        status = 'failed'
+      WHERE reference = $1
+      `,
+      [reference]
+    );
+
+
+    await refundClient.query(
+      'COMMIT'
+    );
+
+  } catch (error) {
+    try {
+      await refundClient.query(
+        'ROLLBACK'
+      );
+    } catch (_) {
+      // Ignore rollback errors.
+    }
+
+    console.error(
+      'Data purchase refund error:',
+      error?.message ||
+        'Unknown error'
+    );
+
+    // Do NOT pretend the refund succeeded.
+    // The transaction remains something that the
+    // reconciliation process must investigate.
     return res.status(500).json({
       success: false,
-      code: 'DATA_PURCHASE_REFUND_PENDING',
+      code:
+        'DATA_PURCHASE_REFUND_PENDING',
       reference,
       message:
-        'The provider reported a failure, but wallet reconciliation requires attention. Please contact support with this transaction reference.',
+        'The provider rejected the purchase, but the wallet reconciliation requires attention. Please contact support with the transaction reference.',
     });
+
+  } finally {
+    refundClient.release();
   }
+
 
   return res.status(400).json({
     success: false,
     status: 'failed',
     reference,
-    network: plansResult.network,
+    network:
+      plansResult.network,
     phone,
     plan: {
-      code: selectedPlan.variation_code,
-      name: selectedPlan.name,
+      code:
+        selectedPlan.variation_code,
+      name:
+        selectedPlan.name,
       amount,
     },
     message:
@@ -969,6 +873,7 @@ const buyData = async (req, res) => {
       'Data purchase failed. Your wallet has been refunded.',
   });
 };
+
 
 // ============================================================
 // EXPORTS
