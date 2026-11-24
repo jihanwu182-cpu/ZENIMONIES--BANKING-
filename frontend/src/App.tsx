@@ -17,6 +17,7 @@ import {
 
 // ==================== PUBLIC WEBSITE ====================
 
+import Home from './pages/Home.tsx';
 import About from './pages/About.tsx';
 
 // ==================== AUTHENTICATION ====================
@@ -860,14 +861,17 @@ const AppRouter: React.FC = () => {
   // This is outside SessionGuard.
   // Visitors can access the website without logging in.
   // ==========================================================
+// ==========================================================
+// PUBLIC ZENIMONIES CORPORATE WEBSITE
+// ==========================================================
 
-  if (
-    pathname === '/' ||
-    pathname === '/about'
-  ) {
-    return <About />;
-  }
+if (pathname === '/') {
+  return <Home />;
+}
 
+if (pathname === '/about') {
+  return <About />;
+}
   // ==========================================================
   // NORMAL CUSTOMER BANKING
   // ==========================================================
