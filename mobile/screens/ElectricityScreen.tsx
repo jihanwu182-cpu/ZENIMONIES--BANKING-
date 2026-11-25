@@ -1074,16 +1074,23 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               </>
             )}
 
-          {showConfirmation &&
-            customer &&
-            {status !== 'success' &&
-            status !== 'pending' &&
-            !showConfirmation && (
+      {showConfirmation &&
+  customer &&
+  status !== 'success' &&
+  status !== 'pending' &&
+  status !== 'failed' &&
+  renderConfirmation()}
 
-          {status === 'success' && paymentResult && renderSuccess()}
-          {status === 'pending' && renderPending()}
-          {status === 'failed' && paymentResult && renderFailed()}
+{status === 'success' &&
+  paymentResult &&
+  renderSuccess()}
 
+{status === 'pending' &&
+  renderPending()}
+
+{status === 'failed' &&
+  paymentResult &&
+  renderFailed()}
           <View style={styles.securityFooter}>
             <Text style={styles.securityIcon}>🔒</Text>
             <Text style={styles.securityText}>
