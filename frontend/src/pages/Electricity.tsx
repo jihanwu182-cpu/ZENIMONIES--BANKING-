@@ -263,11 +263,11 @@ const Electricity: React.FC = () => {
         provider_name:
           provider.name,
 
-        provider_short_name:
-          provider.shortName,
+       shortName:
+      provider.shortName,
 
-        provider_logo:
-          provider.logo,
+      logo:
+      provider.logo, 
 
         meter_type:
           verification.meter_type ||
