@@ -583,14 +583,9 @@ const electricityRequeryInFlightRef =
         currentReference.toUpperCase().startsWith('ZEL-')
       );
 
-    if (
-  !isElectricity ||
-  !reference ||
-  requerying ||
-  electricityRequeryInFlightRef.current
-) {
-  return;
-}
+    if (!isElectricity || !currentReference) {
+      return;
+    }
 
     const initialStatus = String(
       currentTransaction.status || ''
@@ -762,16 +757,7 @@ const electricityRequeryInFlightRef =
       setInterval(() => {
         attempts += 1;
 
-        if (attempts >= 12) {
-          stopChecking();
-
-          setRequeryMessage(
-            'Your payment is still processing. We will not submit another payment. You can check its status again shortly.'
-          );
-
-          return;
-        }
-
+        attempts += 1;
         void checkStatus();
       }, 5000);
 
@@ -1491,116 +1477,123 @@ const isElectricityRefund =
    * ============================================================
    */
 
-  const checkElectricityStatus = async () => {
-    if (!isElectricity || !reference || requerying) {
+  
+const checkElectricityStatus = async () => {
+  if (
+    !isElectricity ||
+    !reference ||
+    requerying ||
+    electricityRequeryInFlightRef.current
+  ) {
+    return;
+  }
+
+  electricityRequeryInFlightRef.current = true;
+  setRequerying(true);
+  setRequeryMessage('');
+
+  try {
+    const token = localStorage.getItem('zenimonies_token');
+
+    if (!token) {
+      throw new Error(
+        'Your session has expired. Please sign in again.'
+      );
+    }
+
+    const response = await fetch(
+      `${API_URL}/bills/electricity/requery/${encodeURIComponent(reference)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      }
+    );
+
+    let result: any = null;
+
+    try {
+      result = await response.json();
+    } catch {
+      result = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        result?.message ||
+          result?.error ||
+          'Unable to check the electricity payment status.'
+      );
+    }
+
+    const providerStatus = String(result?.status || '')
+      .trim()
+      .toLowerCase();
+
+    if (
+      ['completed', 'successful', 'success'].includes(providerStatus)
+    ) {
+      setLiveStatus('completed');
+      setElectricityRefunded(false);
+      setRequeryMessage(
+        result?.message ||
+          'Electricity payment confirmed successfully.'
+      );
+
+      setElectricityTokenOverride(
+        String(result?.electricity_token || result?.token || '')
+      );
+
+      if (result?.units !== undefined && result?.units !== null) {
+        setElectricityUnitsOverride(result.units);
+      }
+
       return;
     }
 
-    setRequerying(true);
-    setRequeryMessage('');
+    if (
+      ['failed', 'failure', 'refunded', 'cancelled', 'canceled'].includes(
+        providerStatus
+      )
+    ) {
+      setLiveStatus('failed');
+      setElectricityRefunded(Boolean(result?.refunded));
 
-    try {
-      const token = localStorage.getItem('zenimonies_token');
-
-      if (!token) {
-        throw new Error(
-          'Your session has expired. Please sign in again.'
-        );
-      }
-
-      const response = await fetch(
-        `${API_URL}/bills/electricity/requery/${encodeURIComponent(reference)}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({}),
-        }
-      );
-
-      let result: any = null;
-
-      try {
-        result = await response.json();
-      } catch {
-        result = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          result?.message ||
-            result?.error ||
-            'Unable to check the electricity payment status.'
-        );
-      }
-
-      const providerStatus = String(result?.status || '')
-        .trim()
-        .toLowerCase();
-
-      if (
-        ['completed', 'successful', 'success'].includes(providerStatus)
-      ) {
-        setLiveStatus('completed');
-        setElectricityRefunded(false);
-        setRequeryMessage(
-          result?.message ||
-            'Electricity payment confirmed successfully.'
-        );
-
-        setElectricityTokenOverride(
-          String(result?.electricity_token || result?.token || '')
-        );
-
-        if (result?.units !== undefined && result?.units !== null) {
-          setElectricityUnitsOverride(result.units);
-        }
-
-        return;
-      }
-
-      if (
-        ['failed', 'failure', 'refunded', 'cancelled', 'canceled'].includes(
-          providerStatus
-        )
-      ) {
-        setLiveStatus('failed');
-       
-        setElectricityRefunded(
-          Boolean(result?.refunded)
-        ); 
-        setRequeryMessage(
-          result?.message ||
-            (result?.refunded
-              ? 'The payment failed and your wallet has been refunded.'
-              : 'The electricity payment was not completed.')
-        );
-
-        return;
-      }
-
-      setLiveStatus('pending');
       setRequeryMessage(
         result?.message ||
-          'The provider has not confirmed this payment yet. Please check again later. Do not make another payment.'
-      );
-    } catch (error) {
-      console.error(
-        'ZENIMONIES electricity requery error:',
-        error
+          (result?.refunded
+            ? 'The payment failed and your wallet has been refunded.'
+            : 'The electricity payment was not completed.')
       );
 
-      setRequeryMessage(
-        error instanceof Error
-          ? error.message
-          : 'Unable to check the electricity payment status right now.'
-      );
-    } finally {
-      setRequerying(false);
+      return;
     }
-  };
+
+    setLiveStatus('pending');
+    setRequeryMessage(
+      result?.message ||
+        'The provider has not confirmed this payment yet. Please check again later. Do not make another payment.'
+    );
+  } catch (error) {
+    console.error(
+      'ZENIMONIES electricity requery error:',
+      error
+    );
+
+    setRequeryMessage(
+      error instanceof Error
+        ? error.message
+        : 'Unable to check the electricity payment status right now.'
+    );
+  } finally {
+    electricityRequeryInFlightRef.current = false;
+    setRequerying(false);
+  }
+};
+
   /*
    * ============================================================
    * INCOMING TRANSFER
@@ -2292,31 +2285,56 @@ const isElectricityRefund =
       </Typography>
     )}
 
-    {isPending && (
-      <Button
-        fullWidth
-        variant="contained"
-        startIcon={<RefreshRounded />}
-        onClick={() => void checkElectricityStatus()}
-        disabled={requerying}
+
+{isPending && (
+  <Box
+    sx={{
+      mt: 1.2,
+      px: 1.5,
+      py: 1.3,
+      borderRadius: 1.8,
+      background: '#EAF7F3',
+      border: '1px solid #CBE8DD',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.2,
+    }}
+  >
+    <RefreshRounded
+      sx={{
+        color: COLORS.primary,
+        animation: 'spin 1s linear infinite',
+        '@keyframes spin': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
+      }}
+    />
+
+    <Box>
+      <Typography
         sx={{
-          mt: 1.2,
-          minHeight: 42,
-          bgcolor: COLORS.primary,
-          borderRadius: 1.8,
-          fontWeight: 800,
-          textTransform: 'none',
-          fontSize: 12,
-          '&:hover': {
-            bgcolor: COLORS.dark,
-          },
+          color: COLORS.primary,
+          fontSize: 11.5,
+          fontWeight: 900,
         }}
       >
-        {requerying ? 'Checking Status...' : 'Check Payment Status'}
-      </Button>
-    )}
+        Checking payment status automatically...
+      </Typography>
+
+      <Typography
+        sx={{
+          mt: 0.3,
+          color: COLORS.muted,
+          fontSize: 10,
+        }}
+      >
+        Please wait. Do not make another payment.
+      </Typography>
+    </Box>
   </Box>
 )}
+
         {isElectricity && !isElectricityRefund && (
             <Box
               sx={{
