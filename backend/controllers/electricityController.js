@@ -213,12 +213,39 @@ const refundElectricity = async ({
       return false;
     }
 
+    const refundReference = `REF-${reference}`;
+
+    // Check for an existing refund before crediting the wallet.
+    const existingRefund = await client.query(
+      `
+      SELECT id
+      FROM transactions
+      WHERE reference = $1
+        AND type = 'electricity_refund'
+      LIMIT 1
+      `,
+      [refundReference]
+    );
+
+    if (existingRefund.rows.length > 0) {
+      throw new Error(
+        'Existing refund found. Manual reconciliation is required.'
+      );
+    }
+
     const amount = Number(bill.amount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error('Invalid electricity refund amount.');
     }
 
+    const providerReference =
+      getProviderReference(providerResult);
+
+    const providerMessage =
+      getProviderMessage(providerResult);
+
+    // Credit wallet inside the same database transaction.
     const accountUpdate = await client.query(
       `
       UPDATE accounts
@@ -234,8 +261,7 @@ const refundElectricity = async ({
       throw new Error('Customer account could not be refunded.');
     }
 
-    const refundReference = `REF-${reference}`;
-
+    // Record the refund using its deterministic reference.
     await client.query(
       `
       INSERT INTO transactions (
@@ -265,13 +291,7 @@ const refundElectricity = async ({
       ]
     );
 
-    const providerReference =
-      getProviderReference(providerResult);
-
-    const providerMessage =
-      getProviderMessage(providerResult);
-
-    await client.query(
+    const billUpdate = await client.query(
       `
       UPDATE bill_payments
       SET
@@ -281,6 +301,7 @@ const refundElectricity = async ({
         provider_response = $2,
         provider_response_message = $3
       WHERE id = $4
+        AND status = 'processing'
       `,
       [
         providerReference,
@@ -289,6 +310,10 @@ const refundElectricity = async ({
         billId,
       ]
     );
+
+    if (billUpdate.rowCount !== 1) {
+      throw new Error('Electricity payment status update failed.');
+    }
 
     const originalTransactionUpdate = await client.query(
       `
@@ -317,6 +342,7 @@ const refundElectricity = async ({
     client.release();
   }
 };
+
 
 // ============================================================
 // PURCHASE ELECTRICITY
