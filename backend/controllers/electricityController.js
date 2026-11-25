@@ -32,48 +32,46 @@ const firstValue = (...values) => {
 // ============================================================
 
 const getProviderStatus = (result) => {
-  const code = String(result?.code || '');
+  const code = String(result?.code || '').trim();
   const status = String(result?.status || '')
     .trim()
     .toLowerCase();
 
+  // Confirmed successful payment
   if (code === '000' && status === 'delivered') {
     return 'completed';
   }
 
+  // Confirmed failed or reversed payment
   if (
-    code === '016' ||
-    code === '091' ||
-    code === '040'
+    [
+      '010',
+      '011',
+      '012',
+      '013',
+      '016',
+      '017',
+      '018',
+      '021',
+      '022',
+      '023',
+      '024',
+      '027',
+      '028',
+      '030',
+      '034',
+      '035',
+      '040',
+      '091',
+    ].includes(code)
   ) {
     return 'failed';
   }
 
+  // Code 000 with initiated/pending status is not a failure
   return 'pending';
 };
 
-const getProviderMessage = (result) =>
-  firstValue(
-    result?.responseDescription,
-    result?.rawResponse?.response_description,
-    result?.rawResponse?.message
-  );
-
-const getProviderReference = (result) =>
-  firstValue(
-    result?.providerTransactionId,
-    result?.rawResponse?.content?.transactions?.transactionId
-  );
-
-const safeJson = (value) => {
-  try {
-    return JSON.stringify(value || {});
-  } catch (_) {
-    return JSON.stringify({
-      message: 'Provider response could not be serialized',
-    });
-  }
-};
 
 // ============================================================
 // SAVE PROVIDER RESPONSE
