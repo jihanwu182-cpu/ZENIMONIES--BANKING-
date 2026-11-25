@@ -189,17 +189,20 @@ const requeryElectricityPayment = async (req, res) => {
     'refunded',
   ];
 
-  if (finalStatuses.includes(bill.status)) {
-    return res.status(200).json({
-      success: true,
-      status: bill.status,
-      message: 'This transaction has already been resolved.',
-      reference: bill.reference,
-      electricity_token: bill.electricity_token,
-      token: bill.electricity_token,
-      units: bill.units,
-    });
-  }
+if (finalStatuses.includes(bill.status)) {
+  return res.status(200).json({
+    success: true,
+    status: bill.status,
+    refunded: Boolean(bill.refunded),
+    message: bill.refunded
+      ? 'Electricity payment failed. Your wallet has already been refunded.'
+      : 'This transaction has already been resolved.',
+    reference: bill.reference,
+    electricity_token: bill.electricity_token,
+    token: bill.electricity_token,
+    units: bill.units,
+  });
+}
 
   // ==========================================================
   // STEP 3 — CHECK SAVED VTPASS REQUEST ID
