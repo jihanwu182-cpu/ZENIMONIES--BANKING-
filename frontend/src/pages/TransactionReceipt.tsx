@@ -165,6 +165,9 @@ const TransactionReceipt: React.FC = () => {
   const [electricityUnitsOverride, setElectricityUnitsOverride] =
     useState<string | number>('');
 
+    const [electricityRefunded, setElectricityRefunded] =
+    useState(false);
+
   const transaction =
     location.state?.transaction as
       | Transaction
