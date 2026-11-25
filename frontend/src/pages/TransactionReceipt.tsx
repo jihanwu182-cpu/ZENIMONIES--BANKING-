@@ -159,6 +159,12 @@ const TransactionReceipt: React.FC = () => {
   const [requeryMessage, setRequeryMessage] =
     useState<string>('');
 
+    const [electricityTokenOverride, setElectricityTokenOverride] =
+    useState<string>('');
+
+  const [electricityUnitsOverride, setElectricityUnitsOverride] =
+    useState<string | number>('');
+
   const transaction =
     location.state?.transaction as
       | Transaction
