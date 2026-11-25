@@ -1983,7 +1983,7 @@ const TransactionReceipt: React.FC = () => {
               ELECTRICITY PAYMENT
           ==================================================== */}
 
-          {isElectricity && (
+        {isElectricity && !isElectricityRefund && (
   <Box
     className="no-print"
     sx={{
@@ -2070,7 +2070,7 @@ const TransactionReceipt: React.FC = () => {
     )}
   </Box>
 )}
-          {isElectricity && (
+        {isElectricity && !isElectricityRefund && (
             <Box
               sx={{
                 mx: 2,
