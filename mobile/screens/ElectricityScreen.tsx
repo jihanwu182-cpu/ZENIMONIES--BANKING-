@@ -142,7 +142,8 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
 
-  const pinInputRef = useRef<TextInput>(null);
+  const pinInputRef =
+  useRef<React.ElementRef<typeof TextInput>>(null);
 
   const selectedProvider = PROVIDERS.find(
     item => item.id === provider,
