@@ -1061,7 +1061,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                   </>
                 )}
 
-                {status === 'failed' && !customer && (
+                {!customer && (
                   <View style={styles.failedNotice}>
                     <Text style={styles.failedNoticeTitle}>
                       Verification unsuccessful
