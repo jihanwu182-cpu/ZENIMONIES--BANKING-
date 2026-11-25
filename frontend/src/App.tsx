@@ -668,6 +668,11 @@ const CustomerRoutes: React.FC = () => {
           path="/transaction-receipt"
           element={<TransactionReceipt />}
         />
+      
+        <Route
+           path="/electricity/success"
+           element={<TransactionReceipt />}
+        />
 
         <Route path="/statement" element={<Statement />} />
 
