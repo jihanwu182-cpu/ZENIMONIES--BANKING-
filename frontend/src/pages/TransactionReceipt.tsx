@@ -1292,6 +1292,7 @@ const TransactionReceipt: React.FC = () => {
         ['completed', 'successful', 'success'].includes(providerStatus)
       ) {
         setLiveStatus('completed');
+        setElectricityRefunded(false);
         setRequeryMessage(
           result?.message ||
             'Electricity payment confirmed successfully.'
@@ -2018,10 +2019,12 @@ const TransactionReceipt: React.FC = () => {
       }}
     >
       {isSuccessful
-        ? 'Your electricity payment has been confirmed.'
-        : isFailed
-          ? 'The electricity payment was not completed.'
-          : 'Your electricity payment is waiting for provider confirmation.'}
+  ? 'Your electricity payment has been confirmed.'
+  : isFailed && electricityRefunded
+    ? 'Your electricity payment failed. Your wallet has been refunded.'
+    : isFailed
+      ? 'The electricity payment was not completed.'
+      : 'Your electricity payment is waiting for provider confirmation.'}
     </Typography>
 
     {requeryMessage && (
