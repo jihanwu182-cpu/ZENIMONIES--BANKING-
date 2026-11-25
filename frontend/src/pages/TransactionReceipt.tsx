@@ -488,7 +488,7 @@ const TransactionReceipt: React.FC = () => {
 
     if (isPending) {
       requeryTimerRef.current =
-        setInterval(
+        setInterval(MoMo
           async () => {
             attempts += 1;
 
@@ -874,20 +874,22 @@ const TransactionReceipt: React.FC = () => {
    * ELECTRICITY VALUES
    * ============================================================
    */
-
   const electricityToken =
     String(
-      transaction.electricity_token ||
+      electricityTokenOverride ||
+        transaction.electricity_token ||
         transaction.token ||
         transaction.prepaid_token ||
         ''
     ).trim();
 
   const electricityUnits =
-    transaction.units ??
-    transaction.kwh ??
-    transaction.unit ??
-    '';
+    electricityUnitsOverride !== ''
+      ? electricityUnitsOverride
+      : transaction.units ??
+        transaction.kwh ??
+        transaction.unit ??
+        '';
 
   const electricityMeterNumber =
     String(
@@ -961,12 +963,9 @@ const TransactionReceipt: React.FC = () => {
       .toLowerCase();
 
   const effectiveStatus =
-    (
-      isInsurance &&
-      liveStatus
-    )
-      ? liveStatus
-      : rawTransactionStatus;
+  ((isInsurance || isElectricity) && liveStatus)
+    ? liveStatus
+    : rawTransactionStatus;
 
   const isSuccessful = [
     'successful',
@@ -1231,7 +1230,117 @@ const TransactionReceipt: React.FC = () => {
         }
       }
     };
+  /*
+   * ============================================================
+   * MANUAL ELECTRICITY PAYMENT REQUERY
+   * ============================================================
+   */
 
+  const checkElectricityStatus = async () => {
+    if (!isElectricity || !reference || requerying) {
+      return;
+    }
+
+    setRequerying(true);
+    setRequeryMessage('');
+
+    try {
+      const token = localStorage.getItem('zenimonies_token');
+
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please sign in again.'
+        );
+      }
+
+      const response = await fetch(
+        `${API_URL}/bills/electricity/requery/${encodeURIComponent(reference)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      let result: any = null;
+
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            result?.error ||
+            'Unable to check the electricity payment status.'
+        );
+      }
+
+      const providerStatus = String(result?.status || '')
+        .trim()
+        .toLowerCase();
+
+      if (
+        ['completed', 'successful', 'success'].includes(providerStatus)
+      ) {
+        setLiveStatus('completed');
+        setRequeryMessage(
+          result?.message ||
+            'Electricity payment confirmed successfully.'
+        );
+
+        setElectricityTokenOverride(
+          String(result?.electricity_token || result?.token || '')
+        );
+
+        if (result?.units !== undefined && result?.units !== null) {
+          setElectricityUnitsOverride(result.units);
+        }
+
+        return;
+      }
+
+      if (
+        ['failed', 'failure', 'refunded', 'cancelled', 'canceled'].includes(
+          providerStatus
+        )
+      ) {
+        setLiveStatus('failed');
+        setRequeryMessage(
+          result?.message ||
+            (result?.refunded
+              ? 'The payment failed and your wallet has been refunded.'
+              : 'The electricity payment was not completed.')
+        );
+
+        return;
+      }
+
+      setLiveStatus('pending');
+      setRequeryMessage(
+        result?.message ||
+          'The provider has not confirmed this payment yet. Please check again later. Do not make another payment.'
+      );
+    } catch (error) {
+      console.error(
+        'ZENIMONIES electricity requery error:',
+        error
+      );
+
+      setRequeryMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to check the electricity payment status right now.'
+      );
+    } finally {
+      setRequerying(false);
+    }
+  };
   /*
    * ============================================================
    * INCOMING TRANSFER
