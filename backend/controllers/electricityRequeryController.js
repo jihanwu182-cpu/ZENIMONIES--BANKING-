@@ -435,6 +435,25 @@ const requeryElectricityPayment = async (req, res) => {
           reference: bill.reference,
         });
       }
+ 
+const refundReference = `REF-${bill.reference}`;
+
+const existingRefund = await client.query(
+  `
+  SELECT id
+  FROM transactions
+  WHERE reference = $1
+    AND type = 'electricity_refund'
+  LIMIT 1
+  `,
+  [refundReference]
+);
+
+if (existingRefund.rows.length > 0) {
+  throw new Error(
+    'Refund transaction already exists. Manual reconciliation is required.'
+  );
+}
 
       const refundAmount = Number(currentBill.amount);
 
