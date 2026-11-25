@@ -1971,6 +1971,91 @@ const TransactionReceipt: React.FC = () => {
           ==================================================== */}
 
           {isElectricity && (
+  <Box
+    className="no-print"
+    sx={{
+      mx: 2,
+      mb: 1.5,
+      p: 1.6,
+      borderRadius: 2.2,
+      background: isSuccessful
+        ? 'rgba(8,127,91,0.08)'
+        : isFailed
+          ? 'rgba(198,40,40,0.07)'
+          : 'rgba(167,101,0,0.08)',
+      border: `1px solid ${
+        isSuccessful
+          ? 'rgba(8,127,91,0.2)'
+          : isFailed
+            ? 'rgba(198,40,40,0.2)'
+            : 'rgba(167,101,0,0.2)'
+      }`,
+    }}
+  >
+    <Typography
+      sx={{
+        color: statusColor,
+        fontSize: 12,
+        fontWeight: 900,
+        mb: 0.5,
+      }}
+    >
+      Electricity Payment Status
+    </Typography>
+
+    <Typography
+      sx={{
+        color: COLORS.text,
+        fontSize: 11.5,
+        lineHeight: 1.5,
+      }}
+    >
+      {isSuccessful
+        ? 'Your electricity payment has been confirmed.'
+        : isFailed
+          ? 'The electricity payment was not completed.'
+          : 'Your electricity payment is waiting for provider confirmation.'}
+    </Typography>
+
+    {requeryMessage && (
+      <Typography
+        sx={{
+          mt: 0.8,
+          color: COLORS.muted,
+          fontSize: 10.5,
+          lineHeight: 1.5,
+        }}
+      >
+        {requeryMessage}
+      </Typography>
+    )}
+
+    {isPending && (
+      <Button
+        fullWidth
+        variant="contained"
+        startIcon={<RefreshRounded />}
+        onClick={() => void checkElectricityStatus()}
+        disabled={requerying}
+        sx={{
+          mt: 1.2,
+          minHeight: 42,
+          bgcolor: COLORS.primary,
+          borderRadius: 1.8,
+          fontWeight: 800,
+          textTransform: 'none',
+          fontSize: 12,
+          '&:hover': {
+            bgcolor: COLORS.dark,
+          },
+        }}
+      >
+        {requerying ? 'Checking Status...' : 'Check Payment Status'}
+      </Button>
+    )}
+  </Box>
+)}
+          {isElectricity && (
             <Box
               sx={{
                 mx: 2,
