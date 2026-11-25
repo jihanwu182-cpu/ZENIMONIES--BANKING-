@@ -450,9 +450,48 @@ const existingRefund = await client.query(
 );
 
 if (existingRefund.rows.length > 0) {
-  throw new Error(
-    'Refund transaction already exists. Manual reconciliation is required.'
+  await client.query(
+    `
+    UPDATE bill_payments
+    SET
+      status = 'failed',
+      provider_reference =
+        COALESCE($1, provider_reference),
+      provider_response = $2::jsonb,
+      provider_response_message = $3
+    WHERE id = $4
+      AND status IN (
+        'processing',
+        'pending',
+        'provider_response_unrecognized'
+      )
+    `,
+    [
+      providerReference,
+      providerResponse,
+      providerMessage,
+      bill.id,
+    ]
   );
+
+  await client.query(
+    `
+    UPDATE transactions
+    SET status = 'failed'
+    WHERE reference = $1
+    `,
+    [bill.reference]
+  );
+
+  await client.query('COMMIT');
+
+  return res.status(200).json({
+    success: true,
+    status: 'failed',
+    refunded: true,
+    message: 'Electricity payment failed. Your existing wallet refund has been recorded.',
+    reference: bill.reference,
+  });
 }
 
       const refundAmount = Number(currentBill.amount);
