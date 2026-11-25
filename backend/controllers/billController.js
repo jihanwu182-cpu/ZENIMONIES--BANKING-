@@ -530,8 +530,107 @@ if (
     });
   }
 };
+// ============================================================
+// VERIFY ELECTRICITY METER — VTPASS
+// ============================================================
+
+const verifyElectricityMeter = async (req, res) => {
+  try {
+    const {
+      provider,
+      meter_number,
+      meter_type,
+    } = req.body || {};
+
+    const normalizedProvider = String(provider || '')
+      .trim()
+      .toUpperCase();
+
+    // Frontend uses PHEDC; VTPass uses PHED.
+    const vtpassProvider =
+      normalizedProvider === 'PHEDC'
+        ? 'PHED'
+        : normalizedProvider;
+
+    const normalizedMeterNumber =
+      String(meter_number || '').trim();
+
+    const normalizedMeterType =
+      String(meter_type || '').trim().toLowerCase();
+
+    if (!normalizedProvider) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select an electricity provider.',
+      });
+    }
+
+    if (!['prepaid', 'postpaid'].includes(normalizedMeterType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Meter type must be prepaid or postpaid.',
+      });
+    }
+
+    if (!/^[A-Za-z0-9-]{5,50}$/.test(normalizedMeterNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid electricity meter number.',
+      });
+    }
+
+    const verification = await verifyVTPassMeter({
+      provider: vtpassProvider,
+      meterNumber: normalizedMeterNumber,
+      meterType: normalizedMeterType,
+    });
+
+    if (!verification || verification.verified !== true) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'VTPass could not verify this electricity meter. Please check the provider and meter number.',
+        verification_code: verification?.code || null,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Electricity meter verified successfully.',
+      data: {
+        provider: normalizedProvider,
+        provider_code: normalizedProvider,
+        meter_number: verification.meterNumber,
+        meter_type: verification.meterType,
+        customer_name: verification.customerName,
+        address: verification.customerAddress,
+        verified: true,
+        verification_code: verification.code,
+        minimum_purchase_amount:
+          verification.minimumPurchaseAmount,
+        can_vend: verification.canVend,
+      },
+    });
+  } catch (error) {
+    console.error(
+      'VTPass electricity verification error:',
+      error.message
+    );
+
+    return res.status(502).json({
+      success: false,
+      message:
+        'Unable to verify this electricity meter at the moment. Please try again.',
+    });
+  }
+};
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   createBillPayment,
   verifyElectricityMeter,
+  purchaseElectricity,
 };
