@@ -122,7 +122,7 @@ const saveProviderResponse = async ({
           COALESCE($6, units),
         completed_at =
           CASE
-            WHEN $1 = 'completed'
+            WHEN $8::boolean = TRUE
             THEN CURRENT_TIMESTAMP
             ELSE completed_at
           END
@@ -138,6 +138,7 @@ const saveProviderResponse = async ({
         token,
         units,
         billId,
+        status === 'completed',
       ]
     );
 
@@ -173,6 +174,7 @@ const saveProviderResponse = async ({
     client.release();
   }
 };
+
 
 // ============================================================
 // REFUND CONFIRMED FAILED TRANSACTION
