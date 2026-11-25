@@ -475,6 +475,27 @@ const purchaseElectricity = async (req, res) => {
     });
   }
 
+const minimumPurchaseAmount = Number(
+  verification.minimumPurchaseAmount
+);
+
+if (
+  verification.minimumPurchaseAmount !== null &&
+  verification.minimumPurchaseAmount !== undefined &&
+  verification.minimumPurchaseAmount !== '' &&
+  Number.isFinite(minimumPurchaseAmount) &&
+  minimumPurchaseAmount > 0 &&
+  numericAmount < minimumPurchaseAmount
+) {
+  return res.status(400).json({
+    success: false,
+    status: 'failed',
+    code: 'BELOW_MINIMUM_AMOUNT',
+    message: `The minimum electricity purchase amount for this provider is ₦${minimumPurchaseAmount.toLocaleString('en-NG')}. Please enter a higher amount.`,
+    minimum_amount: minimumPurchaseAmount,
+  });
+}
+
   const customerName =
     firstValue(verification.customerName);
 
