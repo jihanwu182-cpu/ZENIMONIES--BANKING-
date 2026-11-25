@@ -254,11 +254,11 @@ function navigateAfterLogin(
   }
 
   navigate(
-    '/',
-    {
-      replace: true,
-    }
-  );
+  '/dashboard',
+  {
+    replace: true,
+  }
+);
 }
 
 // ============================================================
