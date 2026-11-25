@@ -1060,7 +1060,7 @@ const [transferDraft, setTransferDraft] =
       },
       [authenticatedFetch]
     );
-  // ====================================================
+    // ====================================================
   // ELECTRICITY METER VERIFICATION
   // ====================================================
 
@@ -1085,10 +1085,8 @@ const [transferDraft, setTransferDraft] =
             session.token,
             {
               provider,
-              meter_number:
-                meterNumber,
-              meter_type:
-                meterType,
+              meter_number: meterNumber,
+              meter_type: meterType,
             }
           );
 
@@ -1099,22 +1097,39 @@ const [transferDraft, setTransferDraft] =
           data.customer ||
           {};
 
+        const customerName =
+          customerData.customer_name ||
+          customerData.customerName ||
+          customerData.name ||
+          data.customer_name ||
+          data.customerName ||
+          data.name;
+
+        if (
+          data.success !== true ||
+          typeof customerName !== 'string' ||
+          !customerName.trim()
+        ) {
+          throw new Error(
+            data.message ||
+              'The electricity provider could not verify this meter. Please check the meter details and try again.'
+          );
+        }
+
         return {
-          customerName:
-            customerData.customer_name ||
-            customerData.customerName ||
-            customerData.name ||
-            data.customer_name ||
-            'Verified Customer',
+          customerName: customerName.trim(),
 
           meterNumber:
             customerData.meter_number ||
             customerData.meterNumber ||
+            data.meter_number ||
             meterNumber,
 
           address:
             customerData.address ||
             customerData.customer_address ||
+            data.address ||
+            data.customer_address ||
             undefined,
         };
       },
