@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -38,9 +39,20 @@ const API_URL =
 const ElectricityPaymentConfirmation: React.FC = () => {
   const navigate = useNavigate();
 
-  const [data, setData] = useState<VerificationData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [data, setData] =
+    useState<VerificationData | null>(null);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [transactionPin, setTransactionPin] =
+    useState('');
+
+  const [showPin, setShowPin] =
+    useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(
@@ -53,7 +65,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
     }
 
     try {
-      const parsed: VerificationData = JSON.parse(saved);
+      const parsed: VerificationData =
+        JSON.parse(saved);
 
       if (!parsed.verified) {
         navigate('/electricity');
@@ -83,12 +96,25 @@ const ElectricityPaymentConfirmation: React.FC = () => {
     }).format(amount);
   };
 
+  // ==========================================================
+  // CONFIRM ELECTRICITY PAYMENT
+  // ==========================================================
+
   const handleConfirmPayment = async () => {
     if (!data || loading) {
       return;
     }
 
-    const token = localStorage.getItem('zenimonies_token');
+    if (!/^\d{4}$/.test(transactionPin)) {
+      setError(
+        'Enter your complete 4-digit Transaction PIN.'
+      );
+      return;
+    }
+
+    const token = localStorage.getItem(
+      'zenimonies_token'
+    );
 
     if (!token) {
       navigate('/login');
@@ -98,15 +124,7 @@ const ElectricityPaymentConfirmation: React.FC = () => {
     setLoading(true);
     setError('');
 
-    try {/*
-         * IMPORTANT:
-         * VTPass credentials are never exposed in the frontend.
-         *
-         * The frontend talks to the Zenimonies backend.
-         * The backend securely handles electricity verification
-         * and purchases through VTPass.
-         */
-
+    try {
       const response = await axios.post(
         `${API_URL}/api/bills/electricity/pay`,
         {
@@ -114,6 +132,9 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           meter_number: data.meter_number,
           meter_type: data.meter_type,
           amount: Number(data.amount),
+
+          // Required by transactionPinMiddleware
+          transaction_pin: transactionPin,
         },
         {
           headers: {
@@ -135,10 +156,28 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         response?.data ||
         {};
 
-      /*
-       * Save the payment result locally so the next screen
-       * can display the receipt/token.
-       */
+      // Handle pending transactions safely.
+      if (
+        response.status === 202 ||
+        paymentData.status === 'processing' ||
+        paymentData.status === 'pending'
+      ) {
+        localStorage.setItem(
+          'zenimonies_electricity_payment',
+          JSON.stringify({
+            ...data,
+            payment: paymentData,
+            paid_at: new Date().toISOString(),
+          })
+        );
+
+        setError(
+          'Your electricity payment is being processed. Please do not submit another payment.'
+        );
+
+        return;
+      }
+
       localStorage.setItem(
         'zenimonies_electricity_payment',
         JSON.stringify({
@@ -148,23 +187,19 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         })
       );
 
-      /*
-       * Go to success/receipt page.
-       */
+      // Clear PIN from component state after submission.
+      setTransactionPin('');
+
       navigate('/electricity/success');
+
     } catch (err: any) {
       console.error(
         'Electricity payment error:',
         err
       );
 
-      /*
-       * If the backend says the transaction is processing,
-       * do NOT tell the customer to immediately pay again.
-       *
-       * This protects against duplicate payments.
-       */
-      const backendData = err?.response?.data;
+      const backendData =
+        err?.response?.data;
 
       const backendStatus =
         backendData?.data?.status ||
@@ -182,12 +217,64 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         return;
       }
 
+      // Transaction PIN errors from backend.
+      const backendCode =
+        backendData?.code;
+
+      if (
+        backendCode === 'INCORRECT_TRANSACTION_PIN'
+      ) {
+        setError(
+          backendData?.message ||
+          'Incorrect Transaction PIN. Please try again.'
+        );
+
+        setTransactionPin('');
+        return;
+      }
+
+      if (
+        backendCode === 'TRANSACTION_PIN_LOCKED'
+      ) {
+        setError(
+          backendData?.message ||
+          'Your Transaction PIN is temporarily locked. Please try again after 10 minutes.'
+        );
+
+        setTransactionPin('');
+        return;
+      }
+
+      if (
+        backendCode === 'TRANSACTION_PIN_NOT_SET'
+      ) {
+        setError(
+          'You have not created a Transaction PIN. Please set up your Transaction PIN before making payments.'
+        );
+
+        setTransactionPin('');
+        return;
+      }
+
+      if (
+        backendCode === 'INVALID_TRANSACTION_PIN'
+      ) {
+        setError(
+          backendData?.message ||
+          'Enter a valid 4-digit Transaction PIN.'
+        );
+
+        setTransactionPin('');
+        return;
+      }
+
       const message =
         backendData?.message ||
         backendData?.error ||
         'Electricity payment could not be completed. Please try again.';
 
       setError(message);
+
     } finally {
       setLoading(false);
     }
@@ -219,9 +306,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         paddingBottom: 40,
       }}
     >
-      {/* =====================================================
-          HEADER
-      ====================================================== */}
+      {/* HEADER */}
+
       <div
         style={{
           background: '#ffffff',
@@ -276,9 +362,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           margin: '0 auto',
         }}
       >
-        {/* =====================================================
-            SECURITY / REVIEW NOTICE
-        ====================================================== */}
+        {/* VERIFIED NOTICE */}
+
         <div
           style={{
             background: '#eaf8f2',
@@ -338,9 +423,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           </div>
         </div>
 
-        {/* =====================================================
-            PROVIDER
-        ====================================================== */}
+        {/* PROVIDER */}
+
         <div
           style={{
             background: '#ffffff',
@@ -422,9 +506,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           </div>
         </div>
 
-        {/* =====================================================
-            CUSTOMER DETAILS
-        ====================================================== */}
+        {/* CUSTOMER DETAILS */}
+
         <div
           style={{
             background: '#ffffff',
@@ -440,24 +523,11 @@ const ElectricityPaymentConfirmation: React.FC = () => {
               borderBottom: '1px solid #eeeeee',
             }}
           >
-            <div
-              style={{
-                color: '#737b78',
-                fontSize: 13,
-                fontWeight: 700,
-                marginBottom: 7,
-              }}
-            >
+            <div style={detailLabel}>
               CUSTOMER NAME
             </div>
 
-            <div
-              style={{
-                fontSize: 21,
-                fontWeight: 800,
-                color: '#111827',
-              }}
-            >
+            <div style={detailValue}>
               {data.customer_name}
             </div>
           </div>
@@ -468,14 +538,7 @@ const ElectricityPaymentConfirmation: React.FC = () => {
               borderBottom: '1px solid #eeeeee',
             }}
           >
-            <div
-              style={{
-                color: '#737b78',
-                fontSize: 13,
-                fontWeight: 700,
-                marginBottom: 7,
-              }}
-            >
+            <div style={detailLabel}>
               {data.meter_type === 'prepaid'
                 ? 'METER NUMBER'
                 : 'METER / ACCOUNT NUMBER'}
@@ -483,9 +546,7 @@ const ElectricityPaymentConfirmation: React.FC = () => {
 
             <div
               style={{
-                fontSize: 20,
-                fontWeight: 800,
-                color: '#111827',
+                ...detailValue,
                 letterSpacing: 0.4,
               }}
             >
@@ -501,22 +562,14 @@ const ElectricityPaymentConfirmation: React.FC = () => {
                 : 'none',
             }}
           >
-            <div
-              style={{
-                color: '#737b78',
-                fontSize: 13,
-                fontWeight: 700,
-                marginBottom: 7,
-              }}
-            >
+            <div style={detailLabel}>
               METER TYPE
             </div>
 
             <div
               style={{
+                ...detailValue,
                 fontSize: 17,
-                fontWeight: 800,
-                color: '#111827',
                 textTransform: 'capitalize',
               }}
             >
@@ -530,14 +583,7 @@ const ElectricityPaymentConfirmation: React.FC = () => {
                 padding: '18px 16px',
               }}
             >
-              <div
-                style={{
-                  color: '#737b78',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  marginBottom: 7,
-                }}
-              >
+              <div style={detailLabel}>
                 ADDRESS
               </div>
 
@@ -555,9 +601,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           )}
         </div>
 
-        {/* =====================================================
-            PAYMENT AMOUNT
-        ====================================================== */}
+        {/* PAYMENT AMOUNT */}
+
         <div
           style={{
             background: '#ffffff',
@@ -590,11 +635,191 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           </div>
         </div>
 
-        {/* =====================================================
-            ERROR
-        ====================================================== */}
+        {/* TRANSACTION PIN */}
+
+        <div
+          style={{
+            background: '#ffffff',
+            border: '1px solid #dce9e2',
+            borderRadius: 18,
+            padding: 20,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 8,
+            }}
+          >
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 11,
+                background: '#e8f7ef',
+                color: '#087f5b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+              }}
+            >
+              🔒
+            </div>
+
+            <div>
+              <div
+                style={{
+                  color: '#123d2d',
+                  fontSize: 16,
+                  fontWeight: 850,
+                }}
+              >
+                Transaction PIN
+              </div>
+
+              <div
+                style={{
+                  color: '#7b8982',
+                  fontSize: 12,
+                  marginTop: 3,
+                }}
+              >
+                Enter your 4-digit PIN to authorize payment.
+              </div>
+            </div>
+          </div>
+
+          <label
+            htmlFor="electricity-transaction-pin"
+            style={{
+              display: 'block',
+              marginTop: 18,
+              marginBottom: 9,
+              color: '#344b40',
+              fontSize: 13,
+              fontWeight: 800,
+            }}
+          >
+            ENTER TRANSACTION PIN
+          </label>
+
+          <div
+            style={{
+              position: 'relative',
+            }}
+          >
+            <input
+              id="electricity-transaction-pin"
+              type={showPin ? 'text' : 'password'}
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
+              value={transactionPin}
+              disabled={loading}
+              placeholder="••••"
+              onChange={(event) => {
+                const digits =
+                  event.target.value
+                    .replace(/\D/g, '')
+                    .slice(0, 4);
+
+                setTransactionPin(digits);
+                setError('');
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+
+                  if (transactionPin.length === 4) {
+                    handleConfirmPayment();
+                  }
+                }
+              }}
+              style={{
+                boxSizing: 'border-box',
+                width: '100%',
+                height: 62,
+                border: '1.5px solid #b8d9c8',
+                borderRadius: 13,
+                background: '#fbfefc',
+                color: '#123d2d',
+                fontSize: 25,
+                fontWeight: 800,
+                letterSpacing: 15,
+                textAlign: 'center',
+                outline: 'none',
+                padding: '0 55px 0 15px',
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowPin(!showPin)}
+              disabled={loading}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                height: 38,
+                padding: '0 10px',
+                border: 'none',
+                background: 'transparent',
+                color: '#087f5b',
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              {showPin ? 'HIDE' : 'SHOW'}
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              color: '#829087',
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            Your PIN is securely verified by Zenimonies.
+            It is not saved on this device.
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 7,
+              marginTop: 14,
+            }}
+          >
+            {[0, 1, 2, 3].map((index) => (
+              <div
+                key={index}
+                style={{
+                  flex: 1,
+                  height: 5,
+                  borderRadius: 10,
+                  background:
+                    transactionPin.length > index
+                      ? '#078b50'
+                      : '#e6eee9',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* ERROR */}
+
         {error && (
           <div
+            role="alert"
             style={{
               background: '#fff1f1',
               border: '1px solid #f2b8b8',
@@ -610,28 +835,38 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           </div>
         )}
 
-        {/* =====================================================
-            CONFIRM & PAY
-        ====================================================== */}
+        {/* CONFIRM & PAY */}
+
         <button
           type="button"
           onClick={handleConfirmPayment}
-          disabled={loading}
+          disabled={
+            loading ||
+            transactionPin.length !== 4
+          }
           style={{
             width: '100%',
             border: 'none',
             borderRadius: 16,
             padding: '18px 16px',
-            background: loading
-              ? '#83ad9e'
-              : '#087f5b',
+            background:
+              loading ||
+              transactionPin.length !== 4
+                ? '#9bb9aa'
+                : '#087f5b',
             color: '#ffffff',
             fontSize: 17,
             fontWeight: 800,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            boxShadow: loading
-              ? 'none'
-              : '0 5px 14px rgba(8,127,91,0.20)',
+            cursor:
+              loading ||
+              transactionPin.length !== 4
+                ? 'not-allowed'
+                : 'pointer',
+            boxShadow:
+              loading ||
+              transactionPin.length !== 4
+                ? 'none'
+                : '0 5px 14px rgba(8,127,91,0.20)',
           }}
         >
           {loading
@@ -639,9 +874,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
             : 'Confirm & Pay'}
         </button>
 
-        {/* =====================================================
-            CANCEL
-        ====================================================== */}
+        {/* CANCEL */}
+
         <button
           type="button"
           onClick={() =>
@@ -652,7 +886,7 @@ const ElectricityPaymentConfirmation: React.FC = () => {
             width: '100%',
             border: 'none',
             background: 'transparent',
-            padding: '16px',
+            padding: 16,
             marginTop: 5,
             color: '#555f5b',
             fontSize: 15,
@@ -663,9 +897,8 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           Go Back
         </button>
 
-        {/* =====================================================
-            SECURITY NOTE
-        ====================================================== */}
+        {/* SECURITY NOTE */}
+
         <div
           style={{
             textAlign: 'center',
@@ -683,6 +916,19 @@ const ElectricityPaymentConfirmation: React.FC = () => {
       </div>
     </div>
   );
+};
+
+const detailLabel: React.CSSProperties = {
+  color: '#737b78',
+  fontSize: 13,
+  fontWeight: 700,
+  marginBottom: 7,
+};
+
+const detailValue: React.CSSProperties = {
+  fontSize: 21,
+  fontWeight: 800,
+  color: '#111827',
 };
 
 export default ElectricityPaymentConfirmation;
