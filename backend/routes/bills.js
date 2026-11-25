@@ -14,6 +14,10 @@ const {
   getElectricityReconciliation,
 } = require('../controllers/electricityReconciliationController');
 
+const {
+  requeryElectricityPayment,
+} = require('../controllers/electricityRequeryController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 const transactionPinMiddleware = require('../middleware/transactionPinMiddleware');
@@ -60,7 +64,18 @@ router.get(
   authMiddleware,
   getElectricityReconciliation
 );
+// ============================================================
+// ELECTRICITY PAYMENT REQUERY
+// ============================================================
+// POST /api/bills/electricity/requery/:reference
+// Authentication required.
+// ============================================================
 
+router.post(
+  '/electricity/requery/:reference',
+  authMiddleware,
+  requeryElectricityPayment
+);
 // ============================================================
 // GENERIC BILL PAYMENT
 // ============================================================
