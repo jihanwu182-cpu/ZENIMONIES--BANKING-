@@ -26,7 +26,39 @@ const firstValue = (...values) => {
 
   return null;
 };
+// ============================================================
+// VTPASS RESPONSE HELPERS
+// ============================================================
 
+const getProviderReference = (result) => {
+  return firstValue(
+    result?.providerTransactionId,
+    result?.providerReference,
+    result?.provider_reference,
+    result?.rawResponse?.content?.transactions?.transactionId,
+    result?.rawResponse?.content?.transactions?.transaction_id
+  );
+};
+
+const getProviderMessage = (result) => {
+  return firstValue(
+    result?.responseDescription,
+    result?.message,
+    result?.rawResponse?.response_description,
+    result?.rawResponse?.content?.transactions?.response_description,
+    result?.rawResponse?.content?.transactions?.message
+  );
+};
+
+const safeJson = (value) => {
+  try {
+    return JSON.stringify(value ?? {});
+  } catch (error) {
+    return JSON.stringify({
+      message: 'Provider response could not be serialized.',
+    });
+  }
+};
 // ============================================================
 // PROVIDER STATUS
 // ============================================================
