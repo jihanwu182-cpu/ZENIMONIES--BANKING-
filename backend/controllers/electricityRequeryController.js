@@ -554,7 +554,7 @@ if (existingRefund.rows.length > 0) {
           currentBill.account_id,
           refundAmount,
           `REF-${bill.reference}`,
-          `VTPass Electricity refund - ${bill.reference}`,
+          `Electricity Refund - ${bill.reference}`,
         ]
       );
 
