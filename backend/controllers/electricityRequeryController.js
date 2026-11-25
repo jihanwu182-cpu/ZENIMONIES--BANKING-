@@ -138,7 +138,14 @@ const requeryElectricityPayment = async (req, res) => {
         bp.currency,
         bp.status,
         bp.electricity_token,
-        bp.units
+        bp.units,
+        EXISTS (
+          SELECT 1
+          FROM transactions rt
+          WHERE rt.reference = 'REF-' || bp.reference
+            AND rt.type = 'electricity_refund'
+            AND rt.status = 'completed'
+)         AS refunded
       FROM bill_payments bp
       INNER JOIN accounts a
         ON a.id = bp.account_id
