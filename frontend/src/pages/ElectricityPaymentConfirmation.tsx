@@ -98,14 +98,14 @@ const ElectricityPaymentConfirmation: React.FC = () => {
     setLoading(true);
     setError('');
 
-    try {
-      /*
-       * IMPORTANT:
-       * The Sogo secret key is NOT used here.
-       *
-       * The frontend talks to our Zenimonies backend.
-       * The backend securely talks to Sogo.
-       */
+    try {/*
+         * IMPORTANT:
+         * VTPass credentials are never exposed in the frontend.
+         *
+         * The frontend talks to the Zenimonies backend.
+         * The backend securely handles electricity verification
+         * and purchases through VTPass.
+         */
 
       const response = await axios.post(
         `${API_URL}/api/bills/electricity/pay`,
