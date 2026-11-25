@@ -143,7 +143,14 @@ const TransactionReceipt: React.FC = () => {
     useRef<ReturnType<typeof setInterval> | null>(
       null
     );
+const electricityRequeryTimerRef =
+  useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
 
+const electricityRequeryInFlightRef =
+  useRef(false);
+  
   const [pdfLoading, setPdfLoading] =
     useState(false);
 
@@ -530,6 +537,248 @@ const TransactionReceipt: React.FC = () => {
           null;
       }
     };
+  }, [location.state]);
+
+  /*
+   * ============================================================
+   * AUTOMATIC ELECTRICITY STATUS CHECK
+   * ============================================================
+   */
+
+  useEffect(() => {
+    const currentTransaction =
+      location.state?.transaction as
+        | Transaction
+        | undefined;
+
+    if (!currentTransaction) return;
+
+    const currentReference = String(
+      currentTransaction.reference ||
+        currentTransaction.transaction_reference ||
+        ''
+    ).trim();
+
+    const currentType = String(
+      currentTransaction.transaction_type ||
+        currentTransaction.type ||
+        currentTransaction.category ||
+        ''
+    ).toLowerCase();
+
+    const currentDescription = String(
+      currentTransaction.description || ''
+    ).toLowerCase();
+
+    const isRefund =
+      currentType.includes('electricity_refund') ||
+      currentDescription.includes('electricity refund') ||
+      currentReference.toUpperCase().startsWith('REF-ZEL-');
+
+    const isElectricity =
+      !isRefund &&
+      (
+        currentType.includes('electricity') ||
+        currentDescription.includes('electricity') ||
+        currentReference.toUpperCase().startsWith('ZEL-')
+      );
+
+    if (
+  !isElectricity ||
+  !reference ||
+  requerying ||
+  electricityRequeryInFlightRef.current
+) {
+  return;
+}
+
+    const initialStatus = String(
+      currentTransaction.status || ''
+    ).toLowerCase();
+
+    const alreadyFinal = [
+      'completed',
+      'successful',
+      'success',
+      'delivered',
+      'failed',
+      'failure',
+      'refunded',
+      'cancelled',
+      'canceled',
+    ].includes(initialStatus);
+
+    if (alreadyFinal) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const stopChecking = () => {
+      if (electricityRequeryTimerRef.current) {
+        clearInterval(electricityRequeryTimerRef.current);
+        electricityRequeryTimerRef.current = null;
+      }
+    };
+
+    const checkStatus = async () => {
+      if (
+        cancelled ||
+        electricityRequeryInFlightRef.current
+      ) {
+        return;
+      }
+
+      electricityRequeryInFlightRef.current = true;
+      setRequerying(true);
+
+      try {
+        const authToken = localStorage.getItem(
+          'zenimonies_token'
+        );
+
+        if (!authToken) {
+          setRequeryMessage(
+            'Please sign in again to check your electricity payment.'
+          );
+          stopChecking();
+          return;
+        }
+
+        const response = await fetch(
+          `${API_URL}/bills/electricity/requery/${encodeURIComponent(currentReference)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({}),
+          }
+        );
+
+        let result: any = null;
+
+        try {
+          result = await response.json();
+        } catch {
+          result = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            result?.message ||
+              'Unable to check electricity payment.'
+          );
+        }
+
+        if (cancelled) return;
+
+        const providerStatus = String(
+          result?.status || ''
+        ).trim().toLowerCase();
+
+        if (
+          ['completed', 'successful', 'success', 'delivered']
+            .includes(providerStatus)
+        ) {
+          setLiveStatus('completed');
+          setElectricityRefunded(false);
+
+          setElectricityTokenOverride(
+            String(
+              result?.electricity_token ||
+                result?.token ||
+                ''
+            )
+          );
+
+          if (
+            result?.units !== undefined &&
+            result?.units !== null
+          ) {
+            setElectricityUnitsOverride(result.units);
+          }
+
+          setRequeryMessage(
+            result?.message ||
+              'Electricity payment confirmed successfully.'
+          );
+
+          stopChecking();
+          return;
+        }
+
+        if (
+          ['failed', 'failure', 'refunded', 'cancelled', 'canceled']
+            .includes(providerStatus)
+        ) {
+          setLiveStatus('failed');
+          setElectricityRefunded(
+            Boolean(result?.refunded)
+          );
+
+          setRequeryMessage(
+            result?.message ||
+              (result?.refunded
+                ? 'Your wallet has been refunded.'
+                : 'The electricity payment was not completed.')
+          );
+
+          stopChecking();
+          return;
+        }
+
+        setLiveStatus('pending');
+
+        setRequeryMessage(
+          result?.message ||
+            'Your payment is still processing. We are checking automatically. Please do not pay again.'
+        );
+      } catch (error) {
+        console.error(
+          'ZENIMONIES automatic electricity check:',
+          error
+        );
+
+        if (!cancelled) {
+          setRequeryMessage(
+            'Your payment is still being checked. Please do not submit another payment.'
+          );
+        }
+      } finally {
+        electricityRequeryInFlightRef.current = false;
+
+        if (!cancelled) {
+          setRequerying(false);
+        }
+      }
+    };
+
+    // Check immediately when the receipt opens.
+    void checkStatus();
+
+    // Continue checking every five seconds.
+    electricityRequeryTimerRef.current =
+      setInterval(() => {
+        attempts += 1;
+
+        if (attempts >= 12) {
+          stopChecking();
+
+          setRequeryMessage(
+            'Your payment is still processing. We will not submit another payment. You can check its status again shortly.'
+          );
+
+          return;
+        }
+
+        void checkStatus();
+      }, 5000);
+
+        return () => {
+         cancelled = true;
+         stopChecking();
+      };
   }, [location.state]);
 
   /*
