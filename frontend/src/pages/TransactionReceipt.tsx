@@ -2548,16 +2548,18 @@ const TransactionReceipt: React.FC = () => {
 
                 <ReceiptRow
                   label="Transaction Type"
-                  value={
-                    isElectricity
-                      ? 'ELECTRICITY PAYMENT'
-                      : String(
-                          transaction.transaction_type ||
-                            transaction.type ||
-                            'TRANSACTION'
-                        ).toUpperCase()
-                  }
-                />
+value={
+  isElectricityRefund
+    ? 'ELECTRICITY REFUND'
+    : isElectricity
+      ? 'ELECTRICITY PAYMENT'
+      : String(
+          transaction.transaction_type ||
+            transaction.type ||
+            'TRANSACTION'
+        ).toUpperCase()
+}
+/>
 
                 {transactionDate && (
                   <ReceiptRow
@@ -2566,16 +2568,16 @@ const TransactionReceipt: React.FC = () => {
                   />
                 )}
 
-                {transaction.description &&
-                  transaction.description.trim() && (
-                    <ReceiptRow
-                      label="Narration"
-                      value={
-                        transaction.description.trim()
-                      }
-                    />
-                  )}
-
+               {(isElectricityRefund || transaction.description?.trim()) && (
+                <ReceiptRow
+               label="Narration"
+                value={
+                isElectricityRefund
+                ? 'Electricity Refund'
+                : transaction.description!.trim()
+             }
+          />
+         )}
                 {reference && (
                   <ReferenceRow
                     label="Transaction Reference"
