@@ -488,7 +488,7 @@ const TransactionReceipt: React.FC = () => {
 
     if (isPending) {
       requeryTimerRef.current =
-        setInterval(MoMo
+        setInterval(
           async () => {
             attempts += 1;
 
