@@ -1314,6 +1314,10 @@ const TransactionReceipt: React.FC = () => {
         )
       ) {
         setLiveStatus('failed');
+       
+        setElectricityRefunded(
+          Boolean(result?.refunded)
+        ); 
         setRequeryMessage(
           result?.message ||
             (result?.refunded
