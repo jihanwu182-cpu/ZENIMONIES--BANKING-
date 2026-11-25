@@ -17,10 +17,26 @@ const {
 // ============================================================
 
 const FINAL_FAILURE_CODES = new Set([
-  '016', // Transaction failed
-  '091', // Transaction not processed
-  '040', // Transaction reversal
+  '010',
+  '011',
+  '012',
+  '013',
+  '016',
+  '017',
+  '018',
+  '021',
+  '022',
+  '023',
+  '024',
+  '027',
+  '028',
+  '030',
+  '034',
+  '035',
+  '040',
+  '091',
 ]);
+
 
 const getTransactionStatus = (result) => {
   const code = String(result?.code || '').trim();
