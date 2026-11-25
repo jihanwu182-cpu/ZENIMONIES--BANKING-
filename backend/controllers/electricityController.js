@@ -1,4 +1,5 @@
 
+const crypto = require('crypto');
 const pool = require('../config/database');
 
 const {
@@ -10,13 +11,6 @@ const {
 // ============================================================
 // ZENIMONIES — ELECTRICITY CONTROLLER
 // VTPASS INTEGRATION
-//
-// - VTPass meter verification
-// - VTPass electricity purchase
-// - Saves provider request ID before purchase
-// - Preserves existing bill_payments and transactions tables
-// - Keeps uncertain transactions pending
-// - Refunds confirmed failures exactly once
 // ============================================================
 
 const firstValue = (...values) => {
@@ -33,14 +27,16 @@ const firstValue = (...values) => {
   return null;
 };
 
+// ============================================================
+// PROVIDER STATUS
+// ============================================================
+
 const getProviderStatus = (result) => {
   const code = String(result?.code || '');
   const status = String(result?.status || '')
     .trim()
     .toLowerCase();
 
-  // VTPass confirms delivery only with code 000
-  // and transaction status delivered.
   if (code === '000' && status === 'delivered') {
     return 'completed';
   }
@@ -53,7 +49,6 @@ const getProviderStatus = (result) => {
     return 'failed';
   }
 
-  // All unclear responses remain pending.
   return 'pending';
 };
 
@@ -96,18 +91,16 @@ const saveProviderResponse = async ({
   const providerMessage =
     getProviderMessage(result);
 
-  const token =
-    firstValue(
-      result?.token,
-      result?.rawResponse?.token,
-      result?.rawResponse?.purchased_code
-    );
+  const token = firstValue(
+    result?.token,
+    result?.rawResponse?.token,
+    result?.rawResponse?.purchased_code
+  );
 
-  const units =
-    firstValue(
-      result?.units,
-      result?.rawResponse?.units
-    );
+  const units = firstValue(
+    result?.units,
+    result?.rawResponse?.units
+  );
 
   const client = await pool.connect();
 
@@ -215,7 +208,6 @@ const refundElectricity = async ({
 
     const bill = billResult.rows[0];
 
-    // A previous refund or final status must never be refunded again.
     if (bill.status !== 'processing') {
       await client.query('COMMIT');
       return false;
@@ -242,7 +234,6 @@ const refundElectricity = async ({
       throw new Error('Customer account could not be refunded.');
     }
 
-    // Deterministic reference prevents duplicate refund ledger entries.
     const refundReference = `REF-${reference}`;
 
     await client.query(
@@ -354,6 +345,13 @@ const purchaseElectricity = async (req, res) => {
     .trim()
     .toUpperCase();
 
+  // The mobile app uses PHEDC.
+  // VTPass uses PHED.
+  const vtpassProvider =
+    normalizedProvider === 'PHEDC'
+      ? 'PHED'
+      : normalizedProvider;
+
   const normalizedMeterNumber = String(meter_number || '')
     .trim();
 
@@ -397,7 +395,6 @@ const purchaseElectricity = async (req, res) => {
 
   // ==========================================================
   // GET CUSTOMER PHONE
-  // VTPass requires a phone number for Electricity purchases.
   // ==========================================================
 
   let phone;
@@ -446,18 +443,18 @@ const purchaseElectricity = async (req, res) => {
 
   try {
     verification = await verifyVTPassMeter({
-      provider: normalizedProvider,
+      provider: vtpassProvider,
       meterNumber: normalizedMeterNumber,
       meterType: normalizedMeterType,
     });
 
     if (
-  !verification ||
-  !['000', '020'].includes(
-    String(verification.code || '').trim()
-  ) ||
-  verification.verified !== true
-) {
+      !verification ||
+      !['000', '020'].includes(
+        String(verification.code || '').trim()
+      ) ||
+      verification.verified !== true
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -484,11 +481,10 @@ const purchaseElectricity = async (req, res) => {
   const customerAddress =
     firstValue(verification.customerAddress);
 
-  const tariffClass =
-    firstValue(
-      verification.rawResponse?.content?.Tariff_Class,
-      verification.rawResponse?.content?.tariff_class
-    );
+  const tariffClass = firstValue(
+    verification.rawResponse?.content?.Tariff_Class,
+    verification.rawResponse?.content?.tariff_class
+  );
 
   // ==========================================================
   // STEP 2 — CREATE LOCAL TRANSACTION AND DEBIT WALLET
@@ -547,16 +543,14 @@ const purchaseElectricity = async (req, res) => {
     }
 
     transactionReference =
-      `ZEL-${Date.now()}-${require('crypto')
+      `ZEL-${Date.now()}-${crypto
         .randomBytes(5)
         .toString('hex')
         .toUpperCase()}`;
 
-    // Generate the VTPass ID BEFORE the provider request.
+    // Generate the VTPass ID before the provider request.
     providerRequestId = generateElectricityRequestId();
 
-    // Match the biller where possible instead of blindly choosing
-    // an unrelated first Electricity biller.
     const billerResult = await client.query(
       `
       SELECT id, name
@@ -708,7 +702,7 @@ const purchaseElectricity = async (req, res) => {
 
   try {
     purchaseResult = await purchaseVTPassElectricity({
-      provider: normalizedProvider,
+      provider: vtpassProvider,
       meterNumber: normalizedMeterNumber,
       meterType: normalizedMeterType,
       amount: numericAmount,
@@ -716,7 +710,7 @@ const purchaseElectricity = async (req, res) => {
       requestId: providerRequestId,
     });
   } catch (error) {
-    // Never refund a timeout or network error.
+    // Never automatically refund a timeout or network error.
     // VTPass may have received and processed the request.
 
     console.error(
@@ -757,8 +751,6 @@ const purchaseElectricity = async (req, res) => {
         status: 'completed',
       });
     } catch (error) {
-      // Provider may have delivered the token. Keep local record
-      // pending if database finalization fails; do not refund.
       console.error(
         'VTPass completed but local update failed:',
         error.message
@@ -775,18 +767,16 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    const token =
-      firstValue(
-        purchaseResult.token,
-        purchaseResult.rawResponse?.token,
-        purchaseResult.rawResponse?.purchased_code
-      );
+    const token = firstValue(
+      purchaseResult.token,
+      purchaseResult.rawResponse?.token,
+      purchaseResult.rawResponse?.purchased_code
+    );
 
-    const units =
-      firstValue(
-        purchaseResult.units,
-        purchaseResult.rawResponse?.units
-      );
+    const units = firstValue(
+      purchaseResult.units,
+      purchaseResult.rawResponse?.units
+    );
 
     return res.status(200).json({
       success: true,
@@ -844,8 +834,8 @@ const purchaseElectricity = async (req, res) => {
     });
   }
 
-  // Any other response, including 099, 001, initiated,
-  // pending, or an unrecognized response, stays processing.
+  // Unknown or pending responses remain processing.
+  // Do not automatically refund uncertain transactions.
 
   try {
     await saveProviderResponse({
