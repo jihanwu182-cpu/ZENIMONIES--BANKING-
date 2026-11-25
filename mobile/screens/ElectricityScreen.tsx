@@ -1,4 +1,5 @@
 
+
 import React, {useRef, useState} from 'react';
 import {
   ActivityIndicator,
@@ -40,6 +41,7 @@ interface ElectricityPaymentResult {
   token?: string;
   units?: string | number;
   customer?: MeterCustomer;
+  refunded?: boolean;
 }
 
 interface ElectricityScreenProps {
@@ -55,6 +57,10 @@ interface ElectricityScreenProps {
     meterType: 'prepaid' | 'postpaid',
     amount: number,
     transactionPin: string,
+  ) => Promise<ElectricityPaymentResult>;
+
+  onRequery?: (
+    reference: string,
   ) => Promise<ElectricityPaymentResult>;
 }
 
@@ -122,6 +128,7 @@ const isSuccessfulResponse = (result: ElectricityPaymentResult) => {
 const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   onValidate,
   onPay,
+  onRequery,
 }) => {
   const [provider, setProvider] = useState('');
   const [showProviders, setShowProviders] = useState(false);
@@ -139,11 +146,12 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
   const [status, setStatus] = useState<PaymentStatus>('idle');
   const [loading, setLoading] = useState(false);
+  const [requeryLoading, setRequeryLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [pinVisible, setPinVisible] = useState(false);
 
   const pinInputRef =
-  useRef<React.ElementRef<typeof TextInput>>(null);
+    useRef<React.ElementRef<typeof TextInput>>(null);
 
   const selectedProvider = PROVIDERS.find(
     item => item.id === provider,
@@ -327,14 +335,103 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
       );
     } catch (error: any) {
       // A connection error does not prove that the provider failed.
-      // Keep the transaction in pending status to prevent an unsafe retry.
+      // Keep the transaction pending to prevent an unsafe retry.
       setStatus('pending');
+      setPaymentResult({
+        status: 'pending',
+        message:
+          'The payment response could not be confirmed. Please check the transaction status before attempting another payment.',
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // Checks the existing transaction reference only.
+  // This function never calls the electricity purchase endpoint.
+  const handleRequery = async () => {
+    const reference = paymentResult?.reference;
+
+    if (!reference || !onRequery || requeryLoading) {
+      Alert.alert(
+        'Reference unavailable',
+        'The original payment reference is missing. Please check your transaction history.',
+      );
+      return;
+    }
+
+    setRequeryLoading(true);
+
+    try {
+      const result = await onRequery(reference);
+
+      const updatedResult: ElectricityPaymentResult = {
+        ...paymentResult,
+        ...result,
+        reference: result.reference || reference,
+      };
+
+      setPaymentResult(updatedResult);
+
+      if (isSuccessfulResponse(updatedResult)) {
+        setStatus('success');
+        Alert.alert(
+          'Payment Confirmed',
+          'The electricity provider has confirmed your payment.',
+        );
+        return;
+      }
+
+      const resultStatus = String(
+        updatedResult.status || '',
+      ).toLowerCase();
+
+      if (
+        resultStatus === 'failed' ||
+        updatedResult.refunded === true
+      ) {
+        setStatus('failed');
+
+        Alert.alert(
+          'Payment Failed',
+          updatedResult.refunded
+            ? 'The provider confirmed that the payment failed. Your wallet refund has been processed.'
+            : updatedResult.message ||
+                'The provider confirmed that this payment failed. Please check your transaction history.',
+        );
+        return;
+      }
+
+      // Unknown, pending, and processing responses remain pending.
+      setStatus('pending');
+
+      Alert.alert(
+        'Still Processing',
+        updatedResult.message ||
+          'The provider has not confirmed the final payment status yet. Please check again later. Do not make another payment.',
+      );
+    } catch (error: any) {
+      setStatus('pending');
+
+      Alert.alert(
+        'Status Check Unavailable',
+        error?.message ||
+          'We could not retrieve the payment status. Your transaction remains pending. Please do not pay again.',
+      );
+    } finally {
+      setRequeryLoading(false);
+    }
+  };
+
   const handleNewPayment = () => {
+    if (status === 'pending' || requeryLoading) {
+      Alert.alert(
+        'Payment Still Pending',
+        'Please confirm the status of your existing transaction before starting another electricity payment.',
+      );
+      return;
+    }
+
     setProvider('');
     setShowProviders(false);
     setMeterNumber('');
@@ -760,9 +857,90 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
       <View style={styles.pendingNotice}>
         <Text style={styles.pendingNoticeText}>
-          Do not make another payment yet. Check your transaction history for the final status before retrying.
+          Do not make another payment yet. Check the status of this original transaction before attempting another payment.
         </Text>
       </View>
+
+      {paymentResult?.reference ? (
+        <View style={styles.resultRow}>
+          <Text style={styles.resultLabel}>Reference</Text>
+          <Text style={styles.resultValue}>
+            {paymentResult.reference}
+          </Text>
+        </View>
+      ) : null}
+
+      {onRequery && paymentResult?.reference ? (
+        <TouchableOpacity
+          style={[
+            styles.newPaymentButton,
+            styles.requeryButton,
+            requeryLoading && styles.disabledButton,
+          ]}
+          onPress={handleRequery}
+          disabled={requeryLoading}
+          activeOpacity={0.8}
+        >
+          {requeryLoading ? (
+            <ActivityIndicator color={WHITE} />
+          ) : (
+            <Text style={styles.newPaymentButtonText}>
+              Check Payment Status
+            </Text>
+          )}
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.noRequeryText}>
+          Payment status checking is currently unavailable. Please check your transaction history.
+        </Text>
+      )}
+
+      <TouchableOpacity
+        style={styles.cancelConfirmationButton}
+        onPress={() => {
+          Alert.alert(
+            'Payment Still Pending',
+            'This transaction has not been confirmed. Please do not start another electricity payment until its status is resolved.',
+          );
+        }}
+        disabled={requeryLoading}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.cancelConfirmationText}>
+          Close
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderFailed = () => (
+    <View style={styles.pendingCard}>
+      <View style={styles.failedIcon}>
+        <Text style={styles.failedIconText}>!</Text>
+      </View>
+
+      <Text style={styles.failedResultTitle}>
+        Payment Failed
+      </Text>
+
+      <Text style={styles.pendingDescription}>
+        {paymentResult?.message ||
+          'The electricity provider confirmed that this payment was unsuccessful.'}
+      </Text>
+
+      {paymentResult?.refunded ? (
+        <View style={styles.pendingNotice}>
+          <Text style={styles.pendingNoticeText}>
+            Your wallet refund has been confirmed by the payment system. Check your wallet transaction history for the refund entry.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.pendingNotice}>
+          <Text style={styles.pendingNoticeText}>
+            Please check your wallet and transaction history before making another payment.
+          </Text>
+        </View>
+      )}
 
       {paymentResult?.reference ? (
         <View style={styles.resultRow}>
@@ -779,7 +957,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         activeOpacity={0.8}
       >
         <Text style={styles.newPaymentButtonText}>
-          Return
+          Done
         </Text>
       </TouchableOpacity>
     </View>
@@ -809,6 +987,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
           {status !== 'success' &&
             status !== 'pending' &&
+            status !== 'failed' &&
             !showConfirmation && (
               <>
                 {renderProviderDropdown()}
@@ -899,10 +1078,12 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             customer &&
             status !== 'success' &&
             status !== 'pending' &&
+            status !== 'failed' &&
             renderConfirmation()}
 
           {status === 'success' && paymentResult && renderSuccess()}
           {status === 'pending' && renderPending()}
+          {status === 'failed' && paymentResult && renderFailed()}
 
           <View style={styles.securityFooter}>
             <Text style={styles.securityIcon}>🔒</Text>
@@ -996,20 +1177,21 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
               </Text>
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.pinConfirmButton,
-                (!isPinValid || loading) &&
-                  styles.disabledButton,
-              ]}
-              onPress={executePayment}
-              disabled={!isPinValid || loading}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.pinConfirmText}>
-                Confirm & Pay {formatCurrency(numericAmount)}
-              </Text>
-            </TouchableOpacity>
+            {isPinValid && (
+              <TouchableOpacity
+                style={[
+                  styles.pinConfirmButton,
+                  loading && styles.disabledButton,
+                ]}
+                onPress={executePayment}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.pinConfirmText}>
+                  Confirm & Pay {formatCurrency(numericAmount)}
+                </Text>
+              </TouchableOpacity>
+            )}
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
@@ -1475,6 +1657,8 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 12,
+    width: '100%',
   },
   cancelConfirmationText: {
     fontSize: 14,
@@ -1654,6 +1838,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
+    width: '100%',
   },
   resultLabel: {
     fontSize: 12,
@@ -1703,6 +1888,7 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 16,
   },
   newPaymentButtonText: {
     color: WHITE,
@@ -1760,6 +1946,37 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  requeryButton: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  noRequeryText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED,
+    textAlign: 'center',
+    marginVertical: 12,
+  },
+  failedIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#FCEDEC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  failedIconText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#B42318',
+  },
+  failedResultTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#B42318',
+    marginBottom: 8,
   },
   failedNotice: {
     backgroundColor: WHITE,
