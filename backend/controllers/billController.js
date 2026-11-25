@@ -478,11 +478,13 @@ const verifyElectricityMeter = async (req, res) => {
       meterType: normalizedMeterType,
     });
 
-    if (
-      !verification ||
-      String(verification.code) !== '020' ||
-      verification.verified !== true
-    ) {
+if (
+  !verification ||
+  !['000', '020'].includes(
+    String(verification.code || '').trim()
+  ) ||
+  verification.verified !== true
+) {
       return res.status(400).json({
         success: false,
         message:
