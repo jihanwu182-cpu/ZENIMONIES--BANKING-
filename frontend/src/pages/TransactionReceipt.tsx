@@ -869,6 +869,11 @@ const TransactionReceipt: React.FC = () => {
         transaction.electricity_token ||
         transaction.meter_number ||
         transaction.units
+      
+    const isElectricityRefund =
+      rawType.includes('electricity_refund') ||
+      rawDescription.includes('electricity refund') ||
+       normalizedReference.startsWith('REF-ZEL-');
       )
     );
 
