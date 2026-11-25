@@ -1076,10 +1076,9 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
           {showConfirmation &&
             customer &&
-            status !== 'success' &&
+            {status !== 'success' &&
             status !== 'pending' &&
-            status !== 'failed' &&
-            renderConfirmation()}
+            !showConfirmation && (
 
           {status === 'success' && paymentResult && renderSuccess()}
           {status === 'pending' && renderPending()}
