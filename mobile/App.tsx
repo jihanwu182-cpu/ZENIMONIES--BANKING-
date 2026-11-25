@@ -1208,6 +1208,49 @@ const [transferDraft, setTransferDraft] =
     );
 
   // ====================================================
+  // ELECTRICITY PAYMENT REQUERY
+  // ====================================================
+
+  const handleElectricityRequery =
+    useCallback(
+      async (reference: string) => {
+        if (!session?.token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        if (!reference?.trim()) {
+          throw new Error(
+            'Electricity transaction reference is missing.'
+          );
+        }
+
+        const result = await authenticatedPost(
+          `${API_BASE}/bills/electricity/requery/${encodeURIComponent(reference)}`,
+          session.token,
+          {}
+        );
+
+        const data = result.data || {};
+
+        return {
+          ...data,
+          status:
+            data.status ||
+            (result.status === 202
+              ? 'processing'
+              : 'unknown'),
+          success: data.success === true,
+        };
+      },
+      [
+        session?.token,
+        authenticatedPost,
+      ]
+    );
+
+  // ====================================================
   // TV CUSTOMER VERIFICATION
   // ====================================================
 
