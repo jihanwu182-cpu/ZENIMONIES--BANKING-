@@ -312,7 +312,14 @@ async function verifyElectricityMeter({
     meterNumber: billersCode,
     meterType: normalizedMeterType,
     code: String(response.code || ''),
-  verified: String(response.code || '') === '020',
+  verified:
+  ['000', '020'].includes(String(response.code || '').trim()) &&
+  Boolean(
+    response.content?.Customer_Name ||
+    response.content?.customer_name ||
+    response.content?.name
+  ) &&
+  response.content?.WrongBillersCode !== true,
     customerName:
       response.content?.Customer_Name ||
       response.content?.customer_name ||
