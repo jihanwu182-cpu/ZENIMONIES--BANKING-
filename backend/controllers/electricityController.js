@@ -452,9 +452,12 @@ const purchaseElectricity = async (req, res) => {
     });
 
     if (
-      !verification ||
-      String(verification.code) !== '020'
-    ) {
+  !verification ||
+  !['000', '020'].includes(
+    String(verification.code || '').trim()
+  ) ||
+  verification.verified !== true
+) {
       return res.status(400).json({
         success: false,
         message:
