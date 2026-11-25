@@ -44,12 +44,9 @@ const getTransactionStatus = (result) => {
     .trim()
     .toLowerCase();
 
-  if (
-    ['000', '001'].includes(code) &&
-    status === 'delivered'
-  ) {
-    return 'completed';
-  }
+if (code === '000' && status === 'delivered') {
+  return 'completed';
+}
 
   if (FINAL_FAILURE_CODES.has(code)) {
     return 'failed';
