@@ -158,10 +158,43 @@ const ElectricityPaymentConfirmation: React.FC = () => {
 
       // Handle pending transactions safely.
       if (
-        response.status === 202 ||
-        paymentData.status === 'processing' ||
-        paymentData.status === 'pending'
-      ) {
+  response.status === 202 ||
+  paymentData.status === 'processing' ||
+  paymentData.status === 'pending'
+) {
+  setTransactionPin('');
+
+  localStorage.setItem(
+    'zenimonies_electricity_payment',
+    JSON.stringify({
+      ...data,
+      payment: paymentData,
+      paid_at: new Date().toISOString(),
+    })
+  );
+
+  navigate('/electricity/success', {
+    state: {
+      transaction: {
+        ...paymentData,
+        reference: paymentData.reference,
+        transaction_reference: paymentData.reference,
+        type: 'electricity_payment',
+        transaction_type: 'electricity_payment',
+        description: `Electricity - ${data.provider_name}`,
+        amount: Number(data.amount),
+        status: 'processing',
+        currency: 'NGN',
+        electricity_provider: data.provider_name,
+        meter_number: data.meter_number,
+        meter_type: data.meter_type,
+        customer_name: data.customer_name,
+      },
+    },
+  });
+
+  return;
+}
         localStorage.setItem(
           'zenimonies_electricity_payment',
           JSON.stringify({
