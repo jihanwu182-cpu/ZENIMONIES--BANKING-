@@ -505,5 +505,4 @@ const verifyElectricityMeter = async (req, res) => {
 module.exports = {
   createBillPayment,
   verifyElectricityMeter,
-  purchaseElectricity,
 };
