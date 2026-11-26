@@ -101,25 +101,38 @@ const ElectricityPaymentConfirmation: React.FC = () => {
   // ==========================================================
 
   
-  const handleConfirmPayment = async () => {
-    if (!data || loading) {
-      return;
-    }
+  
+const handleConfirmPayment = async () => {
+  if (!data || loading) {
+    return;
+  }
 
-    if (!/^\d{4}$/.test(transactionPin)) {
-      setError('Enter your complete 4-digit Transaction PIN.');
-      return;
-    }
+  if (!/^\d{4}$/.test(transactionPin)) {
+    setError('Enter your complete 4-digit Transaction PIN.');
+    return;
+  }
 
-    const token = localStorage.getItem('zenimonies_token');
+  const token = localStorage.getItem('zenimonies_token');
 
-    if (!token) {
-      navigate('/login');
-      return;
-    }
+  if (!token) {
+    navigate('/login');
+    return;
+  }
 
-    setLoading(true);
-    setError('');
+  setError('');
+
+  // Open the full-screen processing page immediately.
+  // The processing page will submit the payment exactly once.
+  navigate('/electricity/processing', {
+    state: {
+      verification: data,
+      transactionPin,
+      token,
+    },
+  });
+
+  setTransactionPin('');
+};
 
     try {
       const response = await axios.post(
