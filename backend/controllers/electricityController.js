@@ -812,7 +812,40 @@ if (
       provider_request_id: providerRequestId,
     });
   }
+  // ==========================================================
+  // SAFE VTPASS ELECTRICITY DIAGNOSTICS
+  // ==========================================================
 
+  if (normalizedProvider === 'APLE') {
+    const raw = purchaseResult?.rawResponse || {};
+    const transactions = raw?.content?.transactions || {};
+
+    console.log(
+      '[APLE VTPASS DIAGNOSTICS]',
+      JSON.stringify({
+        provider: normalizedProvider,
+        vtpassProvider,
+        amount: numericAmount,
+        code: purchaseResult?.code || raw?.code || null,
+        status: purchaseResult?.status || transactions?.status || null,
+        responseDescription:
+          purchaseResult?.responseDescription ||
+          raw?.response_description ||
+          null,
+        transactionResponseCode:
+          transactions?.responseCode ||
+          transactions?.response_code ||
+          null,
+        transactionResponseDescription:
+          transactions?.responseDescription ||
+          transactions?.response_description ||
+          null,
+        providerTransactionId:
+          purchaseResult?.providerTransactionId || null,
+        requestId: providerRequestId,
+      })
+    );
+  }
   // ==========================================================
   // STEP 4 — INTERPRET VTPASS RESPONSE
   // ==========================================================
