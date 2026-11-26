@@ -76,7 +76,7 @@ import ElectricityPaymentConfirmation from './pages/ElectricityPaymentConfirmati
 import Betting from './pages/Betting.tsx';
 import Education from './pages/Education.tsx';
 import Insurance from './pages/Insurance.tsx';
-
+import ElectricityProcessing from './pages/ElectricityProcessing.tsx';
 // ==================== OTHER SERVICES ====================
 
 import VirtualCard from './pages/VirtualCard.tsx';
@@ -668,7 +668,12 @@ const CustomerRoutes: React.FC = () => {
           path="/transaction-receipt"
           element={<TransactionReceipt />}
         />
-      
+
+        <Route
+          path="/electricity/processing"
+          element={<ElectricityProcessing />}
+       />
+        
         <Route
            path="/electricity/success"
            element={<TransactionReceipt />}
