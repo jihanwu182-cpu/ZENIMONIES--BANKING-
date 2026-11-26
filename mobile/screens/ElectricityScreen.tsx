@@ -122,6 +122,20 @@ type PaymentStatus =
 const formatCurrency = (amount: number) =>
   `₦${amount.toLocaleString('en-NG')}`;
 
+// Providers may return token values such as:
+// "Token: 123456", "Token : token: 123456", or " 123456 ".
+// Remove repeated display labels without changing the actual token.
+const normalizeElectricityToken = (
+  value?: string | null,
+): string => {
+  if (!value) return '';
+
+  return String(value)
+    .trim()
+    .replace(/^(?:token\\s*[:#-]?\\s*)+/i, '')
+    .trim();
+};
+
 const isPendingResponse = (result: ElectricityPaymentResult) => {
   const value = String(result.status || '').toLowerCase();
 
@@ -193,6 +207,10 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     customer?.name ||
     customer?.customerName ||
     'Verified Customer';
+
+  const displayToken = normalizeElectricityToken(
+    paymentResult?.token,
+  );
 
   const resetVerification = () => {
     setCustomer(null);
@@ -890,25 +908,33 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         ) : null}
       </View>
 
-      {meterType === 'prepaid' && paymentResult?.token ? (
+      {meterType === 'prepaid' ? (
         <View style={styles.tokenContainer}>
           <Text style={styles.tokenTitle}>
             ELECTRICITY TOKEN
           </Text>
 
-          <Text selectable style={styles.tokenValue}>
-            {paymentResult.token}
-          </Text>
+          {displayToken ? (
+            <>
+              <Text selectable style={styles.tokenValue}>
+                {displayToken}
+              </Text>
 
-          {paymentResult.units ? (
+              {paymentResult?.units ? (
+                <Text style={styles.tokenHint}>
+                  Units: {paymentResult.units}
+                </Text>
+              ) : null}
+
+              <Text style={styles.tokenHint}>
+                Keep this token safe and enter it into your meter.
+              </Text>
+            </>
+          ) : (
             <Text style={styles.tokenHint}>
-              Units: {paymentResult.units}
+              Your payment was confirmed, but the provider did not return an electricity token. Please check your transaction history or contact support before making another payment.
             </Text>
-          ) : null}
-
-          <Text style={styles.tokenHint}>
-            Keep this token safe and enter it into your meter.
-          </Text>
+          )}
         </View>
       ) : null}
 
