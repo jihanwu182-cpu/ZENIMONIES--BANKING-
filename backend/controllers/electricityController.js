@@ -8,6 +8,8 @@ const {
   generateElectricityRequestId,
 } = require('../services/electricityService');
 
+const MIN_ELECTRICITY_AMOUNT = 100;
+const MAX_ELECTRICITY_AMOUNT = 1000000;
 // ============================================================
 // ZENIMONIES — ELECTRICITY CONTROLLER
 // VTPASS INTEGRATION
@@ -441,16 +443,19 @@ const purchaseElectricity = async (req, res) => {
   }
 
   if (
-    !Number.isFinite(numericAmount) ||
-    numericAmount <= 0 ||
-    numericAmount > 1000000
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: 'Enter a valid electricity amount.',
-    });
-  }
-
+  !Number.isFinite(numericAmount) ||
+  numericAmount < MIN_ELECTRICITY_AMOUNT ||
+  numericAmount > MAX_ELECTRICITY_AMOUNT
+) {
+  return res.status(400).json({
+    success: false,
+    status: 'failed',
+    code: 'INVALID_ELECTRICITY_AMOUNT',
+    message: `Electricity purchases must be between ₦${MIN_ELECTRICITY_AMOUNT.toLocaleString('en-NG')} and ₦${MAX_ELECTRICITY_AMOUNT.toLocaleString('en-NG')}.`,
+    minimum_amount: MIN_ELECTRICITY_AMOUNT,
+    maximum_amount: MAX_ELECTRICITY_AMOUNT,
+  });
+}
   // ==========================================================
   // GET CUSTOMER PHONE
   // ==========================================================
