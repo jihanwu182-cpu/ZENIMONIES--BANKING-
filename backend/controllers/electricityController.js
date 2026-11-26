@@ -797,6 +797,23 @@ if (
     // Never automatically refund a timeout or network error.
     // VTPass may have received and processed the request.
 
+  if (normalizedProvider === 'APLE') {
+  console.error(
+    '[APLE VTPASS ERROR]',
+    JSON.stringify({
+      provider: normalizedProvider,
+      vtpassProvider,
+      amount: numericAmount,
+      requestId: providerRequestId,
+      error: error.message,
+      code: error.code || null,
+      status: error.response?.status || null,
+      response:
+        error.response?.data || null,
+    })
+  );
+}
+    
     console.error(
       'VTPass Electricity purchase uncertain:',
       error.message
