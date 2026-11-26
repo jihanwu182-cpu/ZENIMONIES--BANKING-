@@ -356,18 +356,24 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
   // Checks the existing transaction reference only.
   // This function never calls the electricity purchase endpoint.
-  const handleRequery = async () => {
+  const handleRequery = async (silent = false) => {
     const reference = paymentResult?.reference;
 
-    if (!reference || !onRequery || requeryLoading) {
-      Alert.alert(
-        'Reference unavailable',
-        'The original payment reference is missing. Please check your transaction history.',
-      );
+    if (!reference || !onRequery || requeryInFlightRef.current) {
+      if (!silent) {
+        Alert.alert(
+          'Reference unavailable',
+          'The original payment reference is missing. Please check your transaction history.',
+        );
+      }
       return;
     }
 
-    setRequeryLoading(true);
+    requeryInFlightRef.current = true;
+
+    if (!silent) {
+      setRequeryLoading(true);
+    }
 
     try {
       const result = await onRequery(reference);
@@ -380,56 +386,72 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
       setPaymentResult(updatedResult);
 
-      if (isSuccessfulResponse(updatedResult)) {
-        setStatus('success');
-        Alert.alert(
-          'Payment Confirmed',
-          'The electricity provider has confirmed your payment.',
-        );
-        return;
-      }
-
       const resultStatus = String(
         updatedResult.status || '',
       ).toLowerCase();
 
       if (
-        resultStatus === 'failed' ||
+        updatedResult.success === true ||
+        ['success', 'successful', 'completed'].includes(resultStatus)
+      ) {
+        setStatus('success');
+
+        if (!silent) {
+          Alert.alert(
+            'Payment Confirmed',
+            'The electricity provider has confirmed your payment.',
+          );
+        }
+        return;
+      }
+
+      if (
+        ['failed', 'refunded'].includes(resultStatus) ||
         updatedResult.refunded === true
       ) {
         setStatus('failed');
 
-        Alert.alert(
-          'Payment Failed',
-          updatedResult.refunded
-            ? 'The provider confirmed that the payment failed. Your wallet refund has been processed.'
-            : updatedResult.message ||
-                'The provider confirmed that this payment failed. Please check your transaction history.',
-        );
+        if (!silent) {
+          Alert.alert(
+            'Payment Failed',
+            updatedResult.refunded
+              ? 'The provider confirmed that the payment failed. Your wallet refund has been processed.'
+              : updatedResult.message ||
+                  'The provider confirmed that this payment failed.',
+          );
+        }
         return;
       }
 
-      // Unknown, pending, and processing responses remain pending.
       setStatus('pending');
 
-      Alert.alert(
-        'Still Processing',
-        updatedResult.message ||
-          'The provider has not confirmed the final payment status yet. Please check again later. Do not make another payment.',
-      );
+      if (!silent) {
+        Alert.alert(
+          'Still Processing',
+          updatedResult.message ||
+            'The provider has not confirmed the final payment status yet. Do not make another payment.',
+        );
+      }
     } catch (error: any) {
       setStatus('pending');
 
-      Alert.alert(
-        'Status Check Unavailable',
-        error?.message ||
-          'We could not retrieve the payment status. Your transaction remains pending. Please do not pay again.',
-      );
+      if (!silent) {
+        Alert.alert(
+          'Status Check Unavailable',
+          error?.message ||
+            'We could not retrieve the payment status. Your transaction remains pending.',
+        );
+      }
     } finally {
-      setRequeryLoading(false);
+      requeryInFlightRef.current = false;
+
+      if (!silent) {
+        setRequeryLoading(false);
+      }
     }
   };
 
+  
   const handleNewPayment = () => {
     if (status === 'pending' || requeryLoading) {
       Alert.alert(
