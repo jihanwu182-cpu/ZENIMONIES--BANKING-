@@ -132,7 +132,7 @@ const normalizeElectricityToken = (
 
   return String(value)
     .trim()
-    .replace(/^(?:token\\s*[:#-]?\\s*)+/i, '')
+    .replace(/^(?:token\s*[:#-]?\s*)+/i, '')
     .trim();
 };
 
@@ -335,10 +335,17 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   };
 
   const executePayment = async () => {
-    if (!onPay || !customer || !isPinValid || loading) return;
+  if (!onPay || !customer || !isPinValid || loading) return;
 
-    const submittedPin = transactionPin;
+  if (!isAmountValid) {
+    Alert.alert(
+      'Invalid amount',
+      `The minimum electricity purchase is ${formatCurrency(MIN_AMOUNT)}.`,
+    );
+    return;
+  }
 
+  const submittedPin = transactionPin;
     setPinVisible(false);
     setTransactionPin('');
     setLoading(true);
