@@ -15,6 +15,8 @@ const VTPASS_SECRET_KEY = process.env.VTPASS_SECRET_KEY;
 
 const REQUEST_TIMEOUT_MS = 30000;
 
+const MIN_ELECTRICITY_AMOUNT = 100;
+const MAX_ELECTRICITY_AMOUNT = 1000000;
 // ============================================================
 // ELECTRICITY SERVICE IDS
 // ============================================================
@@ -369,11 +371,14 @@ async function purchaseElectricity({
   }
 
   if (
-    !Number.isFinite(purchaseAmount) ||
-    purchaseAmount <= 0
-  ) {
-    throw new Error('Invalid electricity purchase amount.');
-  }
+  !Number.isFinite(purchaseAmount) ||
+  purchaseAmount < MIN_ELECTRICITY_AMOUNT ||
+  purchaseAmount > MAX_ELECTRICITY_AMOUNT
+) {
+  throw new Error(
+    `Electricity purchases must be between ₦${MIN_ELECTRICITY_AMOUNT.toLocaleString('en-NG')} and ₦${MAX_ELECTRICITY_AMOUNT.toLocaleString('en-NG')}.`
+  );
+}
 
   if (!/^0\d{10}$/.test(normalizedPhone)) {
     throw new Error('Invalid Nigerian phone number.');
