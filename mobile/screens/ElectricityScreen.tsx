@@ -933,7 +933,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
             styles.requeryButton,
             requeryLoading && styles.disabledButton,
           ]}
-          onPress={handleRequery}
+          onPress={() => handleRequery()}
           disabled={requeryLoading}
           activeOpacity={0.8}
         >
