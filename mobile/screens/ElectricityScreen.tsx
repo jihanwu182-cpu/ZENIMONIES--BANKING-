@@ -1,5 +1,3 @@
-
-
 import React, {
   useEffect,
   useRef,
@@ -9,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Image,
   Modal,
   Platform,
   SafeAreaView,
@@ -90,6 +89,22 @@ const PROVIDERS: ElectricityProvider[] = [
   {id: 'PHEDC', name: 'Port Harcourt Electricity', shortName: 'PHEDC'},
   {id: 'YEDC', name: 'Yola Electricity', shortName: 'YEDC'},
 ];
+
+// Local electricity provider logos in mobile/assets/electricity.
+const PROVIDER_LOGOS: Record<string, number> = {
+  APLE: require('../assets/electricity/aple.jpg'),
+  AEDC: require('../assets/electricity/aedc.jpg'),
+  BEDC: require('../assets/electricity/bedc.jpg'),
+  EKEDC: require('../assets/electricity/ekedc.jpg'),
+  EEDC: require('../assets/electricity/eedc.jpg'),
+  IBEDC: require('../assets/electricity/ibedc.jpg'),
+  IKEDC: require('../assets/electricity/ikeja.jpg'),
+  JED: require('../assets/electricity/jed.jpg'),
+  KAEDCO: require('../assets/electricity/kaedco.jpg'),
+  KEDCO: require('../assets/electricity/kedco.jpg'),
+  PHEDC: require('../assets/electricity/phedc.jpg'),
+  YEDC: require('../assets/electricity/yedc.jpg'),
+};
 
 const QUICK_AMOUNTS = [100, 200, 300, 500, 1000, 2000];
 const MIN_AMOUNT = 100;
@@ -513,21 +528,31 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
         disabled={loading || !!customer}
         activeOpacity={0.8}
       >
-        <View style={styles.providerDropdownText}>
-          <Text
-            style={[
-              styles.providerDropdownName,
-              !selectedProvider && styles.placeholderText,
-            ]}
-          >
-            {selectedProvider?.name ||
-              'Choose electricity provider'}
-          </Text>
+        <View style={styles.providerDropdownLeft}>
+          {selectedProvider ? (
+            <Image
+              source={PROVIDER_LOGOS[selectedProvider.id]}
+              style={styles.providerDropdownLogo}
+              resizeMode="contain"
+            />
+          ) : null}
 
-          <Text style={styles.providerDropdownSub}>
-            {selectedProvider?.shortName ||
-              'Select your distribution company'}
-          </Text>
+          <View style={styles.providerDropdownText}>
+            <Text
+              style={[
+                styles.providerDropdownName,
+                !selectedProvider && styles.placeholderText,
+              ]}
+            >
+              {selectedProvider?.name ||
+                'Choose electricity provider'}
+            </Text>
+
+            <Text style={styles.providerDropdownSub}>
+              {selectedProvider?.shortName ||
+                'Select your distribution company'}
+            </Text>
+          </View>
         </View>
 
         <Text style={styles.dropdownArrow}>
@@ -551,9 +576,11 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
                 activeOpacity={0.7}
               >
                 <View style={styles.providerLogoPlaceholder}>
-                  <Text style={styles.providerLogoText}>
-                    {item.shortName.slice(0, 3)}
-                  </Text>
+                  <Image
+                    source={PROVIDER_LOGOS[item.id]}
+                    style={styles.providerLogoImage}
+                    resizeMode="contain"
+                  />
                 </View>
 
                 <View style={styles.providerOptionDetails}>
@@ -1342,6 +1369,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  providerDropdownLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  providerDropdownLogo: {
+    width: 42,
+    height: 42,
+    borderRadius: 9,
+    marginRight: 12,
+    backgroundColor: WHITE,
+  },
   providerDropdownText: {
     flex: 1,
   },
@@ -1386,20 +1425,21 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
   providerLogoPlaceholder: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: BACKGROUND,
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
   },
-  providerLogoText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: DARK_GREEN,
+  providerLogoImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
   },
   providerOptionDetails: {
     flex: 1,
