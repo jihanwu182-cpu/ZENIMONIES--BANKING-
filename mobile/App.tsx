@@ -188,6 +188,7 @@ type ElectricityCustomer = {
   customerName: string;
   meterNumber: string;
   address?: string;
+  minimumPurchaseAmount?: number | null;
 };
 
 type ElectricityResult = {
@@ -1066,80 +1067,104 @@ const electricityRequeryLock = useRef(false);
   // ELECTRICITY METER VERIFICATION
   // ====================================================
 
-  const handleElectricityValidate =
-    useCallback(
-      async (
-        provider: string,
-        meterNumber: string,
-        meterType:
-          | 'prepaid'
-          | 'postpaid'
-      ): Promise<ElectricityCustomer> => {
-        if (!session?.token) {
-          throw new Error(
-            'Your session has expired. Please sign in again.'
-          );
-        }
+const handleElectricityValidate =
+  useCallback(
+    async (
+      provider: string,
+      meterNumber: string,
+      meterType:
+        | 'prepaid'
+        | 'postpaid'
+    ): Promise<ElectricityCustomer> => {
+      if (!session?.token) {
+        throw new Error(
+          'Your session has expired. Please sign in again.'
+        );
+      }
 
-        const result =
-          await authenticatedPost(
-            `${API_BASE}/bills/electricity/verify`,
-            session.token,
-            {
-              provider,
-              meter_number: meterNumber,
-              meter_type: meterType,
-            }
-          );
+      const result =
+        await authenticatedPost(
+          `${API_BASE}/bills/electricity/verify`,
+          session.token,
+          {
+            provider,
+            meter_number: meterNumber,
+            meter_type: meterType,
+          }
+        );
 
-        const data = result.data;
+      const data = result.data;
 
-        const customerData =
-          data.data ||
-          data.customer ||
-          {};
+      const customerData =
+        data.data ||
+        data.customer ||
+        {};
 
-        const customerName =
-          customerData.customer_name ||
-          customerData.customerName ||
-          customerData.name ||
-          data.customer_name ||
-          data.customerName ||
-          data.name;
+      const customerName =
+        customerData.customer_name ||
+        customerData.customerName ||
+        customerData.name ||
+        data.customer_name ||
+        data.customerName ||
+        data.name;
 
-        if (
-          data.success !== true ||
-          typeof customerName !== 'string' ||
-          !customerName.trim()
-        ) {
-          throw new Error(
-            data.message ||
-              'The electricity provider could not verify this meter. Please check the meter details and try again.'
-          );
-        }
+      if (
+        data.success !== true ||
+        typeof customerName !== 'string' ||
+        !customerName.trim()
+      ) {
+        throw new Error(
+          data.message ||
+            'The electricity provider could not verify this meter. Please check the meter details and try again.'
+        );
+      }
 
-        return {
-          customerName: customerName.trim(),
+      const rawMinimumAmount =
+        customerData.minimum_purchase_amount ??
+        customerData.minimumPurchaseAmount ??
+        data.minimum_purchase_amount ??
+        data.minimumPurchaseAmount ??
+        null;
 
-          meterNumber:
-            customerData.meter_number ||
-            customerData.meterNumber ||
-            data.meter_number ||
-            meterNumber,
+      const parsedMinimumAmount =
+        rawMinimumAmount === null ||
+        rawMinimumAmount === undefined ||
+        rawMinimumAmount === ''
+          ? null
+          : Number(rawMinimumAmount);
 
-          address:
-            customerData.address ||
-            customerData.customer_address ||
-            data.address ||
-            data.customer_address ||
-            undefined,
-        };
-      },
-      [
-        session?.token,
-        authenticatedPost,
-      ]
-    );
+      const minimumPurchaseAmount =
+        parsedMinimumAmount !== null &&
+        Number.isFinite(parsedMinimumAmount) &&
+        parsedMinimumAmount > 0
+          ? parsedMinimumAmount
+          : null;
+
+      return {
+        customerName: customerName.trim(),
+
+        meterNumber:
+          customerData.meter_number ||
+          customerData.meterNumber ||
+          data.meter_number ||
+          meterNumber,
+
+        address:
+          customerData.address ||
+          customerData.customer_address ||
+          data.address ||
+          data.customer_address ||
+          undefined,
+
+        minimumPurchaseAmount,
+      };
+    },
+    [
+      session?.token,
+      authenticatedPost,
+    ]
+  );
+
 
   // ====================================================
   // ELECTRICITY PAYMENT
