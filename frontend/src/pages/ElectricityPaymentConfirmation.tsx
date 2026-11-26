@@ -100,21 +100,18 @@ const ElectricityPaymentConfirmation: React.FC = () => {
   // CONFIRM ELECTRICITY PAYMENT
   // ==========================================================
 
+  
   const handleConfirmPayment = async () => {
     if (!data || loading) {
       return;
     }
 
     if (!/^\d{4}$/.test(transactionPin)) {
-      setError(
-        'Enter your complete 4-digit Transaction PIN.'
-      );
+      setError('Enter your complete 4-digit Transaction PIN.');
       return;
     }
 
-    const token = localStorage.getItem(
-      'zenimonies_token'
-    );
+    const token = localStorage.getItem('zenimonies_token');
 
     if (!token) {
       navigate('/login');
@@ -132,8 +129,6 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           meter_number: data.meter_number,
           meter_type: data.meter_type,
           amount: Number(data.amount),
-
-          // Required by transactionPinMiddleware
           transaction_pin: transactionPin,
         },
         {
@@ -145,10 +140,7 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         }
       );
 
-      console.log(
-        'Electricity payment response:',
-        response.data
-      );
+      console.log('Electricity payment response:', response.data);
 
       const paymentData: PaymentResponse =
         response?.data?.data ||
@@ -156,45 +148,22 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         response?.data ||
         {};
 
-      // Handle pending transactions safely.
+      const paymentStatus = String(
+        paymentData.status || ''
+      ).toLowerCase();
+
+      const paymentReference =
+        paymentData.reference ||
+        paymentData.transaction_reference;
+
+      // Pending payment: never submit another purchase.
       if (
-  response.status === 202 ||
-  paymentData.status === 'processing' ||
-  paymentData.status === 'pending'
-) {
-  setTransactionPin('');
+        response.status === 202 ||
+        paymentStatus === 'processing' ||
+        paymentStatus === 'pending'
+      ) {
+        setTransactionPin('');
 
-  localStorage.setItem(
-    'zenimonies_electricity_payment',
-    JSON.stringify({
-      ...data,
-      payment: paymentData,
-      paid_at: new Date().toISOString(),
-    })
-  );
-
-  navigate('/electricity/success', {
-    state: {
-      transaction: {
-        ...paymentData,
-        reference: paymentData.reference,
-        transaction_reference: paymentData.reference,
-        type: 'electricity_payment',
-        transaction_type: 'electricity_payment',
-        description: `Electricity - ${data.provider_name}`,
-        amount: Number(data.amount),
-        status: 'processing',
-        currency: 'NGN',
-        electricity_provider: data.provider_name,
-        meter_number: data.meter_number,
-        meter_type: data.meter_type,
-        customer_name: data.customer_name,
-      },
-    },
-  });
-
-  return;
-}
         localStorage.setItem(
           'zenimonies_electricity_payment',
           JSON.stringify({
@@ -204,12 +173,44 @@ const ElectricityPaymentConfirmation: React.FC = () => {
           })
         );
 
-        setError(
-          'Your electricity payment is being processed. Please do not submit another payment.'
-        );
+        navigate('/electricity/success', {
+          state: {
+            transaction: {
+              ...paymentData,
+              reference: paymentReference,
+              transaction_reference: paymentReference,
+              type: 'electricity_payment',
+              transaction_type: 'electricity_payment',
+              description: `Electricity - ${data.provider_name}`,
+              amount: Number(data.amount),
+              status: 'processing',
+              currency: 'NGN',
+              electricity_provider: data.provider_name,
+              meter_number: data.meter_number,
+              meter_type: data.meter_type,
+              customer_name: data.customer_name,
+            },
+          },
+        });
 
         return;
       }
+
+      // Confirmed failure: show the backend response.
+      if (
+        paymentStatus === 'failed' ||
+        paymentStatus === 'refunded'
+      ) {
+        setTransactionPin('');
+        setError(
+          paymentData.message ||
+          'The electricity payment failed. Please check your transaction history.'
+        );
+        return;
+      }
+
+      // Completed payment.
+      setTransactionPin('');
 
       localStorage.setItem(
         'zenimonies_electricity_payment',
@@ -220,19 +221,29 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         })
       );
 
-      // Clear PIN from component state after submission.
-      setTransactionPin('');
-
-      navigate('/electricity/success');
-
+      navigate('/electricity/success', {
+        state: {
+          transaction: {
+            ...paymentData,
+            reference: paymentReference,
+            transaction_reference: paymentReference,
+            type: 'electricity_payment',
+            transaction_type: 'electricity_payment',
+            description: `Electricity - ${data.provider_name}`,
+            amount: Number(data.amount),
+            status: paymentStatus || 'completed',
+            currency: 'NGN',
+            electricity_provider: data.provider_name,
+            meter_number: data.meter_number,
+            meter_type: data.meter_type,
+            customer_name: data.customer_name,
+          },
+        },
+      });
     } catch (err: any) {
-      console.error(
-        'Electricity payment error:',
-        err
-      );
+      console.error('Electricity payment error:', err);
 
-      const backendData =
-        err?.response?.data;
+      const backendData = err?.response?.data;
 
       const backendStatus =
         backendData?.data?.status ||
@@ -243,71 +254,91 @@ const ElectricityPaymentConfirmation: React.FC = () => {
         backendStatus === 'processing' ||
         backendStatus === 'pending'
       ) {
-        setError(
-          'Your electricity payment is being processed. Please do not submit the payment again.'
+        setTransactionPin('');
+
+        const pendingData =
+          backendData?.data ||
+          backendData?.payment ||
+          backendData;
+
+        localStorage.setItem(
+          'zenimonies_electricity_payment',
+          JSON.stringify({
+            ...data,
+            payment: pendingData,
+            paid_at: new Date().toISOString(),
+          })
         );
+
+        navigate('/electricity/success', {
+          state: {
+            transaction: {
+              ...pendingData,
+              reference:
+                pendingData?.reference ||
+                pendingData?.transaction_reference,
+              transaction_reference:
+                pendingData?.reference ||
+                pendingData?.transaction_reference,
+              type: 'electricity_payment',
+              transaction_type: 'electricity_payment',
+              description: `Electricity - ${data.provider_name}`,
+              amount: Number(data.amount),
+              status: 'processing',
+              currency: 'NGN',
+              electricity_provider: data.provider_name,
+              meter_number: data.meter_number,
+              meter_type: data.meter_type,
+              customer_name: data.customer_name,
+            },
+          },
+        });
 
         return;
       }
 
-      // Transaction PIN errors from backend.
-      const backendCode =
-        backendData?.code;
+      const backendCode = backendData?.code;
 
-      if (
-        backendCode === 'INCORRECT_TRANSACTION_PIN'
-      ) {
+      if (backendCode === 'INCORRECT_TRANSACTION_PIN') {
         setError(
           backendData?.message ||
           'Incorrect Transaction PIN. Please try again.'
         );
-
         setTransactionPin('');
         return;
       }
 
-      if (
-        backendCode === 'TRANSACTION_PIN_LOCKED'
-      ) {
+      if (backendCode === 'TRANSACTION_PIN_LOCKED') {
         setError(
           backendData?.message ||
           'Your Transaction PIN is temporarily locked. Please try again after 10 minutes.'
         );
-
         setTransactionPin('');
         return;
       }
 
-      if (
-        backendCode === 'TRANSACTION_PIN_NOT_SET'
-      ) {
+      if (backendCode === 'TRANSACTION_PIN_NOT_SET') {
         setError(
           'You have not created a Transaction PIN. Please set up your Transaction PIN before making payments.'
         );
-
         setTransactionPin('');
         return;
       }
 
-      if (
-        backendCode === 'INVALID_TRANSACTION_PIN'
-      ) {
+      if (backendCode === 'INVALID_TRANSACTION_PIN') {
         setError(
           backendData?.message ||
           'Enter a valid 4-digit Transaction PIN.'
         );
-
         setTransactionPin('');
         return;
       }
 
-      const message =
+      setError(
         backendData?.message ||
         backendData?.error ||
-        'Electricity payment could not be completed. Please try again.';
-
-      setError(message);
-
+        'Electricity payment could not be completed. Please check your transaction history before trying again.'
+      );
     } finally {
       setLoading(false);
     }
