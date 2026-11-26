@@ -571,7 +571,9 @@ const [transferDraft, setTransferDraft] =
     useState(false);
 
   const refreshLock = useRef(false);
-
+  
+// Prevent overlapping automatic electricity checks
+const electricityRequeryLock = useRef(false);
   // ====================================================
   // PROFILE PHOTO
   // ====================================================
@@ -1249,7 +1251,194 @@ const [transferDraft, setTransferDraft] =
         authenticatedPost,
       ]
     );
+  // ====================================================
+  // AUTOMATIC RECONCILIATION OF PENDING ELECTRICITY
+  // ====================================================
 
+  const reconcilePendingElectricityTransactions =
+    useCallback(
+      async (token: string): Promise<void> => {
+        if (
+          !token ||
+          electricityRequeryLock.current
+        ) {
+          return;
+        }
+
+        electricityRequeryLock.current = true;
+
+        let hasFinalUpdate = false;
+
+        try {
+          // Always retrieve the latest server-side transactions.
+          const response = await authenticatedFetch(
+            TRANSACTIONS_URL,
+            token
+          );
+
+          const data: TransactionsResponse =
+            await readJson(response);
+
+          if (
+            !response.ok ||
+            data.success !== true
+          ) {
+            throw new Error(
+              data.message ||
+                'Unable to check pending electricity transactions.'
+            );
+          }
+
+          const rows = Array.isArray(data.transactions)
+            ? data.transactions
+            : [];
+
+          const checkedReferences = new Set<string>();
+
+          const pendingStatuses = new Set([
+            'pending',
+            'processing',
+            'under_review',
+            'initiated',
+            'queued',
+          ]);
+
+          const finalStatuses = new Set([
+            'completed',
+            'success',
+            'successful',
+            'failed',
+            'refunded',
+            'reversed',
+          ]);
+
+          for (const item of rows) {
+            const rawType = String(
+              item?.type || ''
+            ).toLowerCase();
+
+            const title = String(
+              item?.title || ''
+            ).toLowerCase();
+
+            const description = String(
+              item?.description || ''
+            ).toLowerCase();
+
+            const category = String(
+              item?.category ||
+                item?.bill_category ||
+                item?.service_type ||
+                item?.product ||
+                ''
+            ).toLowerCase();
+
+            // Only identify transactions explicitly marked
+            // as electricity. Do not mistake TV or other
+            // utility transactions for electricity.
+            const isElectricity =
+              rawType.includes('electricity') ||
+              title.includes('electricity') ||
+              description.includes('electricity') ||
+              category.includes('electricity');
+
+            if (!isElectricity) {
+              continue;
+            }
+
+            const reference = String(
+              item?.reference || ''
+            ).trim();
+
+            if (
+              !reference ||
+              checkedReferences.has(reference)
+            ) {
+              continue;
+            }
+
+            const status = String(
+              item?.status || ''
+            )
+              .toLowerCase()
+              .replace(/[\s-]+/g, '_');
+
+            if (!pendingStatuses.has(status)) {
+              continue;
+            }
+
+            checkedReferences.add(reference);
+
+            try {
+              // Requery the original transaction only.
+              // This does not initiate a new purchase.
+              const result = await authenticatedPost(
+                `${API_BASE}/bills/electricity/requery/${encodeURIComponent(
+                  reference
+                )}`,
+                token,
+                {}
+              );
+
+              const resultData = result.data || {};
+
+              const returnedStatus = String(
+                resultData.status ||
+                  resultData.transaction?.status ||
+                  resultData.data?.status ||
+                  ''
+              )
+                .toLowerCase()
+                .replace(/[\s-]+/g, '_');
+
+              // HTTP 202 or an unknown status means the
+              // provider has not confirmed a final result.
+              if (
+                result.status !== 202 &&
+                finalStatuses.has(returnedStatus)
+              ) {
+                hasFinalUpdate = true;
+              }
+            } catch (error: any) {
+              // Keep checking other pending electricity
+              // transactions if one reference has an error.
+              console.warn(
+                `Electricity requery failed for ${reference}:`,
+                error?.message || error
+              );
+
+              if (error?.code === 'TOKEN_EXPIRED') {
+                throw error;
+              }
+            }
+          }
+
+          // Refresh the account and history only when
+          // the backend confirms a final transaction status.
+          if (hasFinalUpdate) {
+            await loadDashboardData(token, false);
+          }
+        } catch (error: any) {
+          if (
+            error?.message === 'SESSION_EXPIRED'
+          ) {
+            throw error;
+          }
+
+          console.warn(
+            'Automatic electricity reconciliation failed:',
+            error?.message || error
+          );
+        } finally {
+          electricityRequeryLock.current = false;
+        }
+      },
+      [
+        authenticatedFetch,
+        authenticatedPost,
+        loadDashboardData,
+      ]
+    );
   // ====================================================
   // TV CUSTOMER VERIFICATION
   // ====================================================
@@ -1408,72 +1597,61 @@ const [transferDraft, setTransferDraft] =
   useEffect(() => {
     let mounted = true;
 
-    const restoreSession =
-      async () => {
-        try {
-          const savedToken =
-            await getAuthToken(
-              AUTH_TOKEN_KEY
-            );
+    const restoreSession = async () => {
+      try {
+        const savedToken = await getAuthToken(
+          AUTH_TOKEN_KEY
+        );
 
-          if (!savedToken) {
-            return;
-          }
+        if (!savedToken) {
+          return;
+        }
 
-          const response =
-            await authenticatedFetch(
-              `${AUTH_URL}/me`,
-              savedToken
-            );
+        const response = await authenticatedFetch(
+          `${AUTH_URL}/me`,
+          savedToken
+        );
 
-          const data =
-            await readJson(response);
+        const data = await readJson(response);
 
-          if (
-            !response.ok ||
-            data.success !== true ||
-            !data.user
-          ) {
-            await deleteAuthToken(
-              AUTH_TOKEN_KEY
-            );
-            return;
-          }
+        if (
+          !response.ok ||
+          data.success !== true ||
+          !data.user
+        ) {
+          await deleteAuthToken(AUTH_TOKEN_KEY);
+          return;
+        }
 
-          if (!mounted) return;
+        if (!mounted) return;
 
-          setSession({
-            success: true,
-            token: savedToken,
-            user: data.user,
-            account: data.account,
-            accounts: data.accounts,
-          });
+        setSession({
+          success: true,
+          token: savedToken,
+          user: data.user,
+          account: data.account,
+          accounts: data.accounts,
+        });
 
-          setAccount(
-            data.account ||
-              data.accounts?.[0] ||
-              null
-          );
+        setAccount(
+          data.account ||
+            data.accounts?.[0] ||
+            null
+        );
 
-          setScreen('home');
-          setCheckingSession(false);
+        setScreen('home');
+        setCheckingSession(false);
 
-          void loadProfile(
-            savedToken
-          ).then((profileUser) => {
-            if (
-              !mounted ||
-              !profileUser
-            ) {
+        void loadProfile(savedToken).then(
+          (profileUser) => {
+            if (!mounted || !profileUser) {
               return;
             }
 
             setSession((previous) => {
               if (
                 !previous ||
-                previous.token !==
-                  savedToken
+                previous.token !== savedToken
               ) {
                 return previous;
               }
@@ -1486,42 +1664,39 @@ const [transferDraft, setTransferDraft] =
                 },
               };
             });
-          });
+          }
+        );
 
-          void loadDashboardData(
+        // Load account data first, then reconcile old
+        // pending electricity payments.
+        const dashboardSuccess =
+          await loadDashboardData(savedToken);
+
+        if (mounted && dashboardSuccess) {
+          await reconcilePendingElectricityTransactions(
             savedToken
-          ).catch((error: any) => {
-            if (mounted) {
-              Alert.alert(
-                'Account information',
-                error.message ||
-                  'Your account information could not be loaded. Please refresh.'
-              );
-            }
-          });
-        } catch (error: any) {
-          if (
-            error.message ===
-            'SESSION_EXPIRED'
-          ) {
-            await deleteAuthToken(
-              AUTH_TOKEN_KEY
-            );
-            return;
-          }
-
-          if (mounted) {
-            Alert.alert(
-              'Connection unavailable',
-              'We could not verify your saved session. Check your internet connection and try again.'
-            );
-          }
-        } finally {
-          if (mounted) {
-            setCheckingSession(false);
-          }
+          );
         }
-      };
+      } catch (error: any) {
+        if (
+          error.message === 'SESSION_EXPIRED'
+        ) {
+          await deleteAuthToken(AUTH_TOKEN_KEY);
+          return;
+        }
+
+        if (mounted) {
+          Alert.alert(
+            'Connection unavailable',
+            'We could not verify your saved session. Check your internet connection and try again.'
+          );
+        }
+      } finally {
+        if (mounted) {
+          setCheckingSession(false);
+        }
+      }
+    };
 
     void restoreSession();
 
@@ -1532,54 +1707,49 @@ const [transferDraft, setTransferDraft] =
     authenticatedFetch,
     loadDashboardData,
     loadProfile,
+    reconcilePendingElectricityTransactions,
   ]);
-
-  // ====================================================
+    // ====================================================
   // LOGIN SUCCESS
   // ====================================================
 
-  const handleLoginSuccess =
-    async (
-      authData: AuthSession
-    ) => {
-      if (!authData?.token) {
-        Alert.alert(
-          'Sign in incomplete',
-          'The server did not return a valid login token.'
-        );
-        return;
-      }
+  const handleLoginSuccess = async (
+    authData: AuthSession
+  ) => {
+    if (!authData?.token) {
+      Alert.alert(
+        'Sign in incomplete',
+        'The server did not return a valid login token.'
+      );
+      return;
+    }
 
-      try {
-        await setAuthToken(
-          AUTH_TOKEN_KEY,
-          authData.token
-        );
+    try {
+      await setAuthToken(
+        AUTH_TOKEN_KEY,
+        authData.token
+      );
 
-        const initialAccount =
-          authData.account ||
-          authData.accounts?.[0] ||
-          null;
+      const initialAccount =
+        authData.account ||
+        authData.accounts?.[0] ||
+        null;
 
-        setSession(authData);
-        setAccount(initialAccount);
-        setTransactions([]);
-        setScreen('home');
+      setSession(authData);
+      setAccount(initialAccount);
+      setTransactions([]);
+      setScreen('home');
 
-        offerPushNotifications(
-          authData.token
-        );
+      offerPushNotifications(authData.token);
 
-        void loadProfile(
-          authData.token
-        ).then((profileUser) => {
+      void loadProfile(authData.token).then(
+        (profileUser) => {
           if (!profileUser) return;
 
           setSession((previous) => {
             if (
               !previous ||
-              previous.token !==
-                authData.token
+              previous.token !== authData.token
             ) {
               return previous;
             }
@@ -1592,25 +1762,38 @@ const [transferDraft, setTransferDraft] =
               },
             };
           });
-        });
+        }
+      );
 
-        void loadDashboardData(
-          authData.token
-        ).catch((error: any) => {
+      // Load the dashboard and then check old pending
+      // electricity transactions automatically.
+      void (async () => {
+        try {
+          const dashboardSuccess =
+            await loadDashboardData(
+              authData.token
+            );
+
+          if (dashboardSuccess) {
+            await reconcilePendingElectricityTransactions(
+              authData.token
+            );
+          }
+        } catch (error: any) {
           Alert.alert(
             'Account information',
             error.message ||
               'Your account details could not be loaded. Please refresh the dashboard.'
           );
-        });
-      } catch {
-        Alert.alert(
-          'Secure storage unavailable',
-          'Your login was accepted, but this device could not securely save your session.'
-        );
-      }
-    };
-
+        }
+      })();
+    } catch {
+      Alert.alert(
+        'Secure storage unavailable',
+        'Your login was accepted, but this device could not securely save your session.'
+      );
+    }
+  };
   // ====================================================
   // REGISTRATION SUCCESS
   // ====================================================
@@ -1637,68 +1820,70 @@ const [transferDraft, setTransferDraft] =
   // DASHBOARD REFRESH
   // ====================================================
 
-  const handleRefresh =
-    useCallback(async () => {
-      if (
-        !session?.token ||
-        refreshLock.current
-      ) {
+  const handleRefresh = useCallback(async () => {
+    if (
+      !session?.token ||
+      refreshLock.current
+    ) {
+      return;
+    }
+
+    refreshLock.current = true;
+    setRefreshing(true);
+
+    try {
+      const dashboardSuccess =
+        await loadDashboardData(
+          session.token,
+          false
+        );
+
+      if (!dashboardSuccess) {
         return;
       }
 
-      refreshLock.current = true;
-      setRefreshing(true);
+      // Check pending electricity transactions during refresh.
+      await reconcilePendingElectricityTransactions(
+        session.token
+      );
 
-      try {
-        const dashboardSuccess =
-          await loadDashboardData(
-            session.token,
-            false
-          );
+      const refreshedProfile =
+        await loadProfile(session.token);
 
-        if (!dashboardSuccess) {
-          return;
-        }
+      if (refreshedProfile) {
+        setSession((previous) => {
+          if (
+            !previous ||
+            previous.token !== session.token
+          ) {
+            return previous;
+          }
 
-        const refreshedProfile =
-          await loadProfile(
-            session.token
-          );
-
-        if (refreshedProfile) {
-          setSession((previous) => {
-            if (
-              !previous ||
-              previous.token !==
-                session.token
-            ) {
-              return previous;
-            }
-
-            return {
-              ...previous,
-              user: {
-                ...(previous.user || {}),
-                ...refreshedProfile,
-              },
-            };
-          });
-        }
-      } catch (error: any) {
-        Alert.alert(
-          'Refresh failed',
-          error?.message ||
-            'Unable to refresh your account information. Please check your internet connection and try again.'
-        );
-      } finally {
-        refreshLock.current = false;
-        setRefreshing(false);
+          return {
+            ...previous,
+            user: {
+              ...(previous.user || {}),
+              ...refreshedProfile,
+            },
+          };
+        });
       }
-    }, [
-      session?.token,
-      loadDashboardData,
-      loadProfile,
-    ]);
+    } catch (error: any) {
+      Alert.alert(
+        'Refresh failed',
+        error?.message ||
+          'Unable to refresh your account information. Please check your internet connection and try again.'
+      );
+    } finally {
+      refreshLock.current = false;
+      setRefreshing(false);
+    }
+  }, [
+    session?.token,
+    loadDashboardData,
+    loadProfile,
+    reconcilePendingElectricityTransactions,
+  ]); 
 
   // ====================================================
   // LOGOUT
