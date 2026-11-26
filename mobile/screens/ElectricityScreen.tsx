@@ -451,6 +451,33 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
   };
 
+  // Automatically checks pending electricity payments every 5 seconds.
+  useEffect(() => {
+    const reference = paymentResult?.reference;
+
+    if (status !== 'pending' || !reference || !onRequery) {
+      if (requeryTimerRef.current) {
+        clearInterval(requeryTimerRef.current);
+        requeryTimerRef.current = null;
+      }
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void handleRequery(true);
+    }, 5000);
+
+    requeryTimerRef.current = timer;
+
+    return () => {
+      clearInterval(timer);
+
+      if (requeryTimerRef.current === timer) {
+        requeryTimerRef.current = null;
+      }
+    };
+  }, [status, paymentResult?.reference, onRequery]);
+
   
   const handleNewPayment = () => {
     if (status === 'pending' || requeryLoading) {
