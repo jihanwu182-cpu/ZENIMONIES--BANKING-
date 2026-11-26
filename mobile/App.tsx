@@ -2607,15 +2607,12 @@ if (screen === 'bills' && session) {
         style={styles.container}
       >
         <StatusBar barStyle="dark-content" />
-
-        <ElectricityScreen
-          onValidate={
-            handleElectricityValidate
-          }
-          onPay={
-            handleElectricityPay
-          }
-        />
+    <ElectricityScreen
+       onValidate={handleElectricityValidate}
+       onPay={handleElectricityPay}
+       onRequery={handleElectricityRequery}
+     />
+    
       </SafeAreaView>
     );
   }
