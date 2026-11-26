@@ -157,6 +157,9 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
   const pinInputRef =
     useRef<React.ElementRef<typeof TextInput>>(null);
 
+ const requeryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+ const requeryInFlightRef = useRef(false); 
+  
   const selectedProvider = PROVIDERS.find(
     item => item.id === provider,
   );
