@@ -462,6 +462,9 @@ async function requeryElectricityTransaction(requestId) {
         transactionToken: Boolean(transactions?.token),
         transactionPurchasedCode: Boolean(
           transactions?.purchased_code
+         code: response?.code || null,
+          responseDescription: response?.response_description || null,
+          errors: response?.content?.errors || null,
         ),
       },
     })
