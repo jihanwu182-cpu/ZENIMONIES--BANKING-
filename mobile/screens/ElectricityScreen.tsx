@@ -591,7 +591,7 @@ const updatedResult: ElectricityPaymentResult = {
     };
   }, []);
 
-
+   const handleNewPayment = () => {
     setProvider('');
     setShowProviders(false);
     setMeterNumber('');
