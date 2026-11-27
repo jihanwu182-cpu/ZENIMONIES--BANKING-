@@ -42,6 +42,7 @@ interface ElectricityPaymentResult {
   reference?: string;
   providerReference?: string;
   token?: string;
+  electricity_token?: string;
   units?: string | number;
   customer?: MeterCustomer;
   refunded?: boolean;
@@ -188,6 +189,11 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
 
  const requeryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
  const requeryInFlightRef = useRef(false); 
+
+  const tokenRecoveryTimerRef =
+  useRef<ReturnType<typeof setTimeout> | null>(null);
+
+const tokenRecoveryAttemptsRef = useRef(0);
   
   const selectedProvider = PROVIDERS.find(
     item => item.id === provider,
@@ -208,10 +214,11 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     customer?.customerName ||
     'Verified Customer';
 
-  const displayToken = normalizeElectricityToken(
-    paymentResult?.token,
-  );
-
+const displayToken = normalizeElectricityToken(
+  paymentResult?.token ||
+  paymentResult?.electricity_token,
+);
+  
   const resetVerification = () => {
     setCustomer(null);
     setPaymentResult(null);
@@ -418,11 +425,20 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     try {
       const result = await onRequery(reference);
 
-      const updatedResult: ElectricityPaymentResult = {
-        ...paymentResult,
-        ...result,
-        reference: result.reference || reference,
-      };
+      const recoveredToken =
+  result.token ||
+  result.electricity_token ||
+  paymentResult?.token ||
+  paymentResult?.electricity_token ||
+  '';
+
+const updatedResult: ElectricityPaymentResult = {
+  ...paymentResult,
+  ...result,
+  token: recoveredToken,
+  electricity_token: recoveredToken,
+  reference: result.reference || reference,
+};
 
       setPaymentResult(updatedResult);
 
@@ -491,42 +507,90 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     }
   };
 
-  // Automatically checks pending electricity payments every 5 seconds.
+ 
+  // Automatically reconcile pending payments and recover
+  // missing prepaid electricity tokens.
   useEffect(() => {
     const reference = paymentResult?.reference;
 
-    if (status !== 'pending' || !reference || !onRequery) {
-      if (requeryTimerRef.current) {
-        clearInterval(requeryTimerRef.current);
-        requeryTimerRef.current = null;
-      }
+    if (!reference || !onRequery) {
       return;
     }
 
-    const timer = setInterval(() => {
-      void handleRequery(true);
-    }, 5000);
+    // A confirmed token needs no further recovery.
+    if (status === 'success' && displayToken) {
+      tokenRecoveryAttemptsRef.current = 0;
 
-    requeryTimerRef.current = timer;
+      if (tokenRecoveryTimerRef.current) {
+        clearTimeout(tokenRecoveryTimerRef.current);
+        tokenRecoveryTimerRef.current = null;
+      }
+
+      return;
+    }
+
+    // Pending payments retain their existing status checks.
+    if (status === 'pending') {
+      const timer = setTimeout(() => {
+        void handleRequery(true);
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+
+    // Completed prepaid payments with missing tokens
+    // receive controlled automatic recovery attempts.
+    if (
+      status === 'success' &&
+      meterType === 'prepaid' &&
+      !displayToken &&
+      tokenRecoveryAttemptsRef.current < 3
+    ) {
+     const delays = [5000, 10000, 15000];
+
+      const attempt =
+        tokenRecoveryAttemptsRef.current;
+
+      tokenRecoveryTimerRef.current = setTimeout(() => {
+        tokenRecoveryAttemptsRef.current += 1;
+        void handleRequery(true);
+      }, delays[attempt]);
+
+      return () => {
+        if (tokenRecoveryTimerRef.current) {
+          clearTimeout(tokenRecoveryTimerRef.current);
+          tokenRecoveryTimerRef.current = null;
+        }
+      };
+    }
 
     return () => {
-      clearInterval(timer);
-
-      if (requeryTimerRef.current === timer) {
-        requeryTimerRef.current = null;
+      if (tokenRecoveryTimerRef.current) {
+        clearTimeout(tokenRecoveryTimerRef.current);
+        tokenRecoveryTimerRef.current = null;
       }
     };
-  }, [status, paymentResult?.reference, onRequery]);
+  }, [
+    status,
+    paymentResult,
+    displayToken,
+    meterType,
+    onRequery,
+  ]);
 
-  
-  const handleNewPayment = () => {
-    if (status === 'pending' || requeryLoading) {
-      Alert.alert(
-        'Payment Still Pending',
-        'Please confirm the status of your existing transaction before starting another electricity payment.',
-      );
-      return;
-    }
+  // Clean up recovery timers when the screen unmounts.
+  useEffect(() => {
+    return () => {
+      if (tokenRecoveryTimerRef.current) {
+        clearTimeout(tokenRecoveryTimerRef.current);
+      }
+
+      if (requeryTimerRef.current) {
+        clearInterval(requeryTimerRef.current);
+      }
+    };
+  }, []);
+
 
     setProvider('');
     setShowProviders(false);
@@ -535,6 +599,7 @@ const ElectricityScreen: React.FC<ElectricityScreenProps> = ({
     setAmount('');
     setTransactionPin('');
     setCustomer(null);
+    tokenRecoveryAttemptsRef.current = 0;
     setPaymentResult(null);
     setShowConfirmation(false);
     setPinVisible(false);
