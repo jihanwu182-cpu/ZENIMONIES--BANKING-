@@ -1280,6 +1280,7 @@ const handleElectricityValidate =
   // AUTOMATIC RECONCILIATION OF PENDING ELECTRICITY
   // ====================================================
 
+  
   const reconcilePendingElectricityTransactions =
     useCallback(
       async (token: string): Promise<void> => {
@@ -1295,7 +1296,7 @@ const handleElectricityValidate =
         let hasFinalUpdate = false;
 
         try {
-          // Always retrieve the latest server-side transactions.
+          // Retrieve the latest server-side transactions.
           const response = await authenticatedFetch(
             TRANSACTIONS_URL,
             token
@@ -1310,7 +1311,7 @@ const handleElectricityValidate =
           ) {
             throw new Error(
               data.message ||
-                'Unable to check pending electricity transactions.'
+                'Unable to check electricity transactions.'
             );
           }
 
@@ -1358,9 +1359,7 @@ const handleElectricityValidate =
                 ''
             ).toLowerCase();
 
-            // Only identify transactions explicitly marked
-            // as electricity. Do not mistake TV or other
-            // utility transactions for electricity.
+            // Only identify electricity transactions.
             const isElectricity =
               rawType.includes('electricity') ||
               title.includes('electricity') ||
@@ -1388,15 +1387,65 @@ const handleElectricityValidate =
               .toLowerCase()
               .replace(/[\s-]+/g, '_');
 
-            if (!pendingStatuses.has(status)) {
+            // Read the saved provider response so we can
+            // respect a permanent VTPass code 019 stop marker.
+            let providerResponse =
+              item?.bill_provider_response ??
+              item?.provider_response ??
+              {};
+
+            if (typeof providerResponse === 'string') {
+              try {
+                providerResponse =
+                  JSON.parse(providerResponse);
+              } catch {
+                providerResponse = {};
+              }
+            }
+
+            const tokenRecoveryStopped =
+              item?.token_recovery_stopped === true ||
+              providerResponse?.token_recovery?.stopped === true;
+
+            if (tokenRecoveryStopped) {
+              continue;
+            }
+
+            // Check whether this is a completed prepaid
+            // electricity payment without a saved token.
+            const meterType = String(
+              item?.meter_type ||
+                item?.bill_meter_type ||
+                ''
+            ).toLowerCase().trim();
+
+            const savedToken = String(
+              item?.electricity_token ||
+                item?.bill_electricity_token ||
+                item?.token ||
+                ''
+            ).trim();
+
+            const isCompletedPrepaidMissingToken =
+              status === 'completed' &&
+              meterType === 'prepaid' &&
+              !savedToken;
+
+            // Include pending transactions and completed
+            // prepaid transactions that need token recovery.
+            const shouldRequery =
+              pendingStatuses.has(status) ||
+              isCompletedPrepaidMissingToken;
+
+            if (!shouldRequery) {
               continue;
             }
 
             checkedReferences.add(reference);
 
             try {
-              // Requery the original transaction only.
-              // This does not initiate a new purchase.
+              // Requery the original saved transaction.
+              // This never initiates another purchase.
               const result = await authenticatedPost(
                 `${API_BASE}/bills/electricity/requery/${encodeURIComponent(
                   reference
@@ -1416,17 +1465,29 @@ const handleElectricityValidate =
                 .toLowerCase()
                 .replace(/[\s-]+/g, '_');
 
-              // HTTP 202 or an unknown status means the
-              // provider has not confirmed a final result.
+              // Refresh the dashboard when the backend
+              // confirms a final transaction status.
               if (
                 result.status !== 202 &&
                 finalStatuses.has(returnedStatus)
               ) {
                 hasFinalUpdate = true;
               }
+
+              // Code 019 is persisted by the backend.
+              // Future reconciliation runs will skip it.
+              if (
+                resultData.token_recovery_stopped === true ||
+                String(resultData.provider_code || '') === '019'
+              ) {
+                console.log(
+                  '[ELECTRICITY TOKEN RECOVERY STOPPED]',
+                  reference
+                );
+              }
             } catch (error: any) {
-              // Keep checking other pending electricity
-              // transactions if one reference has an error.
+              // Continue checking other transactions
+              // if one reference encounters an error.
               console.warn(
                 `Electricity requery failed for ${reference}:`,
                 error?.message || error
@@ -1438,8 +1499,8 @@ const handleElectricityValidate =
             }
           }
 
-          // Refresh the account and history only when
-          // the backend confirms a final transaction status.
+          // Refresh account and transaction history after
+          // a final result or completed-payment recovery.
           if (hasFinalUpdate) {
             await loadDashboardData(token, false);
           }
@@ -1464,6 +1525,7 @@ const handleElectricityValidate =
         loadDashboardData,
       ]
     );
+
   // ====================================================
   // TV CUSTOMER VERIFICATION
   // ====================================================
