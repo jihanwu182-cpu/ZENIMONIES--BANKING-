@@ -73,6 +73,7 @@ const getElectricityToken = (result) =>
   result?.rawResponse?.token ||
   result?.rawResponse?.purchased_code ||
   result?.rawResponse?.content?.transactions?.token ||
+  result?.rawResponse?.content?.transactions?.purchased_code ||
   null;
 
 const getElectricityUnits = (result) =>
@@ -256,7 +257,15 @@ const requeryElectricityPayment = async (req, res) => {
       reference: bill.reference,
     });
   }
-
+console.log(
+  '[ELECTRICITY REQUERY TARGET]',
+  JSON.stringify({
+    reference: bill.reference,
+    providerRequestId: bill.provider_request_id,
+    paymentStatus: bill.status,
+    hasSavedToken: Boolean(bill.electricity_token),
+  })
+);
   const resolvedStatus =
     getTransactionStatus(providerResult);
 
