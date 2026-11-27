@@ -447,6 +447,7 @@ async function requeryElectricityTransaction(requestId) {
     request_id: String(requestId).trim(),
   });
 
+  
   const transactions = response?.content?.transactions || {};
 
   console.log(
@@ -456,19 +457,21 @@ async function requeryElectricityTransaction(requestId) {
       responseKeys: Object.keys(response || {}),
       contentKeys: Object.keys(response?.content || {}),
       transactionKeys: Object.keys(transactions),
+      code: response?.code || null,
+      responseDescription:
+        response?.response_description || null,
+      errors: response?.content?.errors || null,
       tokenFields: {
         responseToken: Boolean(response?.token),
         responsePurchasedCode: Boolean(response?.purchased_code),
         transactionToken: Boolean(transactions?.token),
         transactionPurchasedCode: Boolean(
           transactions?.purchased_code
-         code: response?.code || null,
-          responseDescription: response?.response_description || null,
-          errors: response?.content?.errors || null,
         ),
       },
     })
   );
+
 
   return {
     provider: 'VTPASS',
