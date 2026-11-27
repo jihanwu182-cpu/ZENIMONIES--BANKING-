@@ -182,27 +182,38 @@ const requeryElectricityPayment = async (req, res) => {
   // STEP 2 — RETURN ALREADY FINAL TRANSACTIONS
   // ==========================================================
 
+  
   const finalStatuses = [
-    'completed',
     'failed',
     'cancelled',
     'refunded',
   ];
 
-if (finalStatuses.includes(bill.status)) {
-  return res.status(200).json({
-    success: true,
-    status: bill.status,
-    refunded: Boolean(bill.refunded),
-    message: bill.refunded
-      ? 'Electricity payment failed. Your wallet has already been refunded.'
-      : 'This transaction has already been resolved.',
-    reference: bill.reference,
-    electricity_token: bill.electricity_token,
-    token: bill.electricity_token,
-    units: bill.units,
-  });
-}
+  const completedWithToken =
+    bill.status === 'completed' &&
+    Boolean(
+      bill.electricity_token &&
+      String(bill.electricity_token).trim()
+    );
+
+  if (
+    finalStatuses.includes(bill.status) ||
+    completedWithToken
+  ) {
+    return res.status(200).json({
+      success: true,
+      status: bill.status,
+      refunded: Boolean(bill.refunded),
+      message: bill.refunded
+        ? 'Electricity payment failed. Your wallet has already been refunded.'
+        : 'This transaction has already been resolved.',
+      reference: bill.reference,
+      electricity_token: bill.electricity_token,
+      token: bill.electricity_token,
+      units: bill.units,
+    });
+  }
+
 
   // ==========================================================
   // STEP 3 — CHECK SAVED VTPASS REQUEST ID
@@ -263,6 +274,127 @@ if (finalStatuses.includes(bill.status)) {
 
   const providerResponse =
     serializeResponse(providerResult);
+
+  // ==========================================================
+  // RECOVER TOKEN FOR ALREADY-COMPLETED PAYMENTS
+  // Never debit or refund the wallet in this section.
+  // Never downgrade an already-completed transaction.
+  // ==========================================================
+
+  if (bill.status === 'completed') {
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const lockedBill = await client.query(
+        `
+        SELECT
+          id,
+          reference,
+          status,
+          electricity_token,
+          units
+        FROM bill_payments
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [bill.id]
+      );
+
+      if (lockedBill.rows.length === 0) {
+        throw new Error('Electricity transaction not found.');
+      }
+
+      const currentBill = lockedBill.rows[0];
+
+      if (currentBill.status !== 'completed') {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          success: false,
+          status: currentBill.status,
+          message:
+            'The transaction status changed during token recovery. Please refresh the transaction.',
+          reference: bill.reference,
+        });
+      }
+
+      // Only save recovery information when VTPass
+      // confirms delivery. Never change payment status.
+      if (resolvedStatus === 'completed') {
+        await client.query(
+          `
+          UPDATE bill_payments
+          SET
+            provider_reference =
+              COALESCE($1, provider_reference),
+            provider_response = $2::jsonb,
+            provider_response_message = $3,
+            electricity_token =
+              COALESCE($4, electricity_token),
+            units =
+              COALESCE($5, units)
+          WHERE id = $6
+            AND status = 'completed'
+          `,
+          [
+            providerReference,
+            providerResponse,
+            providerMessage,
+            electricityToken,
+            units,
+            bill.id,
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      const savedToken =
+        electricityToken ||
+        currentBill.electricity_token ||
+        null;
+
+      const savedUnits =
+        units ||
+        currentBill.units ||
+        null;
+
+      return res.status(200).json({
+        success: true,
+        status: 'completed',
+        refunded: false,
+        message: savedToken
+          ? 'Your electricity token has been recovered.'
+          : 'Your payment is confirmed, but the electricity token is not yet available. Please contact customer support.',
+        reference: bill.reference,
+        electricity_token: savedToken,
+        token: savedToken,
+        units: savedUnits,
+      });
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+
+      console.error(
+        'Completed electricity token recovery error:',
+        error.message
+      );
+
+      return res.status(202).json({
+        success: true,
+        processing: true,
+        status: 'completed',
+        message:
+          'Your payment remains confirmed. Token recovery is still being checked.',
+        reference: bill.reference,
+      });
+    } finally {
+      client.release();
+    }
+  }
 
   // ==========================================================
   // STEP 5 — COMPLETE CONFIRMED DELIVERY
