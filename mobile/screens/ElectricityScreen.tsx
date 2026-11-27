@@ -1010,16 +1010,17 @@ const updatedResult: ElectricityPaymentResult = {
         </View>
       ) : null}
 
-      <TouchableOpacity
-        style={styles.newPaymentButton}
-        onPress={handleNewPayment}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.newPaymentButtonText}>
-          Make Another Payment
-        </Text>
-      </TouchableOpacity>
-    </View>
+     {(meterType !== 'prepaid' || !!displayToken) && (
+        <TouchableOpacity
+          style={styles.newPaymentButton}
+          onPress={handleNewPayment}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.newPaymentButtonText}>
+            Make Another Payment
+          </Text>
+        </TouchableOpacity>
+      )}
   );
 
   const renderPending = () => (
