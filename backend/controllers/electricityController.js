@@ -797,9 +797,9 @@ if (
     // Never automatically refund a timeout or network error.
     // VTPass may have received and processed the request.
 
-  if (normalizedProvider === 'APLE') {
+  if (['APLE', 'KEDCO', 'JED'].includes(normalizedProvider)) {
   console.error(
-    '[APLE VTPASS ERROR]',
+    '[ELECTRICITY VTPASS ERROR]',
     JSON.stringify({
       provider: normalizedProvider,
       vtpassProvider,
@@ -807,17 +807,19 @@ if (
       requestId: providerRequestId,
       error: error.message,
       code: error.code || null,
-      status: error.response?.status || null,
-      response:
-        error.response?.data || null,
+      httpStatus: error.httpStatus || null,
+      providerResponseDescription:
+        error.providerResponse?.response_description ||
+        error.providerResponse?.message ||
+        null,
     })
   );
+} else {
+  console.error(
+    'VTPass Electricity purchase uncertain:',
+    error.message
+  );
 }
-    
-    console.error(
-      'VTPass Electricity purchase uncertain:',
-      error.message
-    );
 
     return res.status(202).json({
       success: true,
@@ -829,40 +831,88 @@ if (
       provider_request_id: providerRequestId,
     });
   }
+  
   // ==========================================================
   // SAFE VTPASS ELECTRICITY DIAGNOSTICS
+  // APLE, KEDCO AND JED
   // ==========================================================
 
-  if (normalizedProvider === 'APLE') {
+  if (['APLE', 'KEDCO', 'JED'].includes(normalizedProvider)) {
     const raw = purchaseResult?.rawResponse || {};
     const transactions = raw?.content?.transactions || {};
 
+    const tokenCandidates = [
+      purchaseResult?.token,
+      purchaseResult?.rawResponse?.token,
+      purchaseResult?.rawResponse?.purchased_code,
+      transactions?.token,
+      transactions?.purchased_code,
+    ];
+
     console.log(
-      '[APLE VTPASS DIAGNOSTICS]',
+      '[ELECTRICITY VTPASS DIAGNOSTICS]',
       JSON.stringify({
         provider: normalizedProvider,
         vtpassProvider,
         amount: numericAmount,
-        code: purchaseResult?.code || raw?.code || null,
-        status: purchaseResult?.status || transactions?.status || null,
+
+        code:
+          purchaseResult?.code ||
+          raw?.code ||
+          null,
+
+        status:
+          purchaseResult?.status ||
+          transactions?.status ||
+          null,
+
         responseDescription:
           purchaseResult?.responseDescription ||
           raw?.response_description ||
           null,
+
         transactionResponseCode:
           transactions?.responseCode ||
           transactions?.response_code ||
           null,
+
         transactionResponseDescription:
           transactions?.responseDescription ||
           transactions?.response_description ||
           null,
+
         providerTransactionId:
-          purchaseResult?.providerTransactionId || null,
+          purchaseResult?.providerTransactionId ||
+          null,
+
+        tokenPresent: tokenCandidates.some(
+          value =>
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ''
+        ),
+
+        tokenLocations: {
+          purchaseResult: Boolean(purchaseResult?.token),
+          responseToken: Boolean(raw?.token),
+          purchasedCode: Boolean(raw?.purchased_code),
+          transactionToken: Boolean(transactions?.token),
+          transactionPurchasedCode: Boolean(
+            transactions?.purchased_code
+          ),
+        },
+
+        unitsPresent: Boolean(
+          purchaseResult?.units ||
+          raw?.units ||
+          transactions?.units
+        ),
+
         requestId: providerRequestId,
       })
     );
   }
+
   // ==========================================================
   // STEP 4 — INTERPRET VTPASS RESPONSE
   // ==========================================================
