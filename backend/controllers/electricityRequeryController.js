@@ -14,6 +14,8 @@ const {
 // - Completes confirmed deliveries.
 // - Refunds confirmed failures exactly once.
 // - Keeps uncertain responses pending.
+// - Stops token recovery when VTPass returns code 019.
+// - Never debits or refunds an already-completed payment.
 // ============================================================
 
 const FINAL_FAILURE_CODES = new Set([
@@ -37,16 +39,15 @@ const FINAL_FAILURE_CODES = new Set([
   '091',
 ]);
 
-
 const getTransactionStatus = (result) => {
   const code = String(result?.code || '').trim();
   const status = String(result?.status || '')
     .trim()
     .toLowerCase();
 
-if (code === '000' && status === 'delivered') {
-  return 'completed';
-}
+  if (code === '000' && status === 'delivered') {
+    return 'completed';
+  }
 
   if (FINAL_FAILURE_CODES.has(code)) {
     return 'failed';
@@ -93,7 +94,7 @@ const serializeResponse = (result) => {
 };
 
 // ============================================================
-// REQUERY PENDING ELECTRICITY PAYMENT
+// REQUERY ELECTRICITY PAYMENT
 // POST /api/bills/electricity/requery/:reference
 // ============================================================
 
@@ -140,13 +141,14 @@ const requeryElectricityPayment = async (req, res) => {
         bp.status,
         bp.electricity_token,
         bp.units,
+        bp.provider_response,
         EXISTS (
           SELECT 1
           FROM transactions rt
           WHERE rt.reference = 'REF-' || bp.reference
             AND rt.type = 'electricity_refund'
             AND rt.status = 'completed'
-)         AS refunded
+        ) AS refunded
       FROM bill_payments bp
       INNER JOIN accounts a
         ON a.id = bp.account_id
@@ -183,7 +185,6 @@ const requeryElectricityPayment = async (req, res) => {
   // STEP 2 — RETURN ALREADY FINAL TRANSACTIONS
   // ==========================================================
 
-  
   const finalStatuses = [
     'failed',
     'cancelled',
@@ -197,24 +198,34 @@ const requeryElectricityPayment = async (req, res) => {
       String(bill.electricity_token).trim()
     );
 
+  const savedProviderResponse =
+    bill.provider_response || {};
+
+  const tokenRecoveryStopped =
+    savedProviderResponse?.token_recovery?.stopped === true;
+
   if (
     finalStatuses.includes(bill.status) ||
-    completedWithToken
+    completedWithToken ||
+    tokenRecoveryStopped
   ) {
     return res.status(200).json({
       success: true,
       status: bill.status,
       refunded: Boolean(bill.refunded),
-      message: bill.refunded
-        ? 'Electricity payment failed. Your wallet has already been refunded.'
-        : 'This transaction has already been resolved.',
+      token_recovery_stopped: tokenRecoveryStopped,
+      provider_code: tokenRecoveryStopped ? '019' : null,
+      message: tokenRecoveryStopped
+        ? 'Your payment is confirmed, but VTPass could not retrieve the electricity token. Please contact customer support.'
+        : bill.refunded
+          ? 'Electricity payment failed. Your wallet has already been refunded.'
+          : 'This transaction has already been resolved.',
       reference: bill.reference,
       electricity_token: bill.electricity_token,
       token: bill.electricity_token,
       units: bill.units,
     });
   }
-
 
   // ==========================================================
   // STEP 3 — CHECK SAVED VTPASS REQUEST ID
@@ -257,15 +268,17 @@ const requeryElectricityPayment = async (req, res) => {
       reference: bill.reference,
     });
   }
-console.log(
-  '[ELECTRICITY REQUERY TARGET]',
-  JSON.stringify({
-    reference: bill.reference,
-    providerRequestId: bill.provider_request_id,
-    paymentStatus: bill.status,
-    hasSavedToken: Boolean(bill.electricity_token),
-  })
-);
+
+  console.log(
+    '[ELECTRICITY REQUERY TARGET]',
+    JSON.stringify({
+      reference: bill.reference,
+      providerRequestId: bill.provider_request_id,
+      paymentStatus: bill.status,
+      hasSavedToken: Boolean(bill.electricity_token),
+    })
+  );
+
   const resolvedStatus =
     getTransactionStatus(providerResult);
 
@@ -284,10 +297,15 @@ console.log(
   const providerResponse =
     serializeResponse(providerResult);
 
+  const providerCode =
+    String(providerResult?.code || '').trim();
+
   // ==========================================================
   // RECOVER TOKEN FOR ALREADY-COMPLETED PAYMENTS
+  //
   // Never debit or refund the wallet in this section.
   // Never downgrade an already-completed transaction.
+  // Code 019 permanently stops automatic token recovery.
   // ==========================================================
 
   if (bill.status === 'completed') {
@@ -303,7 +321,8 @@ console.log(
           reference,
           status,
           electricity_token,
-          units
+          units,
+          provider_response
         FROM bill_payments
         WHERE id = $1
         FOR UPDATE
@@ -326,6 +345,33 @@ console.log(
           message:
             'The transaction status changed during token recovery. Please refresh the transaction.',
           reference: bill.reference,
+        });
+      }
+
+      // If another request already saved the stop marker,
+      // do not continue automatic recovery.
+      const currentProviderResponse =
+        currentBill.provider_response || {};
+
+      if (
+        currentProviderResponse?.token_recovery?.stopped === true
+      ) {
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+          success: true,
+          status: 'completed',
+          refunded: false,
+          token_recovery_stopped: true,
+          provider_code: '019',
+          reference: bill.reference,
+          electricity_token:
+            currentBill.electricity_token || null,
+          token:
+            currentBill.electricity_token || null,
+          units: currentBill.units || null,
+          message:
+            'Your payment is confirmed, but VTPass could not retrieve the electricity token. Please contact customer support.',
         });
       }
 
@@ -356,6 +402,36 @@ console.log(
             bill.id,
           ]
         );
+      } else if (providerCode === '019') {
+        // Preserve the original provider response and add
+        // a permanent token-recovery stop marker.
+        await client.query(
+          `
+          UPDATE bill_payments
+          SET
+            provider_response =
+              COALESCE(provider_response, '{}'::jsonb)
+              ||
+              jsonb_build_object(
+                'token_recovery',
+                jsonb_build_object(
+                  'stopped', true,
+                  'provider_code', '019',
+                  'response_description', $1,
+                  'response', $2::jsonb,
+                  'checked_at', CURRENT_TIMESTAMP
+                )
+              ),
+            provider_response_message = $1
+          WHERE id = $3
+            AND status = 'completed'
+          `,
+          [
+            providerMessage,
+            providerResponse,
+            bill.id,
+          ]
+        );
       }
 
       await client.query('COMMIT');
@@ -374,9 +450,13 @@ console.log(
         success: true,
         status: 'completed',
         refunded: false,
+        provider_code: providerCode || null,
+        token_recovery_stopped: providerCode === '019',
         message: savedToken
           ? 'Your electricity token has been recovered.'
-          : 'Your payment is confirmed, but the electricity token is not yet available. Please contact customer support.',
+          : providerCode === '019'
+            ? 'Your payment is confirmed, but VTPass could not retrieve the electricity token. Please contact customer support.'
+            : 'Your payment is confirmed, but the electricity token is not yet available. Please contact customer support.',
         reference: bill.reference,
         electricity_token: savedToken,
         token: savedToken,
@@ -583,64 +663,65 @@ console.log(
           reference: bill.reference,
         });
       }
- 
-const refundReference = `REF-${bill.reference}`;
 
-const existingRefund = await client.query(
-  `
-  SELECT id
-  FROM transactions
-  WHERE reference = $1
-    AND type = 'electricity_refund'
-  LIMIT 1
-  `,
-  [refundReference]
-);
+      const refundReference = `REF-${bill.reference}`;
 
-if (existingRefund.rows.length > 0) {
-  await client.query(
-    `
-    UPDATE bill_payments
-    SET
-      status = 'failed',
-      provider_reference =
-        COALESCE($1, provider_reference),
-      provider_response = $2::jsonb,
-      provider_response_message = $3
-    WHERE id = $4
-      AND status IN (
-        'processing',
-        'pending',
-        'provider_response_unrecognized'
-      )
-    `,
-    [
-      providerReference,
-      providerResponse,
-      providerMessage,
-      bill.id,
-    ]
-  );
+      const existingRefund = await client.query(
+        `
+        SELECT id
+        FROM transactions
+        WHERE reference = $1
+          AND type = 'electricity_refund'
+        LIMIT 1
+        `,
+        [refundReference]
+      );
 
-  await client.query(
-    `
-    UPDATE transactions
-    SET status = 'failed'
-    WHERE reference = $1
-    `,
-    [bill.reference]
-  );
+      if (existingRefund.rows.length > 0) {
+        await client.query(
+          `
+          UPDATE bill_payments
+          SET
+            status = 'failed',
+            provider_reference =
+              COALESCE($1, provider_reference),
+            provider_response = $2::jsonb,
+            provider_response_message = $3
+          WHERE id = $4
+            AND status IN (
+              'processing',
+              'pending',
+              'provider_response_unrecognized'
+            )
+          `,
+          [
+            providerReference,
+            providerResponse,
+            providerMessage,
+            bill.id,
+          ]
+        );
 
-  await client.query('COMMIT');
+        await client.query(
+          `
+          UPDATE transactions
+          SET status = 'failed'
+          WHERE reference = $1
+          `,
+          [bill.reference]
+        );
 
-  return res.status(200).json({
-    success: true,
-    status: 'failed',
-    refunded: true,
-    message: 'Electricity payment failed. Your existing wallet refund has been recorded.',
-    reference: bill.reference,
-  });
-}
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+          success: true,
+          status: 'failed',
+          refunded: true,
+          message:
+            'Electricity payment failed. Your existing wallet refund has been recorded.',
+          reference: bill.reference,
+        });
+      }
 
       const refundAmount = Number(currentBill.amount);
 
