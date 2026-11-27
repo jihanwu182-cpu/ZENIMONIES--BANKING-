@@ -46,6 +46,8 @@ interface ElectricityPaymentResult {
   units?: string | number;
   customer?: MeterCustomer;
   refunded?: boolean;
+  provider_code?: string | null;
+  token_recovery_stopped?: boolean;
 }
 
 interface ElectricityScreenProps {
@@ -516,7 +518,14 @@ const updatedResult: ElectricityPaymentResult = {
     if (!reference || !onRequery) {
       return;
     }
-
+      // Stop automatic recovery after a VTPass duplicate response.
+    if (paymentResult?.token_recovery_stopped === true) {
+      if (tokenRecoveryTimerRef.current) {
+        clearTimeout(tokenRecoveryTimerRef.current);
+        tokenRecoveryTimerRef.current = null;
+      }
+      return;
+    }
     // A confirmed token needs no further recovery.
     if (status === 'success' && displayToken) {
       tokenRecoveryAttemptsRef.current = 0;
@@ -1021,8 +1030,8 @@ const updatedResult: ElectricityPaymentResult = {
           </Text>
         </TouchableOpacity>
       )}
+    </View>
   );
-
   const renderPending = () => (
     <View style={styles.pendingCard}>
       <View style={styles.pendingIcon}>
