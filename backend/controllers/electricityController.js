@@ -124,10 +124,12 @@ const saveProviderResponse = async ({
     getProviderMessage(result);
 
   const token = firstValue(
-    result?.token,
-    result?.rawResponse?.token,
-    result?.rawResponse?.purchased_code
-  );
+  result?.token,
+  result?.rawResponse?.token,
+  result?.rawResponse?.purchased_code,
+  result?.rawResponse?.content?.transactions?.token,
+  result?.rawResponse?.content?.transactions?.purchased_code
+);
 
   const units = firstValue(
     result?.units,
@@ -951,11 +953,13 @@ if (
       });
     }
 
-    const token = firstValue(
-      purchaseResult.token,
-      purchaseResult.rawResponse?.token,
-      purchaseResult.rawResponse?.purchased_code
-    );
+const token = firstValue(
+  purchaseResult.token,
+  purchaseResult.rawResponse?.token,
+  purchaseResult.rawResponse?.purchased_code,
+  purchaseResult.rawResponse?.content?.transactions?.token,
+  purchaseResult.rawResponse?.content?.transactions?.purchased_code
+);
 
     const units = firstValue(
       purchaseResult.units,
