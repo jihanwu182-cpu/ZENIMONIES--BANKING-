@@ -412,11 +412,12 @@ async function purchaseElectricity({
     responseDescription:
       response.response_description ||
       null,
-    token:
-      response.token ||
-      response.purchased_code ||
-      response.content?.transactions?.token ||
-      null,
+token:
+  response.token ||
+  response.purchased_code ||
+  response.content?.transactions?.token ||
+  response.content?.transactions?.purchased_code ||
+  null,
     units:
       response.units ||
       response.content?.transactions?.units ||
@@ -486,11 +487,12 @@ async function requeryElectricityTransaction(requestId) {
     responseDescription:
       response.response_description ||
       null,
-    token:
-      response.token ||
-      response.purchased_code ||
-      response.content?.transactions?.token ||
-      null,
+token:
+  response.token ||
+  response.purchased_code ||
+  response.content?.transactions?.token ||
+  response.content?.transactions?.purchased_code ||
+  null,
     units:
       response.units ||
       response.content?.transactions?.units ||
