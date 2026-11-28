@@ -1016,68 +1016,41 @@ const About: React.FC = () => {
         </section>
       </main>
 
-      {/* FOOTER */}
+{/* FOOTER */}
 
-      <footer className="zen-about-footer">
-        <div className="zen-about-container">
-          <div className="zen-about-footer-top">
-            <div>
-              <div className="zen-about-footer-brand">
-                ZENI<span>MONIES</span>
-              </div>
-
-              <p>
-                ZENIMONIES DIGITAL SERVICES LIMITED
-                <br />
-                Digital technology, software development
-                and digital payment services in Nigeria.
-              </p>
-            </div>
-
-            <nav className="zen-about-footer-links">
-              <Link to="/">Home</Link>
-              <Link to="/about">About Us</Link>
-              <Link to="/login">Sign In</Link>
-              <Link to="/register">Create Account</Link>
-              <a href="#company-contact">Contact</a>
-            </nav>
-          </div>
-
-          <div className="zen-about-footer-bottom">
-            © {new Date().getFullYear()} ZENIMONIES DIGITAL
-            SERVICES LIMITED. All rights reserved.
-            <br />
-            RC 9974898 | Nigeria
-
-            <div className="zen-about-legal-notice">
-              <strong>
-                Important Legal and Regulatory Information
-              </strong>
-
-              <p>
-                ZENIMONIES DIGITAL SERVICES LIMITED is a
-                financial technology company, not a bank.
-              </p>
-
-              <p>
-                Certain payment, wallet and card services may
-                be provided through arrangements with licensed
-                financial institutions regulated by the Central
-                Bank of Nigeria (CBN), where applicable.
-              </p>
-
-              <p>
-                Registered Office: No. 8, 3Brimoh Bello Street,
-                Benin City, Edo State, Nigeria.
-              </p>
-
-              <p>
-                Company Registration Number: RC 9974898.
-              </p>
-            </div>
-          </div>
+<footer className="zen-about-footer">
+  <div className="zen-about-container">
+    <div className="zen-about-footer-top">
+      <div>
+        <div className="zen-about-footer-brand">
+          ZENI<span>MONIES</span>
         </div>
-      </footer>
+
+        <p>
+          ZENIMONIES DIGITAL SERVICES LIMITED
+          <br />
+          Digital technology, software development
+          and digital payment services in Nigeria.
+        </p>
+      </div>
+
+      <nav className="zen-about-footer-links">
+        <Link to="/">Home</Link>
+        <Link to="/about">About Us</Link>
+        <Link to="/login">Sign In</Link>
+        <Link to="/register">Create Account</Link>
+        <a href="#company-contact">Contact</a>
+      </nav>
+    </div>
+
+    <div className="zen-about-footer-bottom">
+      © {new Date().getFullYear()} ZENIMONIES DIGITAL
+      SERVICES LIMITED. All rights reserved.
+      <br />
+      RC 9974898 | Nigeria
+    </div>
+  </div>
+  </footer>
     </div>
   );
 };
