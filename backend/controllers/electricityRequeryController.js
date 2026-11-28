@@ -434,57 +434,6 @@ const requeryElectricityPayment = async (req, res) => {
     }
   }
 
-      await client.query('COMMIT');
-
-      const savedToken =
-        electricityToken ||
-        currentBill.electricity_token ||
-        null;
-
-      const savedUnits =
-        units ||
-        currentBill.units ||
-        null;
-
-      return res.status(200).json({
-        success: true,
-        status: 'completed',
-        refunded: false,
-        provider_code: providerCode || null,
-        token_recovery_stopped: providerCode === '019',
-        message: savedToken
-          ? 'Your electricity token has been recovered.'
-          : providerCode === '019'
-            ? 'Your payment is confirmed, but VTPass could not retrieve the electricity token. Please contact customer support.'
-            : 'Your payment is confirmed, but the electricity token is not yet available. Please contact customer support.',
-        reference: bill.reference,
-        electricity_token: savedToken,
-        token: savedToken,
-        units: savedUnits,
-      });
-    } catch (error) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (_) {}
-
-      console.error(
-        'Completed electricity token recovery error:',
-        error.message
-      );
-
-      return res.status(202).json({
-        success: true,
-        processing: true,
-        status: 'completed',
-        message:
-          'Your payment remains confirmed. Token recovery is still being checked.',
-        reference: bill.reference,
-      });
-    } finally {
-      client.release();
-    }
-  }
-
   // ==========================================================
   // STEP 5 — COMPLETE CONFIRMED DELIVERY
   // ==========================================================
