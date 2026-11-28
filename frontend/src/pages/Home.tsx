@@ -12,7 +12,7 @@ const services = [
   {
     icon: '↗',
     title: 'Bank Transfers',
-    description: 'Convenient transfers for everyday personal and business banking.',
+    description: 'Convenient transfers to supported banks for everyday payments.',
   },
   {
     icon: '▤',
@@ -26,17 +26,17 @@ const services = [
   },
   {
     icon: '◉',
-    title: 'Personal Banking',
-    description: 'Access everyday banking services through your personal account.',
+    title: 'Personal Payments',
+    description: 'Convenient payment services for individual customers.',
   },
   {
     icon: '▥',
-    title: 'Business Banking',
-    description: 'Digital banking services designed for business activities.',
+    title: 'Business Payments',
+    description: 'Digital payment solutions designed for business activities.',
   },
   {
     icon: '▦',
-    title: 'POS Services',
+    title: 'POS Solutions',
     description: 'POS services designed to support business payment activities.',
   },
 ];
@@ -654,7 +654,7 @@ const Home: React.FC = () => {
           line-height: 1.8;
         }
 
-        /* BANKING */
+        /* PERSONAL AND BUSINESS SERVICES */
 
         .zen-banking-grid {
           display: grid;
@@ -1131,8 +1131,8 @@ const Home: React.FC = () => {
             <summary aria-label="Open navigation menu">☰</summary>
             <nav>
               <a href="#home">Home</a>
-              <a href="#personal">Personal Banking</a>
-              <a href="#business">Business Banking</a>
+              <a href="#personal">Personal Payments</a>
+              <a href="#business">Business Payments</a>
               <a href="#services">Services</a>
               <Link to="/about">About Us</Link>
               <a href="#security">Security</a>
@@ -1152,17 +1152,17 @@ const Home: React.FC = () => {
             <div className="zen-hero-content">
               <div className="zen-eyebrow">
                 <span className="zen-eyebrow-dot" />
-                Digital banking and payment services
+                Your trusted digital payment partner
               </div>
 
               <h1>
-                Banking designed for <span>everyday life.</span>
+                Your payments, <span>made simple.</span>
               </h1>
 
               <p className="zen-hero-description">
-                ZENIMONIES brings essential digital banking and payment
-                services together in one convenient platform, designed
-                to support individuals and businesses across Nigeria.
+                ZENIMONIES brings essential payment services together
+                in one convenient platform, designed to support
+                individuals and businesses across Nigeria.
               </p>
 
               <div className="zen-hero-actions">
@@ -1176,7 +1176,7 @@ const Home: React.FC = () => {
               </div>
 
               <p className="zen-hero-note">
-                Digital banking and payment services in Nigeria.
+                Payments made simpler for everyday life and business.
               </p>
             </div>
 
@@ -1184,7 +1184,7 @@ const Home: React.FC = () => {
 
             <div
               className="zen-visual"
-              aria-label="Illustrative ZENIMONIES smartphone dashboard"
+              aria-label="Illustrative ZENIMONIES customer dashboard"
             >
               <div className="zen-dashboard-preview">
                 <div className="zen-phone-notch" />
@@ -1273,7 +1273,7 @@ const Home: React.FC = () => {
               </div>
 
               <span className="zen-preview-caption">
-                Illustrative customer app preview
+                Illustrative customer platform preview
               </span>
             </div>
           </div>
@@ -1287,20 +1287,20 @@ const Home: React.FC = () => {
               <span className="zen-kicker">About ZENIMONIES</span>
 
               <h2>
-                Delivering a more seamless digital banking experience.
+                Making everyday payments simpler and more convenient.
               </h2>
 
               <p>
-                ZENIMONIES is a digital banking platform committed to
+                ZENIMONIES is a digital payment platform committed to
                 making everyday financial services more accessible,
                 convenient and straightforward for individuals and
                 businesses across Nigeria.
               </p>
 
               <p>
-                Through a unified digital experience, we bring essential
-                account and payment services together, helping customers
-                manage their everyday financial needs with greater ease.
+                Through one connected platform, customers can access
+                essential payment services, manage account activities
+                and handle everyday financial needs with greater ease.
               </p>
 
               <Link to="/about" className="zen-button zen-button-primary">
@@ -1312,13 +1312,13 @@ const Home: React.FC = () => {
               <div className="zen-intro-mark">Z</div>
 
               <h3>
-                Banking and payment services, connected through one platform.
+                ZENIMONIES — Your Payment Partner.
               </h3>
 
               <p>
-                Explore personal and business banking services designed
-                to support everyday payments, account activities and
-                essential financial needs.
+                Explore personal and business payment services
+                designed to support everyday transfers, account
+                activities and essential financial needs.
               </p>
             </div>
           </div>
@@ -1332,7 +1332,7 @@ const Home: React.FC = () => {
               <span className="zen-kicker">Our services</span>
 
               <h2>
-                Financial services for everyday life and business.
+                Payment solutions for everyday life and business.
               </h2>
 
               <p>
@@ -1353,15 +1353,15 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        {/* PERSONAL BANKING */}
+        {/* PERSONAL PAYMENTS */}
 
         <section className="zen-section zen-section-light" id="personal">
           <div className="zen-container">
             <div className="zen-section-heading">
-              <span className="zen-kicker">Personal banking</span>
+              <span className="zen-kicker">Personal payments</span>
 
               <h2>
-                Everyday banking, designed around your needs.
+                Everyday payments, designed around your needs.
               </h2>
 
               <p>
@@ -1372,10 +1372,10 @@ const Home: React.FC = () => {
 
             <div className="zen-banking-grid">
               <article className="zen-banking-card">
-                <small>Account services</small>
-                <h3>Your everyday banking, in one place.</h3>
+                <small>Personal account services</small>
+                <h3>Your everyday financial services, in one place.</h3>
                 <p>
-                  Access personal account services, manage account
+                  Access your personal account, manage account
                   activities and review your transaction history.
                 </p>
                 <Link to="/register">Get started →</Link>
@@ -1394,19 +1394,19 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        {/* BUSINESS BANKING */}
+        {/* BUSINESS PAYMENTS */}
 
         <section className="zen-section" id="business">
           <div className="zen-container">
             <div className="zen-section-heading">
-              <span className="zen-kicker">Business banking</span>
+              <span className="zen-kicker">Business payments</span>
 
               <h2>
-                Digital banking that supports your business.
+                Payment solutions that support your business.
               </h2>
 
               <p>
-                A dedicated business banking experience for account
+                A dedicated business experience for account
                 activities, payment services and business operations.
               </p>
             </div>
@@ -1414,16 +1414,16 @@ const Home: React.FC = () => {
             <div className="zen-banking-grid">
               <article className="zen-banking-card">
                 <small>Business accounts</small>
-                <h3>Business banking in a connected experience.</h3>
+                <h3>Business services in one connected experience.</h3>
                 <p>
                   Access your business account dashboard and available
-                  banking services through the ZENIMONIES platform.
+                  payment services through the ZENIMONIES platform.
                 </p>
                 <Link to="/register">Explore getting started →</Link>
               </article>
 
               <article className="zen-banking-card">
-                <small>Business POS services</small>
+                <small>Business POS solutions</small>
                 <h3>Additional payment services for businesses.</h3>
                 <p>
                   Explore the POS terminal application process for
@@ -1511,7 +1511,7 @@ const Home: React.FC = () => {
               <span className="zen-kicker">Get started</span>
 
               <h2>
-                Discover the ZENIMONIES digital banking experience.
+                Make ZENIMONIES your payment partner.
               </h2>
 
               <p>
@@ -1545,9 +1545,8 @@ const Home: React.FC = () => {
               </Link>
 
               <p>
-                A digital banking platform focused on convenient
-                banking and payment services for individuals and
-                businesses across Nigeria.
+                Your payment partner, providing convenient payment
+                services for individuals and businesses across Nigeria.
               </p>
             </div>
 
@@ -1561,8 +1560,8 @@ const Home: React.FC = () => {
 
             <div className="zen-footer-column">
               <h4>Services</h4>
-              <a href="#personal">Personal Banking</a>
-              <a href="#business">Business Banking</a>
+              <a href="#personal">Personal Payments</a>
+              <a href="#business">Business Payments</a>
               <a href="#services">Bank Transfers</a>
               <a href="#services">Airtime and Data</a>
             </div>
@@ -1582,7 +1581,7 @@ const Home: React.FC = () => {
             </span>
 
             <span>
-              Digital banking and payment services in Nigeria.
+              Your trusted digital payment partner in Nigeria.
             </span>
           </div>
         </div>
