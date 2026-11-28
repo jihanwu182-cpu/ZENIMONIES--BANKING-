@@ -4,7 +4,7 @@ import axios, { AxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
 // ============================================================
-// ZENIMONIES BANKING — PERSONAL REGISTRATION
+// ZENIMONIES — PERSONAL ACCOUNT REGISTRATION
 // Five-step phone and email verification
 // ============================================================
 
@@ -27,10 +27,14 @@ type RegisterResponse = {
   token?: string;
   access_token?: string;
   session_expires_at?: string;
+  login_required?: boolean;
+  registration_complete?: boolean;
   user?: any;
   account?: any;
   development_otp?: string;
   retry_after_seconds?: number;
+  retryAfter?: number;
+  retry_after?: number;
 };
 
 const cleanText = (value: string) =>
@@ -153,13 +157,21 @@ const Register: React.FC = () => {
   };
 
   const showRequestError = (err: unknown) => {
-    if (
-      axios.isAxiosError(err) &&
-      err.response?.data?.retry_after_seconds
-    ) {
-      setCountdown(
-        Number(err.response.data.retry_after_seconds)
-      );
+    if (axios.isAxiosError(err)) {
+      const responseData = err.response?.data;
+
+      const retryAfter =
+        responseData?.retry_after_seconds ??
+        responseData?.retryAfter ??
+        responseData?.retry_after;
+
+      if (
+        retryAfter !== undefined &&
+        Number.isFinite(Number(retryAfter)) &&
+        Number(retryAfter) > 0
+      ) {
+        setCountdown(Math.ceil(Number(retryAfter)));
+      }
     }
 
     setError(getErrorMessage(err));
@@ -173,6 +185,9 @@ const Register: React.FC = () => {
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    if (loading) return;
+
     resetMessages();
 
     const cleanPhoneNumber = cleanPhone(phone);
@@ -223,6 +238,9 @@ const Register: React.FC = () => {
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    if (loading) return;
+
     resetMessages();
 
     if (!/^\d{6}$/.test(otp.trim())) {
@@ -246,7 +264,9 @@ const Register: React.FC = () => {
       setCountdown(0);
       setStep('email');
 
-      setSuccess('Your phone number has been verified successfully.');
+      setSuccess(
+        'Your phone number has been verified successfully.'
+      );
     } catch (err) {
       showRequestError(err);
     } finally {
@@ -262,6 +282,9 @@ const Register: React.FC = () => {
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    if (loading) return;
+
     resetMessages();
 
     const cleanEmailAddress = cleanEmail(email);
@@ -316,6 +339,9 @@ const Register: React.FC = () => {
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    if (loading) return;
+
     resetMessages();
 
     if (!/^\d{6}$/.test(otp.trim())) {
@@ -363,6 +389,10 @@ const Register: React.FC = () => {
     try {
       const isPhoneStep = step === 'phoneOtp';
 
+      if (!isPhoneStep && step !== 'emailOtp') {
+        return;
+      }
+
       const endpoint = isPhoneStep
         ? '/registration/phone'
         : '/registration/email';
@@ -404,12 +434,10 @@ const Register: React.FC = () => {
     const token = data.token || data.access_token;
 
     if (!token) {
-      throw new Error(
-        'Your account was created, but the server did not return a login token. Please sign in.'
-      );
+      throw new Error('A login token was not returned.');
     }
 
-    // Keep the same authentication keys used by Login.tsx.
+    // Preserve existing authentication keys.
     localStorage.setItem('zenimonies_token', token);
     localStorage.setItem('token', token);
 
@@ -437,6 +465,9 @@ const Register: React.FC = () => {
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+
+    if (loading) return;
+
     resetMessages();
 
     if (!phoneVerified || !emailVerified) {
@@ -492,32 +523,37 @@ const Register: React.FC = () => {
         }
       );
 
-      // The account is now created only after both OTPs
-      // have been verified by the backend.
-
+      // The backend has confirmed registration completion.
       setPassword('');
       setConfirmPassword('');
 
-      if (data.token || data.access_token) {
-        saveAuthenticatedSession(data);
+      const token = data.token || data.access_token;
 
+      // Account created, but authentication session unavailable.
+      if (data.login_required || !token) {
         setSuccess(
-          data.message ||
-            'Your ZENIMONIES Personal Banking account has been created.'
-        );
-
-        window.setTimeout(() => {
-          navigate('/', { replace: true });
-        }, 900);
-      } else {
-        setSuccess(
-          'Your account has been created. Please sign in to continue.'
+          'Your ZENIMONIES account has been created successfully. Please sign in to continue.'
         );
 
         window.setTimeout(() => {
           navigate('/login', { replace: true });
         }, 1200);
+
+        return;
       }
+
+      // Save the authenticated customer session.
+      saveAuthenticatedSession(data);
+
+      setSuccess(
+        'Your ZENIMONIES personal account has been created successfully.'
+      );
+
+      // Personal customers enter the authenticated dashboard.
+      window.setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 900);
+
     } catch (err) {
       showRequestError(err);
     } finally {
@@ -606,7 +642,6 @@ const Register: React.FC = () => {
 
         <div style={brandStyle}>
           <div style={brandNameStyle}>ZENIMONIES</div>
-          <div style={brandSubtitleStyle}>PERSONAL BANKING</div>
         </div>
 
         {/* HEADING */}
@@ -672,13 +707,13 @@ const Register: React.FC = () => {
         {/* ALERTS */}
 
         {error && (
-          <div style={errorStyle}>
+          <div style={errorStyle} role="alert">
             {error}
           </div>
         )}
 
         {success && (
-          <div style={successStyle}>
+          <div style={successStyle} role="status">
             {success}
           </div>
         )}
@@ -951,7 +986,7 @@ const Register: React.FC = () => {
         </div>
 
         <div style={securityStyle}>
-          SECURE REGISTRATION • ZENIMONIES BANKING
+          SECURE REGISTRATION • ZENIMONIES
         </div>
       </div>
     </div>
@@ -994,14 +1029,6 @@ const brandNameStyle: React.CSSProperties = {
   fontSize: 30,
   fontWeight: 900,
   letterSpacing: '-0.8px',
-};
-
-const brandSubtitleStyle: React.CSSProperties = {
-  marginTop: 5,
-  color: '#718078',
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 3,
 };
 
 const eyebrowStyle: React.CSSProperties = {
