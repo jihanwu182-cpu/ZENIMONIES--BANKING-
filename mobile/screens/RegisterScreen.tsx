@@ -56,13 +56,14 @@ type RegistrationSession = {
 };
 
 type RegisterScreenProps = {
-  onRegistrationSuccess?: (
+  onRegistrationSuccess: (
     session: RegistrationSession | null
-  ) => void;
+  ) => void | Promise<void>;
 };
 
 type ApiError = Error & {
   retryAfter?: number;
+  ambiguous?: boolean;
 };
 
 // ============================================================
@@ -85,14 +86,13 @@ const normalizeNigerianPhone = (value: string): string => {
 
 const isValidNigerianPhone = (value: string): boolean => {
   const normalized = normalizeNigerianPhone(value);
-
-  // Nigerian mobile numbers in local format:
-  // 11 digits, beginning with 070–079, 080–089, or 090–099.
   return /^0[789]\d{9}$/.test(normalized);
 };
 
-const numericOnly = (value: string, maxLength: number): string =>
-  value.replace(/\D/g, '').slice(0, maxLength);
+const numericOnly = (
+  value: string,
+  maxLength: number
+): string => value.replace(/\D/g, '').slice(0, maxLength);
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) {
@@ -129,6 +129,10 @@ export default function RegisterScreen({
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
 
+  // Prevent another account-creation request after success.
+  const [registrationCompleted, setRegistrationCompleted] =
+    useState(false);
+
   // ============================================================
   // OTP RESEND COUNTDOWN
   // ============================================================
@@ -137,7 +141,7 @@ export default function RegisterScreen({
     if (resendSeconds <= 0) return;
 
     const timer = setTimeout(() => {
-      setResendSeconds((previous) =>
+      setResendSeconds(previous =>
         Math.max(0, previous - 1)
       );
     }, 1000);
@@ -155,10 +159,12 @@ export default function RegisterScreen({
   ) => {
     const controller = new AbortController();
 
-    const timeout = setTimeout(
-      () => controller.abort(),
-      REQUEST_TIMEOUT_MS
-    );
+    let timedOut = false;
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch(`${API_URL}${endpoint}`, {
@@ -176,19 +182,26 @@ export default function RegisterScreen({
       try {
         data = await response.json();
       } catch {
-        throw new Error(
-          'The server returned an invalid response. Please try again.'
-        );
+        const error = new Error(
+          'The server returned an invalid response. Please check your account before trying again.'
+        ) as ApiError;
+
+        error.ambiguous = true;
+        throw error;
       }
 
       if (!response.ok || data?.success !== true) {
         const error = new Error(
           data?.message ||
-            data?.error ||
-            `Request failed (${response.status}). Please try again.`
+          data?.error ||
+          `Request failed (${response.status}). Please try again.`
         ) as ApiError;
 
-        const retryAfter = Number(data?.retry_after_seconds);
+        const retryAfter = Number(
+          data?.retry_after_seconds ??
+          data?.retryAfter ??
+          data?.retry_after
+        );
 
         if (
           Number.isFinite(retryAfter) &&
@@ -202,19 +215,27 @@ export default function RegisterScreen({
 
       return data;
     } catch (error: any) {
-      if (error?.name === 'AbortError') {
-        throw new Error(
-          'The request timed out. Please check your internet connection and try again.'
-        );
+      if (error?.name === 'AbortError' || timedOut) {
+        const timeoutError = new Error(
+          'The request timed out. We could not confirm the server response.'
+        ) as ApiError;
+
+        timeoutError.ambiguous = true;
+        throw timeoutError;
       }
 
       if (
         error instanceof TypeError ||
-        error?.message?.toLowerCase().includes('network request failed')
+        error?.message?.toLowerCase().includes(
+          'network request failed'
+        )
       ) {
-        throw new Error(
-          'Unable to connect to ZENIMONIES. Check your internet connection and try again.'
-        );
+        const networkError = new Error(
+          'Unable to connect to ZENIMONIES. Check your internet connection.'
+        ) as ApiError;
+
+        networkError.ambiguous = true;
+        throw networkError;
       }
 
       throw error;
@@ -250,7 +271,7 @@ export default function RegisterScreen({
   // ============================================================
 
   const startPhoneVerification = async () => {
-    if (loading) return;
+    if (loading || registrationCompleted) return;
 
     if (!isValidNigerianPhone(phone)) {
       Alert.alert(
@@ -300,7 +321,7 @@ export default function RegisterScreen({
   // ============================================================
 
   const verifyPhone = async () => {
-    if (loading) return;
+    if (loading || registrationCompleted) return;
 
     const cleanOtp = numericOnly(otp, OTP_LENGTH);
 
@@ -349,7 +370,7 @@ export default function RegisterScreen({
   // ============================================================
 
   const startEmailVerification = async () => {
-    if (loading) return;
+    if (loading || registrationCompleted) return;
 
     const cleanEmail = email.trim().toLowerCase();
 
@@ -406,7 +427,7 @@ export default function RegisterScreen({
   // ============================================================
 
   const verifyEmail = async () => {
-    if (loading) return;
+    if (loading || registrationCompleted) return;
 
     const cleanOtp = numericOnly(otp, OTP_LENGTH);
 
@@ -464,7 +485,13 @@ export default function RegisterScreen({
   // ============================================================
 
   const resendCode = async () => {
-    if (loading || resendSeconds > 0) return;
+    if (
+      loading ||
+      registrationCompleted ||
+      resendSeconds > 0
+    ) {
+      return;
+    }
 
     if (step !== 'phoneOtp' && step !== 'emailOtp') {
       return;
@@ -518,7 +545,7 @@ export default function RegisterScreen({
   // ============================================================
 
   const completeRegistration = async () => {
-    if (loading) return;
+    if (loading || registrationCompleted) return;
 
     if (!phoneVerified || !emailVerified) {
       Alert.alert(
@@ -598,8 +625,9 @@ export default function RegisterScreen({
         password,
       });
 
-      // Account creation has succeeded.
-      // Do not attempt registration again if session setup is incomplete.
+      // The backend has confirmed account creation.
+      // Never submit account creation again from this screen.
+      setRegistrationCompleted(true);
       setPassword('');
       setConfirmPassword('');
       setOtp('');
@@ -619,27 +647,47 @@ export default function RegisterScreen({
 
       Alert.alert(
         'Welcome to ZENIMONIES',
-        data.login_required === true || !data.token
-          ? 'Your account has been created successfully. Please log in to continue.'
-          : 'Your account has been created successfully. Your secure session is ready.',
+        registrationSession
+          ? 'Your account has been created successfully. Your secure session is ready.'
+          : 'Your account has been created successfully. Please log in to continue.',
         [
           {
             text: 'Continue',
             onPress: () => {
-              if (onRegistrationSuccess) {
-                onRegistrationSuccess(registrationSession);
-              } else {
-                Alert.alert(
-                  'Registration complete',
-                  'Please return to the login screen to continue.'
-                );
-              }
+              void onRegistrationSuccess(
+                registrationSession
+              );
             },
           },
-        ]
+        ],
+        { cancelable: false }
       );
     } catch (error) {
-      handleError(error);
+      const apiError = error as ApiError;
+
+      if (apiError?.ambiguous) {
+        // The server may have created the account even though
+        // the response did not reach this device.
+        setRegistrationCompleted(true);
+        setPassword('');
+        setConfirmPassword('');
+
+        Alert.alert(
+          'Check your account',
+          'We could not confirm the final server response. To avoid creating a duplicate account, please try logging in first.',
+          [
+            {
+              text: 'Continue to login',
+              onPress: () => {
+                void onRegistrationSuccess(null);
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        handleError(error);
+      }
     } finally {
       setLoading(false);
     }
@@ -650,7 +698,7 @@ export default function RegisterScreen({
   // ============================================================
 
   const goBack = () => {
-    if (loading) return;
+    if (loading || registrationCompleted) return;
 
     setOtp('');
     setResendSeconds(0);
@@ -766,10 +814,6 @@ export default function RegisterScreen({
         <View style={styles.header}>
           <Text style={styles.brand}>ZENIMONIES</Text>
 
-          <Text style={styles.eyebrow}>
-            PERSONAL BANKING
-          </Text>
-
           <Text style={styles.heading}>{heading}</Text>
 
           <Text style={styles.description}>
@@ -833,8 +877,6 @@ export default function RegisterScreen({
         {/* FORM */}
 
         <View style={styles.form}>
-          {/* PHONE */}
-
           {step === 'phone' && (
             <>
               {renderField(
@@ -860,8 +902,6 @@ export default function RegisterScreen({
             </>
           )}
 
-          {/* PHONE OTP */}
-
           {step === 'phoneOtp' && (
             <>
               <View style={styles.verifiedInfo}>
@@ -873,7 +913,7 @@ export default function RegisterScreen({
               {renderField(
                 'Six-digit phone code',
                 otp,
-                (value) => setOtp(numericOnly(value, OTP_LENGTH)),
+                value => setOtp(numericOnly(value, OTP_LENGTH)),
                 '000000',
                 {
                   keyboardType: 'number-pad',
@@ -905,8 +945,6 @@ export default function RegisterScreen({
               )}
             </>
           )}
-
-          {/* EMAIL */}
 
           {step === 'email' && (
             <>
@@ -940,8 +978,6 @@ export default function RegisterScreen({
             </>
           )}
 
-          {/* EMAIL OTP */}
-
           {step === 'emailOtp' && (
             <>
               <View style={styles.verifiedInfo}>
@@ -957,7 +993,7 @@ export default function RegisterScreen({
               {renderField(
                 'Six-digit email code',
                 otp,
-                (value) => setOtp(numericOnly(value, OTP_LENGTH)),
+                value => setOtp(numericOnly(value, OTP_LENGTH)),
                 '000000',
                 {
                   keyboardType: 'number-pad',
@@ -989,8 +1025,6 @@ export default function RegisterScreen({
               )}
             </>
           )}
-
-          {/* PROFILE */}
 
           {step === 'profile' && (
             <>
@@ -1029,9 +1063,7 @@ export default function RegisterScreen({
               )}
 
               <View style={styles.field}>
-                <Text style={styles.label}>
-                  Password
-                </Text>
+                <Text style={styles.label}>Password</Text>
 
                 <TextInput
                   style={styles.input}
@@ -1047,9 +1079,7 @@ export default function RegisterScreen({
 
                 <Text
                   style={styles.link}
-                  onPress={() =>
-                    setShowPassword(!showPassword)
-                  }
+                  onPress={() => setShowPassword(!showPassword)}
                 >
                   {showPassword
                     ? 'Hide password'
@@ -1082,8 +1112,6 @@ export default function RegisterScreen({
             </>
           )}
 
-          {/* BACK BUTTON */}
-
           {step !== 'phone' && (
             <Text
               style={[
@@ -1097,7 +1125,7 @@ export default function RegisterScreen({
           )}
 
           <Text style={styles.securityNote}>
-            SECURE REGISTRATION • ZENIMONIES BANKING
+            SECURE REGISTRATION • ZENIMONIES
           </Text>
         </View>
       </ScrollView>
@@ -1129,13 +1157,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 2,
     marginBottom: 30,
-  },
-  eyebrow: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2,
-    marginBottom: 10,
   },
   heading: {
     fontSize: 29,
