@@ -494,7 +494,7 @@ const Profile: React.FC = () => {
       <header style={styles.header}>
         <button type="button" onClick={() => navigate('/')} style={styles.headerBack} aria-label="Go back">←</button>
         <div style={styles.headerBrand}>
-          <div style={styles.headerEyebrow}>ZENIMONIES BANKING</div>
+          <div style={styles.headerEyebrow}>ZENIMONIES</div>
           <div style={styles.headerTitle}>My Profile</div>
         </div>
         <button type="button" onClick={() => navigate('/')} style={styles.headerHome}>Dashboard</button>
