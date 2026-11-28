@@ -1591,7 +1591,7 @@ const logout = () => {
             margin: '25px 0',
           }}
         >
-          Zenimonies • Secure Digital Banking
+          Zenimonies
         </div>
       </main>
 
