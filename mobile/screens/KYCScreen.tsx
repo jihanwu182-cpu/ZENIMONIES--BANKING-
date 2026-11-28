@@ -262,10 +262,10 @@ export default function KYCScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Compact website-style green banner */}
+        {/* Compact green verification banner */}
         <View style={styles.heroCard}>
           <Text style={styles.brandText}>
-            ZENIMONIES BANKING
+            ZENIMONIES
           </Text>
 
           <Text style={styles.heroTitle}>
@@ -416,7 +416,7 @@ export default function KYCScreen({
         })}
 
         <Text style={styles.footerText}>
-          ZENIMONIES Banking uses secure identity verification
+          ZENIMONIES uses secure identity verification
           to help protect your account and financial activities.
         </Text>
       </ScrollView>
@@ -436,46 +436,45 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
 
-  /* Compact green banner */
+  /* Compact, centred green banner */
   heroCard: {
-    backgroundColor: GREEN,
-    width: '75%',
+    width: '100%',
+    maxWidth: 420,
     alignSelf: 'center',
-    borderRadius: 18,
-    paddingHorizontal: 13,
-    paddingTop: 12,
-    paddingBottom: 10,
+    backgroundColor: GREEN,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     marginBottom: 16,
   },
 
   brandText: {
     color: '#DDF3E5',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 1.5,
-    marginBottom: 6,
+    letterSpacing: 1.2,
+    marginBottom: 5,
   },
 
   heroTitle: {
     color: WHITE,
-    fontSize: 19,
-    lineHeight: 25,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: '900',
-    letterSpacing: -0.4,
   },
 
   heroDescription: {
     color: '#E5F5EA',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 5,
   },
 
   heroBadges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    marginTop: 9,
+    marginTop: 8,
     gap: 5,
   },
 
@@ -484,13 +483,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.24)',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
   },
 
   heroBadgeText: {
     color: WHITE,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
   },
 
