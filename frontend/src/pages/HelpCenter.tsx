@@ -581,7 +581,7 @@ const HelpCenter: React.FC = () => {
         <div style={styles.footer}>
           <div style={styles.footerLogo}>ZENIMONIES</div>
           <div style={styles.footerText}>
-            Secure banking made simple.
+            Secure.made.simple.
           </div>
         </div>
       </div>
