@@ -542,6 +542,29 @@ const About: React.FC = () => {
           line-height: 1.7;
         }
 
+        .zen-about-legal-notice {
+          margin-top: 22px;
+          padding: 20px;
+          background: #1C3325;
+          border: 1px solid #385443;
+          border-radius: 10px;
+          color: #D5E2D8;
+          font-size: 11px;
+          line-height: 1.9;
+        }
+
+        .zen-about-legal-notice strong {
+          display: block;
+          margin-bottom: 8px;
+          color: #FFFFFF;
+          font-size: 12px;
+        }
+
+        .zen-about-legal-notice p {
+          margin: 5px 0;
+          color: #D5E2D8;
+        }
+
         @media (max-width: 800px) {
           .zen-about-grid,
           .zen-about-contact-grid {
@@ -642,6 +665,10 @@ const About: React.FC = () => {
 
           .zen-about-footer-links {
             gap: 14px;
+          }
+
+          .zen-about-legal-notice {
+            padding: 16px;
           }
         }
 
@@ -1021,6 +1048,33 @@ const About: React.FC = () => {
             SERVICES LIMITED. All rights reserved.
             <br />
             RC 9974898 | Nigeria
+
+            <div className="zen-about-legal-notice">
+              <strong>
+                Important Legal and Regulatory Information
+              </strong>
+
+              <p>
+                ZENIMONIES DIGITAL SERVICES LIMITED is a
+                financial technology company, not a bank.
+              </p>
+
+              <p>
+                Certain payment, wallet and card services may
+                be provided through arrangements with licensed
+                financial institutions regulated by the Central
+                Bank of Nigeria (CBN), where applicable.
+              </p>
+
+              <p>
+                Registered Office: No. 8, 3Brimoh Bello Street,
+                Benin City, Edo State, Nigeria.
+              </p>
+
+              <p>
+                Company Registration Number: RC 9974898.
+              </p>
+            </div>
           </div>
         </div>
       </footer>
