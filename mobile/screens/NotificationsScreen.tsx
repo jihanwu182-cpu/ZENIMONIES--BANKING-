@@ -848,7 +848,7 @@ export default function NotificationsScreen({
             Notifications
           </Text>
           <Text style={styles.headerSubtitle}>
-            ZENIMONIES BANKING
+            ZENIMONIES
           </Text>
         </View>
 
@@ -1027,7 +1027,7 @@ export default function NotificationsScreen({
         )}
 
         <Text style={styles.footer}>
-          ZENIMONIES BANKING
+          ZENIMONIES
         </Text>
       </ScrollView>
 
@@ -1049,7 +1049,7 @@ export default function NotificationsScreen({
                   Notification details
                 </Text>
                 <Text style={styles.modalSubtitle}>
-                  ZENIMONIES BANKING
+                  ZENIMONIES
                 </Text>
               </View>
 
