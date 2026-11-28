@@ -3075,7 +3075,7 @@ if (screen === 'kyc' && session) {
           </Text>
 
           <Text style={styles.premiumBrandSubtitle}>
-            BANKING
+            YOUR PAYMENT PARTNER
           </Text>
         </View>
 
@@ -3086,12 +3086,12 @@ if (screen === 'kyc' && session) {
             />
 
             <Text style={styles.premiumBadgeText}>
-              YOUR EVERYDAY BANKING PARTNER
+              YOUR EVERYDAY PAYMENT PARTNER
             </Text>
           </View>
 
           <Text style={styles.premiumHeading}>
-            Banking that moves{' \n'}
+            Partner that moves{' \n'}
             <Text
               style={styles.premiumHeadingGreen}
             >
