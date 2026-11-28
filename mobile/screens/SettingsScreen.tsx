@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -1153,7 +1154,7 @@ export default function SettingsScreen({
     setActivePanel(null);
   };
 
-    const confirmLogout = () => {
+  const confirmLogout = () => {
     const message =
       'Are you sure you want to log out of your Zenimonies account?';
 
@@ -1192,75 +1193,76 @@ export default function SettingsScreen({
   // ==========================================================
 
   const renderInput = (
-  label: string,
-  value: string,
-  onChangeText: (value: string) => void,
-  options?: {
-    secure?: boolean;
-    numeric?: boolean;
-    placeholder?: string;
-    multiline?: boolean;
-    maxLength?: number;
-  },
-) => (
-  <View style={styles.inputGroup}>
-    <Text style={styles.inputLabel}>{label}</Text>
+    label: string,
+    value: string,
+    onChangeText: (value: string) => void,
+    options?: {
+      secure?: boolean;
+      numeric?: boolean;
+      placeholder?: string;
+      multiline?: boolean;
+      maxLength?: number;
+    },
+  ) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
 
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      style={[
-        styles.input,
-        options?.multiline && styles.multilineInput,
-      ]}
-      placeholder={options?.placeholder || label}
-      placeholderTextColor={colors.textMuted}
-      secureTextEntry={Boolean(options?.secure)}
-      keyboardType={
-        options?.numeric ? 'number-pad' : 'default'
-      }
-      maxLength={options?.maxLength}
-      autoComplete="off"
-      textContentType="none"
-      importantForAutofill="no"
-      multiline={Boolean(options?.multiline)}
-      textAlignVertical={
-        options?.multiline ? 'top' : 'center'
-      }
-      autoCapitalize="none"
-      autoCorrect={false}
-    />
-  </View>
-);
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        style={[
+          styles.input,
+          options?.multiline && styles.multilineInput,
+        ]}
+        placeholder={options?.placeholder || label}
+        placeholderTextColor={colors.textMuted}
+        secureTextEntry={Boolean(options?.secure)}
+        keyboardType={
+          options?.numeric ? 'number-pad' : 'default'
+        }
+        maxLength={options?.maxLength}
+        autoComplete="off"
+        textContentType="none"
+        importantForAutofill="no"
+        multiline={Boolean(options?.multiline)}
+        textAlignVertical={
+          options?.multiline ? 'top' : 'center'
+        }
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </View>
+  );
 
   const renderTransactionPinInput = (
-  label: string,
-  value: string,
-  onChangeText: (value: string) => void,
-) => (
-  <View style={styles.inputGroup}>
-    <Text style={styles.inputLabel}>{label}</Text>
+    label: string,
+    value: string,
+    onChangeText: (value: string) => void,
+  ) => (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
 
-    <TextInput
-      value={value}
-      onChangeText={(text) => {
-        const digits = text.replace(/\D/g, '').slice(0, 4);
-        onChangeText(digits);
-      }}
-      style={styles.input}
-      placeholder={label}
-      placeholderTextColor={colors.textMuted}
-      secureTextEntry
-      keyboardType="number-pad"
-      maxLength={4}
-      autoComplete="off"
-      importantForAutofill="no"
-      autoCorrect={false}
-      autoCapitalize="none"
-      editable={!savingTransactionPin}
-    />
-  </View>
-);
+      <TextInput
+        value={value}
+        onChangeText={(text) => {
+          const digits = text.replace(/\D/g, '').slice(0, 4);
+          onChangeText(digits);
+        }}
+        style={styles.input}
+        placeholder={label}
+        placeholderTextColor={colors.textMuted}
+        secureTextEntry
+        keyboardType="number-pad"
+        maxLength={4}
+        autoComplete="off"
+        importantForAutofill="no"
+        autoCorrect={false}
+        autoCapitalize="none"
+        editable={!savingTransactionPin}
+      />
+    </View>
+  );
+
   const renderButton = (
     title: string,
     onPress: () => void,
@@ -1350,7 +1352,7 @@ export default function SettingsScreen({
           </View>
         );
 
-            case 'transaction-pin':
+      case 'transaction-pin':
         return (
           <>
             <Text style={styles.bodyText}>
@@ -1454,7 +1456,7 @@ export default function SettingsScreen({
             )}
           </>
         );
-      
+
       case 'login-settings':
         return (
           <>
@@ -1914,22 +1916,17 @@ export default function SettingsScreen({
             </Text>
 
             <Text style={styles.aboutSubtitle}>
-              Digital Banking
+              Your money. Your freedom.
             </Text>
 
             <View style={styles.divider} />
 
             {renderStatus(
               'Application',
-              'ZENIMONIES Banking',
+              'ZENIMONIES',
             )}
 
             {renderStatus('Version', '8.21.0')}
-
-            {renderStatus(
-              'Platform',
-              'Digital Banking',
-            )}
           </View>
         );
 
@@ -1994,7 +1991,7 @@ export default function SettingsScreen({
   return (
     <View style={styles.container}>
       <StatusBar
-       barStyle={isDark ? 'light-content' : 'dark-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
       />
 
       {/* HEADER */}
@@ -2047,110 +2044,111 @@ export default function SettingsScreen({
           </View>
         ) : (
           <>
-        {/* GREEN ACCOUNT SETTINGS BANNER */}
+            {/* GREEN ACCOUNT SETTINGS BANNER */}
 
-        <View style={styles.hero}>
-          <Text style={styles.heroBrand}>
-            ZENIMONIES
-          </Text>
+            <View style={styles.hero}>
+              <Text style={styles.heroBrand}>
+                ZENIMONIES
+              </Text>
 
-          <Text style={styles.heroTitle}>
-            Account Settings
-          </Text>
+              <Text style={styles.heroTitle}>
+                Account Settings
+              </Text>
 
-          <Text style={styles.heroDescription}>
-            Manage your profile, payments, login security,
-            savings and account preferences.
-          </Text>
-        </View>
-
-        {/* SETTINGS GROUPS */}
-
-        {SECTION_ITEMS.map(section => (
-          <View
-            key={section.key}
-            style={styles.sectionWrapper}
-          >
-            <Text style={styles.sectionHeading}>
-              {section.title}
-            </Text>
-
-            <View style={styles.sectionCard}>
-              {section.items.map((item, index) => (
-                <TouchableOpacity
-                  key={`${section.key}-${item.title}`}
-                  style={[
-                    styles.settingRow,
-                    index < section.items.length - 1 &&
-                      styles.settingRowBorder,
-                  ]}
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    if (item.action === 'logout') {
-                      confirmLogout();
-                      return;
-                    }
-
-                    if (item.panel) {
-                      openPanel(item.panel);
-                    }
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.settingIcon,
-                      item.danger &&
-                        styles.dangerIcon,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.settingIconText,
-                        item.danger &&
-                          styles.dangerIconText,
-                        item.icon === 'SMS' &&
-                          styles.smsIconText,
-                      ]}
-                    >
-                      {item.icon}
-                    </Text>
-                  </View>
-
-                  <View style={styles.settingText}>
-                    <Text
-                      style={[
-                        styles.settingTitle,
-                        item.danger &&
-                          styles.dangerTitle,
-                      ]}
-                    >
-                      {item.title}
-                    </Text>
-
-                    <Text style={styles.settingDescription}>
-                      {item.description}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.rowChevron}>
-                    ›
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <Text style={styles.heroDescription}>
+                Manage your profile, payments, login security,
+                savings and account preferences.
+              </Text>
             </View>
-          </View>
-        ))}
 
-        {/* FOOTER */}
-         <View style={styles.footer}>
-       <Text style={styles.footerText}>
-       Zenimonies • Secure Digital Banking
-      </Text>
+            {/* SETTINGS GROUPS */}
 
-      <Text style={styles.footerVersion}>
-       Version 8.21.0
-       </Text>
-       </View>
+            {SECTION_ITEMS.map(section => (
+              <View
+                key={section.key}
+                style={styles.sectionWrapper}
+              >
+                <Text style={styles.sectionHeading}>
+                  {section.title}
+                </Text>
+
+                <View style={styles.sectionCard}>
+                  {section.items.map((item, index) => (
+                    <TouchableOpacity
+                      key={`${section.key}-${item.title}`}
+                      style={[
+                        styles.settingRow,
+                        index < section.items.length - 1 &&
+                          styles.settingRowBorder,
+                      ]}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        if (item.action === 'logout') {
+                          confirmLogout();
+                          return;
+                        }
+
+                        if (item.panel) {
+                          openPanel(item.panel);
+                        }
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.settingIcon,
+                          item.danger &&
+                            styles.dangerIcon,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.settingIconText,
+                            item.danger &&
+                              styles.dangerIconText,
+                            item.icon === 'SMS' &&
+                              styles.smsIconText,
+                          ]}
+                        >
+                          {item.icon}
+                        </Text>
+                      </View>
+
+                      <View style={styles.settingText}>
+                        <Text
+                          style={[
+                            styles.settingTitle,
+                            item.danger &&
+                              styles.dangerTitle,
+                          ]}
+                        >
+                          {item.title}
+                        </Text>
+
+                        <Text style={styles.settingDescription}>
+                          {item.description}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.rowChevron}>
+                        ›
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+
+            {/* FOOTER */}
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                ZENIMONIES • Your money. Your freedom.
+              </Text>
+
+              <Text style={styles.footerVersion}>
+                Version 8.21.0
+              </Text>
+            </View>
           </>
         )}
       </ScrollView>
@@ -2685,20 +2683,20 @@ function createStyles(colors: any) {
       paddingVertical: 22,
       marginTop: 3,
     },
-  footerText: {
-  color: colors.textMuted,
-  fontSize: 12,
-  fontWeight: '800',
-  letterSpacing: 0.5,
-},
 
-footerVersion: {
-  color: colors.textMuted,
-  fontSize: 10,
-  textAlign: 'center',
-  marginTop: 5,
-  marginBottom: 10,
-},
-    
+    footerText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+
+    footerVersion: {
+      color: colors.textMuted,
+      fontSize: 10,
+      textAlign: 'center',
+      marginTop: 5,
+      marginBottom: 10,
+    },
   });
 }
