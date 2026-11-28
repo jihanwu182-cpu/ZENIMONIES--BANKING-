@@ -910,7 +910,7 @@ const Profile: React.FC = () => {
         )}
 
         <footer style={styles.footer}>
-          <span>ZENIMONIES BANKING</span>
+          <span>ZENIMONIES</span>
           <span>Keep your sign-in details private and secure.</span>
         </footer>
       </main>
