@@ -71,7 +71,10 @@ const getProviderReference = (result) =>
 
 const getElectricityToken = (result) =>
   result?.token ||
+  result?.Token ||
+  result?.purchased_code ||
   result?.rawResponse?.token ||
+  result?.rawResponse?.Token ||
   result?.rawResponse?.purchased_code ||
   result?.rawResponse?.content?.transactions?.token ||
   result?.rawResponse?.content?.transactions?.purchased_code ||
@@ -79,7 +82,9 @@ const getElectricityToken = (result) =>
 
 const getElectricityUnits = (result) =>
   result?.units ||
+  result?.Units ||
   result?.rawResponse?.units ||
+  result?.rawResponse?.Units ||
   result?.rawResponse?.content?.transactions?.units ||
   null;
 
