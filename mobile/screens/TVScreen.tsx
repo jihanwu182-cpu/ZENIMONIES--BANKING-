@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import {
   View,
@@ -9,12 +10,14 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  Image,
 } from 'react-native';
 
 interface TVProvider {
   id: string;
   name: string;
   shortName: string;
+  logo: string;
 }
 
 interface TVPackage {
@@ -63,7 +66,7 @@ const SUCCESS_BORDER = '#D4E8BD';
 const PENDING_BACKGROUND = '#F6F8F3';
 
 // ============================================================
-// OFFICIAL PROVIDER LOGOS
+// TV PROVIDERS AND LOGOS
 // ============================================================
 
 const providers: TVProvider[] = [
@@ -71,16 +74,19 @@ const providers: TVProvider[] = [
     id: 'dstv',
     name: 'DStv',
     shortName: 'DStv',
+    logo: 'https://static.africa-press.net/zimbabwe/sites/14/2021/02/img-602a97355367f.jpg',
   },
   {
     id: 'gotv',
     name: 'GOtv',
     shortName: 'GOtv',
+    logo: 'https://commons.wikimedia.org/wiki/Special:FilePath/GOtv_Africa_logo.png',
   },
   {
     id: 'startimes',
     name: 'StarTimes',
     shortName: 'StarTimes',
+    logo: 'https://shopbeta.com.gh/cdn/shop/files/channels4_profile_19f7066d-9fe9-4f22-91e1-254539afa50b.jpg?v=1773873699&width=700',
   },
 ];
 
@@ -144,7 +150,10 @@ export default function TVScreen({
   // ============================================================
 
   const handleProviderChange = (provider: string) => {
-    if (loadingSubscription) return;
+    if (
+      loadingSubscription ||
+      paymentProcessing
+    ) return;
 
     setSelectedProvider(provider);
     setCustomerNumber('');
@@ -235,7 +244,10 @@ export default function TVScreen({
   // ============================================================
 
   const handleSelectPackage = (item: TVPackage) => {
-    if (paymentProcessing) return;
+    if (
+      paymentProcessing ||
+      loadingSubscription
+    ) return;
 
     setSelectedPackage(item);
     setTransactionPin('');
@@ -367,10 +379,6 @@ export default function TVScreen({
 
       setTransactionPin('');
 
-      // --------------------------------------------------------
-      // PENDING TRANSACTION
-      // --------------------------------------------------------
-
       if (isPending) {
         setPaymentProcessing(true);
 
@@ -394,10 +402,6 @@ export default function TVScreen({
         return;
       }
 
-      // --------------------------------------------------------
-      // SUCCESSFUL TRANSACTION
-      // --------------------------------------------------------
-
       if (isCompleted) {
         Alert.alert(
           'Subscription Successful',
@@ -413,10 +417,6 @@ export default function TVScreen({
 
         return;
       }
-
-      // --------------------------------------------------------
-      // FAILED TRANSACTION
-      // --------------------------------------------------------
 
       Alert.alert(
         'Transaction Failed',
@@ -438,10 +438,6 @@ export default function TVScreen({
 
       setTransactionPin('');
 
-      // --------------------------------------------------------
-      // UNKNOWN TRANSACTION STATUS
-      // --------------------------------------------------------
-
       if (isAmbiguous) {
         setPaymentProcessing(true);
 
@@ -452,10 +448,6 @@ export default function TVScreen({
 
         return;
       }
-
-      // --------------------------------------------------------
-      // DEFINITE FAILURE
-      // --------------------------------------------------------
 
       Alert.alert(
         'Transaction Failed',
@@ -491,9 +483,7 @@ export default function TVScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ================================================== */}
         {/* HEADER */}
-        {/* ================================================== */}
 
         <View style={styles.header}>
           <View style={styles.headerTextContainer}>
@@ -513,9 +503,7 @@ export default function TVScreen({
           </View>
         </View>
 
-        {/* ================================================== */}
         {/* PROVIDERS */}
-        {/* ================================================== */}
 
         <Text style={styles.sectionTitle}>
           Select Provider
@@ -537,11 +525,12 @@ export default function TVScreen({
                 onPress={() =>
                   handleProviderChange(provider.id)
                 }
-                disabled={loadingSubscription}
+                disabled={
+                  loadingSubscription ||
+                  paymentProcessing
+                }
                 activeOpacity={0.8}
               >
-                {/* OFFICIAL LOGO */}
-
                 <View
                   style={[
                     styles.providerLogoContainer,
@@ -549,12 +538,12 @@ export default function TVScreen({
                       styles.providerLogoContainerSelected,
                   ]}
                 >
-                  <Text style={styles.providerMark}>
-                    {provider.shortName}
-                  </Text>
+                  <Image
+                    source={{ uri: provider.logo }}
+                    style={styles.providerLogo}
+                    resizeMode="contain"
+                  />
                 </View>
-
-                {/* PROVIDER NAME */}
 
                 <Text
                   style={[
@@ -565,8 +554,6 @@ export default function TVScreen({
                 >
                   {provider.name}
                 </Text>
-
-                {/* SELECTED INDICATOR */}
 
                 {selected && (
                   <View style={styles.selectedIndicator}>
@@ -580,9 +567,7 @@ export default function TVScreen({
           })}
         </View>
 
-        {/* ================================================== */}
         {/* CUSTOMER DETAILS */}
-        {/* ================================================== */}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
@@ -629,9 +614,7 @@ export default function TVScreen({
           </TouchableOpacity>
         </View>
 
-        {/* ================================================== */}
         {/* VERIFIED CUSTOMER */}
-        {/* ================================================== */}
 
         {validated && customer && (
           <View style={styles.customerCard}>
@@ -657,9 +640,7 @@ export default function TVScreen({
           </View>
         )}
 
-        {/* ================================================== */}
         {/* PACKAGES */}
-        {/* ================================================== */}
 
         {validated && (
           <>
@@ -740,9 +721,7 @@ export default function TVScreen({
           </>
         )}
 
-        {/* ================================================== */}
         {/* PAYMENT */}
-        {/* ================================================== */}
 
         {selectedPackage && (
           <View style={styles.paymentCard}>
@@ -797,8 +776,6 @@ export default function TVScreen({
                 )}
               </Text>
             </View>
-
-            {/* PENDING TRANSACTION NOTICE */}
 
             {paymentProcessing && (
               <View style={styles.pendingNotice}>
@@ -882,9 +859,7 @@ export default function TVScreen({
           </View>
         )}
 
-        {/* ================================================== */}
         {/* SECURITY */}
-        {/* ================================================== */}
 
         <View style={styles.securityNotice}>
           <Text style={styles.securityIcon}>
@@ -908,10 +883,6 @@ export default function TVScreen({
 
           <Text style={styles.footerText}>
             ZENIMONIES
-          </Text>
-
-          <Text style={styles.footerTagline}>
-            Banking made simple.
           </Text>
         </View>
       </ScrollView>
@@ -938,10 +909,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-
-  // ----------------------------------------------------------
-  // HEADER
-  // ----------------------------------------------------------
 
   header: {
     flexDirection: 'row',
@@ -982,10 +949,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
 
-  // ----------------------------------------------------------
-  // SECTION TITLES
-  // ----------------------------------------------------------
-
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
@@ -993,10 +956,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     marginTop: 10,
   },
-
-  // ----------------------------------------------------------
-  // PROVIDER CARDS
-  // ----------------------------------------------------------
 
   providerContainer: {
     flexDirection: 'row',
@@ -1032,18 +991,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
     paddingHorizontal: 5,
+    overflow: 'hidden',
   },
 
   providerLogoContainerSelected: {
     backgroundColor: WHITE,
   },
 
-  providerMark: {
-    color: DARK_GREEN,
-    fontSize: 17,
-    fontWeight: '900',
-    textAlign: 'center',
+  providerLogo: {
     width: '100%',
+    height: '100%',
   },
 
   providerName: {
@@ -1075,10 +1032,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 12,
   },
-
-  // ----------------------------------------------------------
-  // CUSTOMER CARD
-  // ----------------------------------------------------------
 
   card: {
     backgroundColor: WHITE,
@@ -1130,10 +1083,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ----------------------------------------------------------
-  // VERIFIED CUSTOMER
-  // ----------------------------------------------------------
-
   customerCard: {
     backgroundColor: SUCCESS_BACKGROUND,
     borderRadius: 18,
@@ -1184,10 +1133,6 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginTop: 4,
   },
-
-  // ----------------------------------------------------------
-  // PACKAGES
-  // ----------------------------------------------------------
 
   packageCard: {
     backgroundColor: WHITE,
@@ -1251,10 +1196,6 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
   },
 
-  // ----------------------------------------------------------
-  // EMPTY PACKAGES
-  // ----------------------------------------------------------
-
   emptyCard: {
     backgroundColor: WHITE,
     borderRadius: 16,
@@ -1293,10 +1234,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20,
   },
-
-  // ----------------------------------------------------------
-  // PAYMENT CARD
-  // ----------------------------------------------------------
 
   paymentCard: {
     backgroundColor: WHITE,
@@ -1351,10 +1288,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // ----------------------------------------------------------
-  // PENDING TRANSACTION
-  // ----------------------------------------------------------
-
   pendingNotice: {
     backgroundColor: PENDING_BACKGROUND,
     borderRadius: 12,
@@ -1390,10 +1323,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // ----------------------------------------------------------
-  // PIN
-  // ----------------------------------------------------------
-
   pinContainer: {
     height: 52,
     borderWidth: 1,
@@ -1422,10 +1351,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // ----------------------------------------------------------
-  // PAY BUTTON
-  // ----------------------------------------------------------
-
   payButton: {
     height: 54,
     borderRadius: 14,
@@ -1444,10 +1369,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
-
-  // ----------------------------------------------------------
-  // SECURITY NOTICE
-  // ----------------------------------------------------------
 
   securityNotice: {
     flexDirection: 'row',
@@ -1468,10 +1389,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
-
-  // ----------------------------------------------------------
-  // FOOTER
-  // ----------------------------------------------------------
 
   footer: {
     alignItems: 'center',
@@ -1502,11 +1419,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 2,
-  },
-
-  footerTagline: {
-    color: MUTED,
-    fontSize: 11,
-    marginTop: 5,
   },
 });
