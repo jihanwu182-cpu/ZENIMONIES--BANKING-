@@ -18,13 +18,13 @@ const companyServices = [
   },
   {
     icon: '⇄',
-    title: 'Digital Banking',
+    title: 'Digital Payment Services',
     description:
-      'A convenient digital platform bringing essential account and payment services together.',
+      'A convenient digital platform bringing essential payment and account services together.',
   },
   {
     icon: '▤',
-    title: 'Payment Services',
+    title: 'Payment Solutions',
     description:
       'Access supported transfers, airtime, data and essential bill payment services.',
   },
@@ -174,6 +174,19 @@ const About: React.FC = () => {
           color: ${MUTED};
           font-size: 15px;
           line-height: 1.9;
+        }
+
+        .zen-about-tagline {
+          display: inline-block;
+          margin-top: 24px;
+          padding: 12px 20px;
+          background: #EDF5EF;
+          border: 1px solid #DCEADF;
+          border-radius: 8px;
+          color: ${GREEN};
+          font-size: 12px;
+          font-weight: 850;
+          letter-spacing: 1px;
         }
 
         .zen-about-section {
@@ -680,8 +693,12 @@ const About: React.FC = () => {
               ZENIMONIES DIGITAL SERVICES LIMITED is a Nigerian
               technology company focused on digital technology,
               software development, online integration services
-              and convenient digital financial experiences.
+              and convenient digital payment experiences.
             </p>
+
+            <div className="zen-about-tagline">
+              ZENIMONIES — YOUR PAYMENT PARTNER
+            </div>
           </div>
         </section>
 
@@ -711,9 +728,9 @@ const About: React.FC = () => {
               </p>
 
               <p>
-                Through the ZENIMONIES platform, we are focused
-                on bringing essential account and payment
-                services into a convenient digital experience
+                Through the ZENIMONIES platform, we focus on
+                bringing essential payment services and account
+                activities into a convenient digital experience
                 for individuals and businesses across Nigeria.
               </p>
             </div>
@@ -768,7 +785,7 @@ const About: React.FC = () => {
               <p>
                 Our company activities focus on technology,
                 software solutions, online integration and
-                digital services.
+                digital payment services.
               </p>
             </div>
 
@@ -814,7 +831,7 @@ const About: React.FC = () => {
                 <h3>Our Mission</h3>
                 <p>
                   To develop accessible and practical digital
-                  solutions that simplify everyday financial
+                  solutions that simplify everyday payment
                   activities and support the evolving needs
                   of individuals and businesses.
                 </p>
@@ -986,7 +1003,7 @@ const About: React.FC = () => {
                 ZENIMONIES DIGITAL SERVICES LIMITED
                 <br />
                 Digital technology, software development
-                and digital services in Nigeria.
+                and digital payment services in Nigeria.
               </p>
             </div>
 
