@@ -19,8 +19,12 @@ import PrimaryButton from '../components/PrimaryButton';
 const API_URL =
   'https://zenimonies-banking.onrender.com/api/auth';
 
+// ======================================================
+// TYPES
+// ======================================================
+
 type LoginScreenProps = {
-  onLoginSuccess?: (session: any) => void;
+  onLoginSuccess: (session: any) => void | Promise<void>;
   onRegisterPress?: () => void;
   onForgotPasswordPress?: () => void;
 };
@@ -32,21 +36,30 @@ type LoginResponse = {
   session_expires_at?: string;
   inactivity_timeout_minutes?: number;
   user?: any;
+  account?: any;
   accounts?: any[];
 };
+
+// ======================================================
+// SCREEN
+// ======================================================
 
 export default function LoginScreen({
   onLoginSuccess,
   onRegisterPress,
   onForgotPasswordPress,
 }: LoginScreenProps) {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
   const styles = createStyles(colors);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // ======================================================
+  // NORMALIZE PHONE OR EMAIL
+  // ======================================================
 
   const normalizeIdentifier = (value: string) => {
     const input = value.trim();
@@ -68,6 +81,10 @@ export default function LoginScreen({
     return phone;
   };
 
+  // ======================================================
+  // VALIDATE LOGIN IDENTIFIER
+  // ======================================================
+
   const validateIdentifier = () => {
     const cleanIdentifier = identifier.trim();
 
@@ -76,10 +93,12 @@ export default function LoginScreen({
         'Information required',
         'Enter your mobile number or email address.'
       );
+
       return undefined;
     }
 
-    const normalized = normalizeIdentifier(cleanIdentifier);
+    const normalized =
+      normalizeIdentifier(cleanIdentifier);
 
     if (cleanIdentifier.includes('@')) {
       if (
@@ -89,6 +108,7 @@ export default function LoginScreen({
           'Invalid email',
           'Enter a valid email address.'
         );
+
         return undefined;
       }
 
@@ -100,16 +120,22 @@ export default function LoginScreen({
         'Invalid mobile number',
         'Enter a valid Nigerian mobile number, for example 08012345678.'
       );
+
       return undefined;
     }
 
     return normalized;
   };
 
+  // ======================================================
+  // LOGIN
+  // ======================================================
+
   const handleLogin = async () => {
     if (loading) return;
 
-    const normalizedIdentifier = validateIdentifier();
+    const normalizedIdentifier =
+      validateIdentifier();
 
     if (!normalizedIdentifier) return;
 
@@ -118,23 +144,27 @@ export default function LoginScreen({
         'Password required',
         'Enter your account password.'
       );
+
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          identifier: normalizedIdentifier,
-          password,
-        }),
-      });
+      const response = await fetch(
+        `${API_URL}/login`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            identifier: normalizedIdentifier,
+            password,
+          }),
+        }
+      );
 
       let data: LoginResponse;
 
@@ -152,22 +182,18 @@ export default function LoginScreen({
         !data.token
       ) {
         throw new Error(
-          data.message || 'Unable to sign in. Please try again.'
+          data.message ||
+            'Unable to sign in. Please try again.'
         );
       }
 
-      if (onLoginSuccess) {
+      // Pass the complete session to App.tsx.
+      // App.tsx securely stores the token and loads the dashboard.
       await onLoginSuccess(data);
-    } else {
-      Alert.alert(
-       'Login successful',
-       'Your credentials have been verified.'
-     );
-  }
     } catch (error: any) {
       Alert.alert(
         'Sign in failed',
-        error.message ||
+        error?.message ||
           'Unable to connect. Please check your internet connection and try again.'
       );
     } finally {
@@ -175,28 +201,42 @@ export default function LoginScreen({
     }
   };
 
+  // ======================================================
+  // FORGOT PASSWORD
+  // ======================================================
+
   const handleForgotPassword = () => {
     if (onForgotPasswordPress) {
       onForgotPasswordPress();
-    } else {
-      Alert.alert(
-        'Password recovery',
-        'Password recovery will be connected in the next step.'
-      );
+      return;
     }
+
+    Alert.alert(
+      'Password recovery',
+      'Password recovery will be connected in the next step.'
+    );
   };
+
+  // ======================================================
+  // SCREEN UI
+  // ======================================================
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }
     >
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Top navigation */}
+        {/* TOP NAVIGATION */}
+
         <View style={styles.topBar}>
           <View />
 
@@ -207,25 +247,30 @@ export default function LoginScreen({
                 'Please contact ZENIMONIES Support for assistance.'
               )
             }
+            disabled={loading}
           >
-            <Text style={styles.helpText}>Help</Text>
+            <Text style={styles.helpText}>
+              Help
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Branding */}
+        {/* BRANDING */}
+
         <View style={styles.brandArea}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>Z</Text>
+            <Text style={styles.logoText}>
+              Z
+            </Text>
           </View>
 
-          <Text style={styles.brand}>ZENIMONIES</Text>
-
-          <Text style={styles.brandSubtitle}>
-            BANKING
+          <Text style={styles.brand}>
+            ZENIMONIES
           </Text>
         </View>
 
-        {/* Single-step login */}
+        {/* LOGIN FORM */}
+
         <View style={styles.form}>
           <Text style={styles.heading}>
             Welcome back
@@ -235,7 +280,8 @@ export default function LoginScreen({
             Log in securely to your ZENIMONIES account.
           </Text>
 
-          {/* Phone or email */}
+          {/* PHONE OR EMAIL */}
+
           <View style={styles.inputContainer}>
             <Text style={styles.floatingLabel}>
               Phone number or email address
@@ -257,7 +303,8 @@ export default function LoginScreen({
             />
           </View>
 
-          {/* Password */}
+          {/* PASSWORD */}
+
           <View style={styles.inputContainer}>
             <Text style={styles.floatingLabel}>
               Password
@@ -299,7 +346,8 @@ export default function LoginScreen({
             </View>
           </View>
 
-          {/* Forgot password */}
+          {/* FORGOT PASSWORD */}
+
           <TouchableOpacity
             style={styles.forgotContainer}
             onPress={handleForgotPassword}
@@ -310,7 +358,8 @@ export default function LoginScreen({
             </Text>
           </TouchableOpacity>
 
-          {/* Login button */}
+          {/* LOGIN BUTTON */}
+
           <PrimaryButton
             title="LOG IN"
             onPress={handleLogin}
@@ -323,7 +372,8 @@ export default function LoginScreen({
           </Text>
         </View>
 
-        {/* Footer */}
+        {/* FOOTER */}
+
         <View style={styles.footerArea}>
           <Text style={styles.footer}>
             Don't have an account?{' '}
@@ -344,8 +394,14 @@ export default function LoginScreen({
   );
 }
 
+// ======================================================
+// STYLES
+// ======================================================
+
 function createStyles(
-  colors: ReturnType<typeof import('../theme/colors').getColors>
+  colors: ReturnType<
+    typeof import('../theme/colors').getColors
+  >
 ) {
   return StyleSheet.create({
     container: {
@@ -401,13 +457,6 @@ function createStyles(
       fontSize: 22,
       fontWeight: '900',
       letterSpacing: 2,
-    },
-
-    brandSubtitle: {
-      color: colors.primary,
-      fontSize: 9,
-      fontWeight: '800',
-      letterSpacing: 4,
     },
 
     form: {
