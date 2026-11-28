@@ -72,6 +72,8 @@ const Home: React.FC = () => {
             border-color .2s ease, transform .2s ease;
         }
 
+        /* HEADER */
+
         .zen-header {
           position: sticky;
           top: 0;
@@ -190,16 +192,22 @@ const Home: React.FC = () => {
           color: ${GREEN};
         }
 
+        /* HERO */
+
         .zen-hero {
-          padding: 76px 0 82px;
+          padding: 88px 0 92px;
           background: #fff;
         }
 
         .zen-hero-grid {
           display: grid;
-          grid-template-columns: 1.05fr .95fr;
+          grid-template-columns: 1fr;
           align-items: center;
-          gap: 55px;
+          gap: 0;
+        }
+
+        .zen-hero-content {
+          max-width: 760px;
         }
 
         .zen-eyebrow {
@@ -221,10 +229,10 @@ const Home: React.FC = () => {
         }
 
         .zen-hero h1 {
-          max-width: 620px;
+          max-width: 720px;
           margin: 22px 0 19px;
           color: ${DARK};
-          font-size: clamp(43px, 5.2vw, 65px);
+          font-size: clamp(43px, 6vw, 68px);
           line-height: 1.08;
           letter-spacing: -2.8px;
           font-weight: 850;
@@ -235,7 +243,7 @@ const Home: React.FC = () => {
         }
 
         .zen-hero-description {
-          max-width: 510px;
+          max-width: 620px;
           margin: 0;
           color: ${MUTED};
           font-size: 15px;
@@ -287,230 +295,6 @@ const Home: React.FC = () => {
           margin-top: 20px;
           color: #89938C;
           font-size: 11px;
-        }
-
-        /* SMARTPHONE SHOWCASE */
-
-        .zen-visual {
-          position: relative;
-          min-height: 610px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 25px;
-          background: #F7FAF7;
-          border: 1px solid ${BORDER};
-          border-radius: 20px;
-        }
-
-        .zen-dashboard-preview {
-          position: relative;
-          z-index: 2;
-          width: 100%;
-          max-width: 340px;
-          padding: 23px 17px 18px;
-          background: #FFFFFF;
-          border: 9px solid #17251C;
-          border-radius: 37px;
-          box-shadow: 0 25px 60px rgba(20,45,28,.16);
-          overflow: hidden;
-        }
-
-        .zen-phone-notch {
-          width: 82px;
-          height: 17px;
-          margin: -16px auto 17px;
-          background: #17251C;
-          border-radius: 0 0 12px 12px;
-        }
-
-        .zen-dashboard-header,
-        .zen-dashboard-user,
-        .zen-dashboard-balance-top,
-        .zen-dashboard-section-title,
-        .zen-dashboard-bottom-nav {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .zen-dashboard-header {
-          padding-bottom: 14px;
-          border-bottom: 1px solid ${BORDER};
-        }
-
-        .zen-dashboard-brand {
-          color: ${DARK};
-          font-size: 13px;
-          font-weight: 900;
-          letter-spacing: -.4px;
-        }
-
-        .zen-dashboard-header-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .zen-dashboard-header-actions span {
-          width: 29px;
-          height: 29px;
-          display: grid;
-          place-items: center;
-          border: 1px solid ${BORDER};
-          border-radius: 50%;
-          color: ${DARK};
-          font-size: 12px;
-        }
-
-        .zen-dashboard-user {
-          justify-content: flex-start;
-          gap: 10px;
-          margin: 17px 0;
-        }
-
-        .zen-dashboard-avatar {
-          width: 36px;
-          height: 36px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          background: #EDF5EF;
-          color: ${GREEN};
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .zen-dashboard-user small {
-          display: block;
-          color: ${MUTED};
-          font-size: 9px;
-        }
-
-        .zen-dashboard-user strong {
-          display: block;
-          margin-top: 3px;
-          color: ${DARK};
-          font-size: 12px;
-        }
-
-        .zen-dashboard-balance {
-          padding: 17px;
-          color: #fff;
-          background: linear-gradient(125deg, #176D3C, #0A8745);
-          border-radius: 11px;
-        }
-
-        .zen-dashboard-balance-top {
-          color: rgba(255,255,255,.85);
-          font-size: 9px;
-        }
-
-        .zen-dashboard-balance strong {
-          display: block;
-          margin: 13px 0 12px;
-          font-size: 23px;
-          letter-spacing: .5px;
-        }
-
-        .zen-dashboard-balance-foot {
-          display: flex;
-          justify-content: space-between;
-          color: rgba(255,255,255,.86);
-          font-size: 9px;
-        }
-
-        .zen-dashboard-section-title {
-          margin: 19px 0 11px;
-          color: ${DARK};
-          font-size: 11px;
-          font-weight: 850;
-        }
-
-        .zen-dashboard-actions {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 10px 5px;
-        }
-
-        .zen-dashboard-action {
-          text-align: center;
-          color: #59645C;
-          font-size: 8px;
-          line-height: 1.35;
-        }
-
-        .zen-dashboard-action span {
-          width: 32px;
-          height: 32px;
-          display: grid;
-          place-items: center;
-          margin: 0 auto 5px;
-          background: #F0F5F1;
-          color: ${GREEN};
-          border-radius: 9px;
-          font-size: 14px;
-          font-weight: 800;
-        }
-
-        .zen-dashboard-service-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 9px 0;
-          border-bottom: 1px solid ${BORDER};
-          color: #4D5A51;
-          font-size: 9px;
-        }
-
-        .zen-dashboard-service-row span:last-child {
-          color: ${GREEN};
-          font-size: 13px;
-        }
-
-        .zen-dashboard-transactions {
-          padding: 13px 10px;
-          text-align: center;
-          background: #FAFCFA;
-          border: 1px solid ${BORDER};
-          border-radius: 8px;
-        }
-
-        .zen-dashboard-transactions strong {
-          display: block;
-          color: ${DARK};
-          font-size: 10px;
-        }
-
-        .zen-dashboard-transactions span {
-          display: block;
-          margin-top: 4px;
-          color: ${MUTED};
-          font-size: 8px;
-        }
-
-        .zen-dashboard-bottom-nav {
-          margin-top: 15px;
-          padding-top: 12px;
-          border-top: 1px solid ${BORDER};
-        }
-
-        .zen-dashboard-bottom-nav span {
-          color: #7A857D;
-          font-size: 8px;
-          text-align: center;
-        }
-
-        .zen-dashboard-bottom-nav span:first-child {
-          color: ${GREEN};
-          font-weight: 850;
-        }
-
-        .zen-preview-caption {
-          position: absolute;
-          right: 18px;
-          bottom: 14px;
-          color: #8A948D;
-          font-size: 9px;
-          letter-spacing: .2px;
         }
 
         /* GENERAL SECTIONS */
@@ -855,16 +639,12 @@ const Home: React.FC = () => {
 
         @media (max-width: 900px) {
           .zen-hero-grid {
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
+            grid-template-columns: 1fr;
+            gap: 0;
           }
 
-          .zen-hero h1 {
-            font-size: 46px;
-          }
-
-          .zen-visual {
-            min-height: 570px;
+          .zen-hero-content {
+            max-width: 720px;
           }
 
           .zen-services-grid {
@@ -906,12 +686,12 @@ const Home: React.FC = () => {
           }
 
           .zen-hero {
-            padding: 48px 0 42px;
+            padding: 55px 0 58px;
           }
 
           .zen-hero-grid {
             grid-template-columns: 1fr;
-            gap: 30px;
+            gap: 0;
           }
 
           .zen-eyebrow {
@@ -946,40 +726,6 @@ const Home: React.FC = () => {
           .zen-hero-note {
             margin-top: 14px;
             font-size: 10px;
-          }
-
-          .zen-visual {
-            min-height: auto;
-            padding: 24px 12px;
-            border-radius: 12px;
-          }
-
-          .zen-dashboard-preview {
-            width: 100%;
-            max-width: 340px;
-            padding: 20px 13px 15px;
-            border-width: 8px;
-            border-radius: 32px;
-          }
-
-          .zen-dashboard-balance {
-            padding: 14px;
-          }
-
-          .zen-dashboard-balance strong {
-            font-size: 20px;
-          }
-
-          .zen-dashboard-action span {
-            width: 27px;
-            height: 27px;
-          }
-
-          .zen-preview-caption {
-            position: static;
-            display: block;
-            margin-top: 12px;
-            text-align: center;
           }
 
           .zen-section {
@@ -1145,7 +891,7 @@ const Home: React.FC = () => {
       </header>
 
       <main>
-        {/* HERO */}
+        {/* HERO — CLEAN LAYOUT WITHOUT PHONE PREVIEW */}
 
         <section className="zen-hero" id="home">
           <div className="zen-container zen-hero-grid">
@@ -1178,103 +924,6 @@ const Home: React.FC = () => {
               <p className="zen-hero-note">
                 Payments made simpler for everyday life and business.
               </p>
-            </div>
-
-            {/* ILLUSTRATIVE PHONE — NO LIVE CUSTOMER DATA */}
-
-            <div
-              className="zen-visual"
-              aria-label="Illustrative ZENIMONIES customer dashboard"
-            >
-              <div className="zen-dashboard-preview">
-                <div className="zen-phone-notch" />
-
-                <div className="zen-dashboard-header">
-                  <span className="zen-dashboard-brand">ZENIMONIES</span>
-                  <div className="zen-dashboard-header-actions">
-                    <span>♧</span>
-                    <span>?</span>
-                  </div>
-                </div>
-
-                <div className="zen-dashboard-user">
-                  <span className="zen-dashboard-avatar">C</span>
-                  <div>
-                    <small>Welcome back,</small>
-                    <strong>Customer</strong>
-                  </div>
-                </div>
-
-                <div className="zen-dashboard-balance">
-                  <div className="zen-dashboard-balance-top">
-                    <span>Available balance</span>
-                    <span>•••</span>
-                  </div>
-                  <strong>₦ ••••••</strong>
-                  <div className="zen-dashboard-balance-foot">
-                    <span>Personal account</span>
-                    <span>NGN</span>
-                  </div>
-                </div>
-
-                <div className="zen-dashboard-section-title">
-                  <span>Quick Actions</span>
-                  <span>View all</span>
-                </div>
-
-                <div className="zen-dashboard-actions">
-                  <div className="zen-dashboard-action"><span>＋</span>Add Money</div>
-                  <div className="zen-dashboard-action"><span>↗</span>To Bank</div>
-                  <div className="zen-dashboard-action"><span>⇄</span>Send</div>
-                  <div className="zen-dashboard-action"><span>▤</span>Airtime</div>
-                  <div className="zen-dashboard-action"><span>▦</span>Data</div>
-                  <div className="zen-dashboard-action"><span>◎</span>Betting</div>
-                  <div className="zen-dashboard-action"><span>▣</span>TV</div>
-                  <div className="zen-dashboard-action"><span>ϟ</span>Bills</div>
-                  <div className="zen-dashboard-action"><span>◇</span>Savings</div>
-                  <div className="zen-dashboard-action"><span>•••</span>More</div>
-                </div>
-
-                <div className="zen-dashboard-section-title">
-                  <span>More Services</span>
-                  <span />
-                </div>
-
-                <div className="zen-dashboard-service-row">
-                  <span>Transactions</span><span>›</span>
-                </div>
-                <div className="zen-dashboard-service-row">
-                  <span>Wallet</span><span>›</span>
-                </div>
-                <div className="zen-dashboard-service-row">
-                  <span>Cards</span><span>›</span>
-                </div>
-                <div className="zen-dashboard-service-row">
-                  <span>Settings</span><span>›</span>
-                </div>
-
-                <div className="zen-dashboard-section-title">
-                  <span>Recent Transactions</span>
-                  <span>See all</span>
-                </div>
-
-                <div className="zen-dashboard-transactions">
-                  <strong>No transactions yet</strong>
-                  <span>Your transactions will appear here.</span>
-                </div>
-
-                <div className="zen-dashboard-bottom-nav">
-                  <span>⌂<br />Home</span>
-                  <span>↔<br />Activity</span>
-                  <span>▣<br />Cards</span>
-                  <span>◫<br />Wallet</span>
-                  <span>○<br />Profile</span>
-                </div>
-              </div>
-
-              <span className="zen-preview-caption">
-                Illustrative customer platform preview
-              </span>
             </div>
           </div>
         </section>
