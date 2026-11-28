@@ -580,7 +580,7 @@ const Home: React.FC = () => {
         /* FOOTER */
 
         .zen-footer {
-          padding: 55px 0 22px;
+          padding: 55px 0 30px;
           background: #14251B;
           color: #fff;
         }
@@ -626,13 +626,31 @@ const Home: React.FC = () => {
         }
 
         .zen-footer-bottom {
-          display: flex;
-          justify-content: space-between;
-          gap: 15px;
+          display: block;
+          width: 100%;
           padding-top: 20px;
           border-top: 1px solid #34483A;
+        }
+
+        .zen-footer-legal {
+          width: 100%;
           color: #AAB9AE;
-          font-size: 10px;
+          font-size: 11px;
+          line-height: 1.8;
+          overflow-wrap: anywhere;
+        }
+
+        .zen-footer-legal p {
+          margin: 0 0 12px;
+        }
+
+        .zen-footer-legal p:last-child {
+          margin-bottom: 0;
+        }
+
+        .zen-footer-legal strong {
+          color: #D5E0D8;
+          font-weight: 750;
         }
 
         /* TABLET */
@@ -815,6 +833,7 @@ const Home: React.FC = () => {
 
           .zen-footer {
             padding-top: 43px;
+            padding-bottom: 28px;
           }
 
           .zen-footer-grid {
@@ -827,8 +846,12 @@ const Home: React.FC = () => {
           }
 
           .zen-footer-bottom {
-            flex-direction: column;
-            line-height: 1.7;
+            padding-top: 20px;
+          }
+
+          .zen-footer-legal {
+            font-size: 11px;
+            line-height: 1.85;
           }
         }
 
@@ -891,7 +914,7 @@ const Home: React.FC = () => {
       </header>
 
       <main>
-        {/* HERO — CLEAN LAYOUT WITHOUT PHONE PREVIEW */}
+        {/* HERO */}
 
         <section className="zen-hero" id="home">
           <div className="zen-container zen-hero-grid">
@@ -1224,14 +1247,27 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="zen-footer-bottom">
-            <span>
-              © {new Date().getFullYear()} ZENIMONIES. All rights reserved.
-            </span>
+          {/* LEGAL INFORMATION — INTEGRATED INTO THE EXISTING FOOTER */}
 
-            <span>
-              Your trusted digital payment partner in Nigeria.
-            </span>
+          <div className="zen-footer-bottom">
+            <div className="zen-footer-legal">
+              <p>
+                © {new Date().getFullYear()} ZENIMONIES DIGITAL SERVICE
+                LIMITED (RC: 9974898). All rights reserved.
+              </p>
+
+              <p>
+                <strong>CAC Registered Address:</strong> No. 8,
+                3Brimoh Bello Street, Benin City, Edo State, Nigeria.
+              </p>
+
+              <p>
+                ZENIMONIES is a financial technology company, not a
+                bank. Payment, wallet, and card services are provided
+                in partnership with licensed financial institutions
+                regulated by the Central Bank of Nigeria (CBN).
+              </p>
+            </div>
           </div>
         </div>
       </footer>
