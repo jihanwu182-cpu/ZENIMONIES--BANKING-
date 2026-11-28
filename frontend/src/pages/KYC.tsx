@@ -7,7 +7,7 @@ import React, {
 import { useTheme } from '../theme/Theme.tsx';
 
 // ============================================================
-// ZENIMONIES BANKING — KYC
+// ZENIMONIES— KYC
 // ============================================================
 
 const API_BASE =
@@ -3661,7 +3661,7 @@ connect.open();
 
         <div className="zk-footer">
 
-          ZENIMONIES Banking uses secure
+          ZENIMONIES uses secure
           identity verification to help
           protect your account and comply
           with verification requirements.
