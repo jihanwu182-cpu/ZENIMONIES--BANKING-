@@ -177,7 +177,7 @@ const categories: Category[] = [
   },
   {
     id: 'business',
-    title: 'Business Banking',
+    title: 'Business ',
     description: 'Help for ZENIMONIES business customers and POS services.',
     icon: '🏢',
     faqs: [
