@@ -3327,7 +3327,7 @@ const logout = () => {
                       fontSize: 13,
                     }}
                   >
-                    Digital Banking
+                    Digital Wallet
                   </p>
                 </div>
 
