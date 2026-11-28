@@ -871,7 +871,7 @@ const Profile: React.FC = () => {
 
         <section style={styles.card}>
           <div style={styles.sectionHeadingBlock}>
-            <div style={styles.eyebrow}>BANKING DETAILS</div>
+            <div style={styles.eyebrow}>PERSONAL DETAILS</div>
             <h2 style={styles.sectionTitle}>Account information</h2>
             <p style={styles.sectionDescription}>A quick overview of the account linked to your profile.</p>
           </div>
