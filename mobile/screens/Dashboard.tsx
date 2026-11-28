@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 import {
@@ -20,8 +21,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { getColors } from '../theme/colors';
 
 // ======================================================
-// ZENIMONIES BANKING — PERSONAL DASHBOARD
-// Professional banking icons + Light / Dark Theme
+// ZENIMONIES — PERSONAL DASHBOARD
+// Professional icons + Light / Dark Theme
 // ======================================================
 
 type DashboardAction =
@@ -34,11 +35,8 @@ type DashboardAction =
   | 'electricity'
   | 'bills'
   | 'cards'
-  | 'savings'
-  | 'betting'
   | 'tv'
   | 'kyc';
-  
 
 type TabName =
   | 'Home'
@@ -82,7 +80,7 @@ type IconName =
   React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 // ======================================================
-// STATIC DASHBOARD DATA
+// QUICK ACTIONS
 // ======================================================
 
 const quickActions: {
@@ -122,16 +120,15 @@ const quickActions: {
   },
 ];
 
+// ======================================================
+// OTHER SERVICES
+// ======================================================
+
 const serviceActions: {
   title: string;
   icon: IconName;
   action: DashboardAction;
 }[] = [
-  {
-    title: 'Betting',
-    icon: 'soccer',
-    action: 'betting',
-  },
   {
     title: 'TV',
     icon: 'television',
@@ -143,16 +140,15 @@ const serviceActions: {
     action: 'bills',
   },
   {
-    title: 'Savings',
-    icon: 'piggy-bank-outline',
-    action: 'savings',
-  },
-  {
     title: 'More',
     icon: 'dots-horizontal',
     action: 'bills',
   },
 ];
+
+// ======================================================
+// BOTTOM NAVIGATION
+// ======================================================
 
 const navigation: {
   title: TabName;
@@ -223,7 +219,7 @@ export default function Dashboard({
   const GREEN = isDark ? '#20C875' : '#02A339';
 
   // ====================================================
-  // DYNAMIC VERIFICATION TIER BADGE
+  // VERIFICATION TIER
   // ====================================================
 
   const normalizedLevel = String(verificationLevel || '1')
@@ -274,7 +270,6 @@ export default function Dashboard({
       }
 
       const photo = result.assets[0];
-
       const formData = new FormData();
 
       formData.append(
@@ -385,7 +380,6 @@ export default function Dashboard({
 
         <View style={styles.header}>
           <View style={styles.headerIdentity}>
-            {/* PROFILE PHOTO + TIER */}
             <View style={styles.profileColumn}>
               <TouchableOpacity
                 style={styles.logoCircle}
@@ -416,19 +410,21 @@ export default function Dashboard({
                 )}
               </TouchableOpacity>
 
-              {/* CLICKABLE TIER BADGE — OPENS KYC DIRECTLY */}
+              {/* VERIFICATION TIER */}
+
               <TouchableOpacity
                 style={styles.tierBadge}
                 onPress={() => handleAction('kyc')}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Open KYC verification, ${tierLabel}`}
+                accessibilityLabel={`Open verification, ${tierLabel}`}
               >
                 <MaterialCommunityIcons
                   name="shield-check"
                   size={11}
                   color="#FFFFFF"
                 />
+
                 <Text style={styles.tierBadgeText}>
                   {tierLabel}
                 </Text>
@@ -436,8 +432,11 @@ export default function Dashboard({
             </View>
 
             {/* CUSTOMER INFORMATION */}
+
             <View style={styles.customerIdentity}>
-              <Text style={styles.greeting}>Good day,</Text>
+              <Text style={styles.greeting}>
+                Good day,
+              </Text>
 
               <Text
                 style={styles.customerName}
@@ -446,14 +445,11 @@ export default function Dashboard({
               >
                 {displayName}
               </Text>
-
-              <Text style={styles.brandCaption}>
-                DIGITAL BANKING
-              </Text>
             </View>
           </View>
 
           {/* NOTIFICATIONS */}
+
           <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => handleNavigate('Notifications')}
@@ -465,6 +461,7 @@ export default function Dashboard({
               size={23}
               color={colors.text}
             />
+
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
@@ -517,22 +514,30 @@ export default function Dashboard({
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.accountType}>Personal</Text>
+            <Text style={styles.accountType}>
+              Personal
+            </Text>
 
             <View style={styles.balanceRow}>
               <Text style={styles.balanceAmount}>
                 {formatBalance()}
               </Text>
 
-              <Text style={styles.currency}>{currency}</Text>
+              <Text style={styles.currency}>
+                {currency}
+              </Text>
             </View>
 
             <View style={styles.balanceBottomRow}>
               <View style={styles.secureDot} />
 
-              <Text style={styles.secureText}>Secure</Text>
+              <Text style={styles.secureText}>
+                Secure
+              </Text>
 
-              <Text style={styles.balanceWatermark}>Z</Text>
+              <Text style={styles.balanceWatermark}>
+                Z
+              </Text>
             </View>
           </View>
 
@@ -615,40 +620,6 @@ export default function Dashboard({
               ))}
             </View>
           </View>
-
-          {/* ACCOUNT VERIFICATION CARD REMOVED */}
-
-          {/* SAVINGS */}
-
-          <TouchableOpacity
-            style={styles.savingsCard}
-            onPress={() => handleAction('savings')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.savingsIcon}>
-              <MaterialCommunityIcons
-                name="piggy-bank"
-                size={25}
-                color="#FFFFFF"
-              />
-            </View>
-
-            <View style={styles.savingsContent}>
-              <Text style={styles.savingsTitle}>
-                ZENIMONIES Save
-              </Text>
-
-              <Text style={styles.savingsDescription}>
-                Manage your savings with ease.
-              </Text>
-            </View>
-
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={26}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
 
           {/* RECENT TRANSACTIONS */}
 
@@ -751,10 +722,6 @@ export default function Dashboard({
           <View style={styles.footer}>
             <Text style={styles.footerBrand}>
               ZENIMONIES
-            </Text>
-
-            <Text style={styles.footerText}>
-              Banking made simpler.
             </Text>
           </View>
         </ScrollView>
@@ -864,14 +831,6 @@ const createStyles = (
       marginTop: 2,
     },
 
-    brandCaption: {
-      color: colors.primary,
-      fontSize: 7,
-      fontWeight: '800',
-      letterSpacing: 2,
-      marginTop: 2,
-    },
-
     notificationButton: {
       width: 42,
       height: 42,
@@ -925,8 +884,6 @@ const createStyles = (
       alignItems: 'center',
       justifyContent: 'center',
     },
-
-    // TIER BADGE
 
     tierBadge: {
       flexDirection: 'row',
@@ -1136,43 +1093,6 @@ const createStyles = (
       textAlign: 'center',
     },
 
-    savingsCard: {
-      backgroundColor: colors.primaryLight,
-      borderRadius: 16,
-      padding: 14,
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 22,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : '#D7EFDF',
-    },
-
-    savingsIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 13,
-      backgroundColor: colors.primaryDark,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-
-    savingsContent: {
-      flex: 1,
-      marginLeft: 11,
-    },
-
-    savingsTitle: {
-      fontSize: 13,
-      fontWeight: '800',
-      color: colors.text,
-    },
-
-    savingsDescription: {
-      fontSize: 10,
-      color: colors.textSecondary,
-      marginTop: 3,
-    },
-
     emptyTransactions: {
       backgroundColor: colors.surface,
       borderRadius: 16,
@@ -1283,12 +1203,6 @@ const createStyles = (
       fontWeight: '900',
       fontSize: 14,
       letterSpacing: 2,
-    },
-
-    footerText: {
-      color: colors.textSecondary,
-      fontSize: 10,
-      marginTop: 4,
     },
 
     bottomNavigation: {
