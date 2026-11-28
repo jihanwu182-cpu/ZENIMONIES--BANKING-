@@ -303,8 +303,7 @@ const requeryElectricityPayment = async (req, res) => {
     serializeResponse(providerResult);
 
   const providerCode =
-    String(providerResult?.code || '').
-
+  String(providerResult?.code || '').trim();
   // ==========================================================
   // STOP AUTOMATIC RECOVERY ON VTPASS CODE 019
   //
