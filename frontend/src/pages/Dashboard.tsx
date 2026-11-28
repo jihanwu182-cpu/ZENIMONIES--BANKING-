@@ -846,7 +846,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div style={styles.brandSubtitle}>
-              DIGITAL BANKING
+              YOUR MONEY. YOUR FREEDOM
             </div>
           </div>
         </div>
