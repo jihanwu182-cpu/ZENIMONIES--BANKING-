@@ -303,17 +303,23 @@ const requeryElectricityPayment = async (req, res) => {
     serializeResponse(providerResult);
 
   const providerCode =
-    String(providerResult?.code || '').trim();
+    String(providerResult?.code || '').
 
   // ==========================================================
-  // RECOVER TOKEN FOR ALREADY-COMPLETED PAYMENTS
+  // STOP AUTOMATIC RECOVERY ON VTPASS CODE 019
   //
-  // Never debit or refund the wallet in this section.
-  // Never downgrade an already-completed transaction.
-  // Code 019 permanently stops automatic token recovery.
+  // Applies to completed AND processing payments.
+  //
+  // IMPORTANT:
+  // - Do not initiate another purchase.
+  // - Do not debit the wallet.
+  // - Do not refund the wallet.
+  // - Preserve the existing payment status.
+  // - Preserve existing provider response metadata.
+  // - Stop future automatic requery attempts.
   // ==========================================================
 
-  if (bill.status === 'completed') {
+  if (providerCode === '019') {
     const client = await pool.connect();
 
     try {
@@ -336,108 +342,98 @@ const requeryElectricityPayment = async (req, res) => {
       );
 
       if (lockedBill.rows.length === 0) {
-        throw new Error('Electricity transaction not found.');
+        throw new Error(
+          'Electricity transaction not found during recovery stop.'
+        );
       }
 
       const currentBill = lockedBill.rows[0];
 
-      if (currentBill.status !== 'completed') {
-        await client.query('ROLLBACK');
+      const currentStatus = currentBill.status;
 
-        return res.status(409).json({
-          success: false,
-          status: currentBill.status,
-          message:
-            'The transaction status changed during token recovery. Please refresh the transaction.',
-          reference: bill.reference,
-        });
-      }
-
-      // If another request already saved the stop marker,
-      // do not continue automatic recovery.
-      const currentProviderResponse =
-        currentBill.provider_response || {};
-
-      if (
-        currentProviderResponse?.token_recovery?.stopped === true
-      ) {
-        await client.query('COMMIT');
-
-        return res.status(200).json({
-          success: true,
-          status: 'completed',
-          refunded: false,
-          token_recovery_stopped: true,
-          provider_code: '019',
-          reference: bill.reference,
-          electricity_token:
-            currentBill.electricity_token || null,
-          token:
-            currentBill.electricity_token || null,
-          units: currentBill.units || null,
-          message:
-            'Your payment is confirmed, but VTPass could not retrieve the electricity token. Please contact customer support.',
-        });
-      }
-
-      // Only save recovery information when VTPass
-      // confirms delivery. Never change payment status.
-      if (resolvedStatus === 'completed') {
-        await client.query(
-          `
-          UPDATE bill_payments
-          SET
-            provider_reference =
-              COALESCE($1, provider_reference),
-            provider_response = $2::jsonb,
-            provider_response_message = $3,
-            electricity_token =
-              COALESCE($4, electricity_token),
-            units =
-              COALESCE($5, units)
-          WHERE id = $6
-            AND status = 'completed'
-          `,
-          [
-            providerReference,
-            providerResponse,
-            providerMessage,
-            electricityToken,
-            units,
-            bill.id,
-          ]
-        );
-      } else if (providerCode === '019') {
-        // Preserve the original provider response and add
-        // a permanent token-recovery stop marker.
-        await client.query(
-          `
-          UPDATE bill_payments
-          SET
-            provider_response =
-              COALESCE(provider_response, '{}'::jsonb)
-              ||
+      // Preserve the existing payment status.
+      // Code 019 is not proof that the original payment failed.
+      await client.query(
+        `
+        UPDATE bill_payments
+        SET
+          provider_response =
+            COALESCE(provider_response, '{}'::jsonb)
+            ||
+            jsonb_build_object(
+              'token_recovery',
               jsonb_build_object(
-                'token_recovery',
-                jsonb_build_object(
-                  'stopped', true,
-                  'provider_code', '019',
-                  'response_description', $1,
-                  'response', $2::jsonb,
-                  'checked_at', CURRENT_TIMESTAMP
-                )
-              ),
-            provider_response_message = $1
-          WHERE id = $3
-            AND status = 'completed'
-          `,
-          [
-            providerMessage,
-            providerResponse,
-            bill.id,
-          ]
-        );
-      }
+                'stopped', true,
+                'provider_code', '019',
+                'response_description', $1,
+                'response', $2::jsonb,
+                'checked_at', CURRENT_TIMESTAMP
+              )
+            ),
+          provider_response_message = $1
+        WHERE id = $3
+        `,
+        [
+          providerMessage ||
+            'VTPass returned duplicate transaction response.',
+          providerResponse,
+          bill.id,
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      console.warn(
+        '[ELECTRICITY TOKEN RECOVERY STOPPED]',
+        JSON.stringify({
+          reference: currentBill.reference,
+          providerCode: '019',
+          paymentStatusPreserved: currentStatus,
+          hasSavedToken: Boolean(
+            currentBill.electricity_token
+          ),
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        status: currentStatus,
+        refunded: false,
+        processing: currentStatus !== 'completed',
+        token_recovery_stopped: true,
+        provider_code: '019',
+        reference: currentBill.reference,
+        electricity_token:
+          currentBill.electricity_token || null,
+        token:
+          currentBill.electricity_token || null,
+        units:
+          currentBill.units || null,
+        message:
+          'VTPass reported a likely duplicate transaction. No new payment or refund was made. Automatic token recovery has been stopped. Please contact ZENIMONIES customer support for manual reconciliation.',
+      });
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+
+      console.error(
+        'Electricity code 019 recovery-stop error:',
+        error.message
+      );
+
+      return res.status(202).json({
+        success: true,
+        processing: true,
+        status: bill.status,
+        message:
+          'Your original payment status has not been changed. Token recovery could not be stopped automatically. Please contact customer support for manual reconciliation.',
+        reference: bill.reference,
+      });
+    } finally {
+      client.release();
+    }
+  }
 
       await client.query('COMMIT');
 
