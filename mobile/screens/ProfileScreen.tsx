@@ -390,7 +390,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         <Text style={styles.footer}>
-          ZENIMONIES BANKING
+          ZENIMONIES
         </Text>
 
         <Text style={styles.version}>
